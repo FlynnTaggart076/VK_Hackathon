@@ -1,0 +1,81 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: zhkh
+      POSTGRES_USER: zhkh
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in private .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zhkh -d zhkh"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks: [private]
+
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    command: ["alembic", "upgrade", "head"]
+    environment: &backend_environment
+      APP_MODE: ${APP_MODE:-dev}
+      APP_ROOT_PATH: /team/zhkh
+      DATABASE_URL: postgresql+psycopg://zhkh:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in private .env}@db:5432/zhkh
+      STORAGE_PATH: /storage
+      FIXTURE_ROOT: /workspace/fixtures/receipts
+      ENGINE_MODE: ${ENGINE_MODE:-stub}
+      DEMO_AUTH_ENABLED: ${DEMO_AUTH_ENABLED:-true}
+      DEMO_ACCESS_CODE: ${DEMO_ACCESS_CODE:?set DEMO_ACCESS_CODE in private .env}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [private]
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    environment: *backend_environment
+    volumes:
+      - source_documents:/storage
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks: [private]
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    command: ["python", "-m", "app.jobs.worker"]
+    environment: *backend_environment
+    volumes:
+      - source_documents:/storage
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [private]
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/web.Dockerfile
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [private]
+
+networks:
+  private:
+    internal: true
+
+volumes:
+  postgres_data:
+  source_documents:

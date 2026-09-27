@@ -19,6 +19,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from PIL import Image, UnidentifiedImageError
 from pypdf import PdfReader
+from starlette.concurrency import run_in_threadpool
+
+from app.errors import ApiError
 
 
 def now() -> datetime:
@@ -60,20 +63,15 @@ class Settings:
             raise ValueError("ENGINE_MODE must be real or stub")
         if self.mode == "production" and (self.demo_auth_enabled or self.engine_mode == "stub"):
             raise ValueError("Production forbids demo auth and engine stub")
+        if self.mode != "dev":
+            raise ValueError("E1 backend supports dev mode only; MAX and real engine are not integrated")
         if self.demo_auth_enabled and not self.demo_access_code:
             raise ValueError("DEMO_ACCESS_CODE required when demo auth is enabled")
         if self.mode != "dev" and not self.database_url:
             raise ValueError("Persistent DATABASE_URL required outside dev")
-
-
-class ApiError(Exception):
-    def __init__(self, status: int, code: str, message: str, *, retryable: bool = False,
-                 details: dict | None = None):
-        self.status = status
-        self.code = code
-        self.message = message
-        self.retryable = retryable
-        self.details = details or {}
+        if self.database_url and not self.database_url.startswith("postgresql+psycopg://"):
+            if not (self.mode == "dev" and self.database_url.startswith("sqlite:///")):
+                raise ValueError("PostgreSQL psycopg URL required outside isolated dev tests")
 
 
 def error_response(request: Request, error: ApiError) -> JSONResponse:
@@ -253,6 +251,37 @@ class MemoryStore:
             self.idempotency[idem_key] = (fingerprint, deepcopy(result), created + timedelta(hours=24))
             return result
 
+    def import_demo(self, user_id: str, key: str, fixture_id: str) -> dict:
+        if fixture_id not in {"water-2026-08", "water-2026-09"}:
+            raise ApiError(404, "NOT_FOUND", "Демообразец не найден.")
+        fingerprint = hashlib.sha256(f"demo:{fixture_id}".encode()).hexdigest()
+        idem_key = (user_id, "POST /api/v1/receipts/demo", key)
+        with self.lock:
+            if self.profiles[user_id]["privacy_notice_version"] != self.settings.privacy_notice_version:
+                raise ApiError(422, "PRIVACY_NOTICE_REQUIRED", "Подтвердите актуальное уведомление.")
+            prior = self.idempotency.get(idem_key)
+            if prior and prior[2] > now():
+                if prior[0] != fingerprint:
+                    raise ApiError(409, "IDEMPOTENCY_CONFLICT", "Ключ уже использован с другим образцом.")
+                return deepcopy(prior[1])
+            created = now()
+            receipt_id, job_id = str(uuid.uuid4()), str(uuid.uuid4())
+            receipt = {"id": receipt_id, "status": "queued", "revision": 1,
+                       "created_at": stamp(created), "updated_at": stamp(created),
+                       "dataset_kind": "synthetic", "extraction_outcome": None,
+                       "bill_data": empty_bill(), "field_evidence": [], "issues": [],
+                       "document": {"available": False, "mime_type": None, "page_count": None, "expires_at": None},
+                       "job": {"id": job_id, "state": "queued", "stage": None},
+                       "confirmed_at": None, "engine_version": None,
+                       "_user_id": user_id, "_fixture_id": fixture_id}
+            self.receipts[receipt_id] = receipt
+            self.jobs[job_id] = {"id": job_id, "kind": "demo_import", "state": "queued", "stage": None,
+                                 "receipt_id": receipt_id, "error": None, "updated_at": stamp(created),
+                                 "user_id": user_id}
+            result = {"receipt": self._public_receipt(receipt), "job_id": job_id}
+            self.idempotency[idem_key] = (fingerprint, deepcopy(result), created + timedelta(hours=24))
+            return result
+
     @staticmethod
     def _public_receipt(receipt: dict) -> dict:
         return {key: deepcopy(value) for key, value in receipt.items() if not key.startswith("_")}
@@ -276,11 +305,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     settings.validate()
     if settings.database_url:
-        # PostgreSQL adapter is the next E1 checkpoint; never silently use memory in configured deployments.
-        raise RuntimeError("PostgreSQL adapter not yet connected")
-    if settings.mode != "dev":
-        raise RuntimeError("MemoryStore is dev-only")
-    store = MemoryStore(settings)
+        from app.db.store import SqlStore
+        store = SqlStore(settings)
+    else:
+        if settings.mode != "dev":
+            raise RuntimeError("MemoryStore is dev-only")
+        store = MemoryStore(settings)
     app = FastAPI(title="MAX ЖКХ backend", version="1.0.0-e1-dev", root_path=os.getenv("APP_ROOT_PATH", "/team/zhkh"))
     app.state.store = store
 
@@ -307,6 +337,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                                                "retryable": False, "fields": fields, "details": {}},
                                      "request_id": request_id},
                             headers={"X-Request-ID": request_id})
+
+    @app.exception_handler(Exception)
+    async def handle_unexpected_error(request: Request, exc: Exception):
+        return error_response(request, ApiError(503, "SERVICE_UNAVAILABLE", "Сервис временно недоступен.", retryable=True))
 
     def current_user(authorization: str | None = Header(default=None)) -> str:
         if not authorization or not authorization.startswith("Bearer "):
@@ -335,7 +369,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise ApiError(422, "VALIDATION_FAILED", "Неверный запрос демовхода.")
         if not isinstance(body["identity"], str) or not isinstance(body["access_code"], str):
             raise ApiError(422, "VALIDATION_FAILED", "Неверный запрос демовхода.")
-        return store.authenticate_demo(body["identity"], body["access_code"])
+        return await run_in_threadpool(store.authenticate_demo, body["identity"], body["access_code"])
 
     @app.post("/api/v1/auth/max")
     def auth_max():
@@ -353,13 +387,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise ApiError(400, "INVALID_REQUEST", "Некорректный JSON.") from None
         if not isinstance(body, dict):
             raise ApiError(422, "VALIDATION_FAILED", "Неверный профиль.")
-        return store.update_profile(user_id, body)
+        return await run_in_threadpool(store.update_profile, user_id, body)
 
     @app.get("/api/v1/catalog")
     def catalog(user_id: str = Depends(current_user)):
         return {"territories": [{"id": "demo-territory", "label": "Учебная территория"}],
                 "organizations": [], "topics": [], "service_codes": [], "units": [], "document_kinds": [],
-                "demo_receipts": []}
+                "demo_receipts": [
+                    {"fixture_id": "water-2026-08", "label": "Вода, август", "description": "Синтетическая квитанция"},
+                    {"fixture_id": "water-2026-09", "label": "Вода, сентябрь", "description": "Синтетическая квитанция"},
+                ]}
 
     @app.post("/api/v1/receipts", status_code=202)
     async def upload_receipt(file: UploadFile, idempotency_key: str = Header(alias="Idempotency-Key"),
@@ -371,7 +408,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         content = await file.read(settings.upload_max_bytes + 1)
         await file.close()
         mime, pages = inspect_document(content, file.content_type or "", settings)
-        return store.upload(user_id, idempotency_key, content, mime, pages)
+        return await run_in_threadpool(store.upload, user_id, idempotency_key, content, mime, pages)
+
+    @app.post("/api/v1/receipts/demo", status_code=202)
+    async def import_demo(request: Request, idempotency_key: str = Header(alias="Idempotency-Key"),
+                          user_id: str = Depends(current_user)):
+        try:
+            uuid.UUID(idempotency_key)
+        except ValueError:
+            raise ApiError(422, "VALIDATION_FAILED", "Idempotency-Key должен быть UUID.") from None
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректный JSON.") from None
+        if not isinstance(body, dict) or set(body) != {"fixture_id"} or not isinstance(body["fixture_id"], str):
+            raise ApiError(422, "VALIDATION_FAILED", "Выберите демообразец.")
+        return await run_in_threadpool(store.import_demo, user_id, idempotency_key, body["fixture_id"])
 
     @app.get("/api/v1/receipts/{receipt_id}")
     def get_receipt(receipt_id: uuid.UUID, user_id: str = Depends(current_user)):
@@ -387,7 +439,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/health/ready")
     def ready():
-        raise ApiError(503, "SERVICE_UNAVAILABLE", "БД и worker ещё не подключены.", retryable=True)
+        if not settings.database_url or not store.ready():
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "БД или worker не готовы.", retryable=True)
+        return {"status": "ready"}
 
     return app
 
