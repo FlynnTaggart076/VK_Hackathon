@@ -55,7 +55,7 @@ try {
   await page.getByLabel('Локальный код').fill(DEMO_ACCESS_CODE);
   await page.getByRole('button', { name: 'Войти в dev' }).click();
   await page.getByRole('heading', { name: 'Сравнение квитанций' }).waitFor();
-  await page.getByLabel('Поздний документ').locator('option').filter({ hasText: '2026-09' }).waitFor({ timeout: 15000 });
+  await page.getByLabel('Поздний документ').locator('option').filter({ hasText: '2026-09' }).waitFor({ state: 'attached', timeout: 15000 });
   const options = await page.getByLabel('Поздний документ').locator('option').allTextContents();
   if (!options.some((label) => label.includes('2026-09'))) throw new Error('History did not survive reload');
   await page.getByRole('link', { name: 'Помощник' }).click();
