@@ -374,7 +374,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                            "receipt_retention_days": 30, "source_retention_days": 7},
                 "features": {"voice": False, "external_submission": False,
                              "receipt_ocr": settings.engine_mode == "real",
-                             "comparison": False, "engine_stub": settings.engine_mode == "stub",
+                             "comparison": settings.engine_mode == "real" and bool(settings.database_url),
+                             "engine_stub": settings.engine_mode == "stub",
                              "demo_auth": settings.demo_auth_enabled},
                 "privacy_notice": {"version": settings.privacy_notice_version,
                                    "text": "Исходные документы хранятся 7 дней, данные квитанций — 30 дней."}}
@@ -435,6 +436,38 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     {"fixture_id": "water-2026-08", "label": "Вода, август", "description": "Синтетическая квитанция"},
                     {"fixture_id": "water-2026-09", "label": "Вода, сентябрь", "description": "Синтетическая квитанция"},
                 ]}
+
+    @app.post("/api/v1/comparisons")
+    async def compare_receipts_http(request: Request, user_id: str = Depends(current_user)):
+        if not settings.database_url or settings.engine_mode != "real":
+            raise ApiError(503, "ENGINE_UNAVAILABLE", "Сравнение пока недоступно.", retryable=True)
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректный JSON.") from None
+        if not isinstance(body, dict) or set(body) != {"left", "right", "identity_acknowledged"} or \
+                type(body["identity_acknowledged"]) is not bool:
+            raise ApiError(422, "VALIDATION_FAILED", "Проверьте запрос сравнения.")
+        refs = []
+        for field in ("left", "right"):
+            ref = body[field]
+            if not isinstance(ref, dict) or set(ref) != {"id", "revision"} or \
+                    not isinstance(ref["id"], str) or type(ref["revision"]) is not int or ref["revision"] < 1:
+                raise ApiError(422, "VALIDATION_FAILED", "Укажите обе версии квитанций.")
+            try:
+                uuid.UUID(ref["id"])
+            except ValueError:
+                raise ApiError(422, "VALIDATION_FAILED", "Некорректный ID квитанции.") from None
+            refs.append(ref)
+        from app.services.comparison_adapter import compare_json
+        from housing_engine import EngineError
+
+        snapshots, territory = await run_in_threadpool(store.comparison_snapshots, user_id, refs)
+        try:
+            return await run_in_threadpool(compare_json, snapshots, territory, body["identity_acknowledged"])
+        except EngineError as exc:
+            status = 409 if exc.code == "INCOMPARABLE_RECEIPTS" else 503 if exc.retryable else 422
+            raise ApiError(status, exc.code, exc.message, retryable=exc.retryable) from None
 
     @app.post("/api/v1/receipts", status_code=202)
     async def upload_receipt(file: UploadFile, idempotency_key: str = Header(alias="Idempotency-Key"),
