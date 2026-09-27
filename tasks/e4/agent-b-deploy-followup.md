@@ -1,0 +1,8 @@
+# E4 B follow-up: deploy only the accepted candidate
+
+- Role: backend/MAX/VM per §18.3. Accepted technical candidate / sole allowed deploy SHA: `01a271a506db1e65aedd68efc7101c761827d89a`; this supersedes the earlier `d223c4e` permission because the MAX worker egress and CA fixes are required. Work in `agent-b/e4b` for any further code/docs; deploy from a clean checkout of the exact SHA.
+- Current read-only VM snapshot: `/srv/team` contains `web/`, `VK-bot/` and README; only healthy `team-web-nginx-1` is running. Internal `/team/` and `/healthz`, external HTTPS `/team/` returned 200. No application has been deployed. Recheck immediately before any mutation.
+- Verify real MAX bot token, webhook secret, connected mini-app and registration rights through a private channel. Do not print values. Until those prerequisites exist, keep VM unchanged and document `not deployed`; synthetic production variables are CI-only.
+- Once prerequisites exist, follow `TECHNICAL_SPEC.md` §12.8, local VM owner instruction and `docs/deployment.md`: private runtime/env outside Git, backup current shared files, Compose config, Nginx syntax, own network/route only, preserve other services and `/team/`/`/healthz`; then verify internal and external HTTPS, webhook, signed MAX Web/mobile with A. Record deployed SHA, health, migration, backup/restore and limitations in a separate report commit. Do not enable voice/transcription/real complaint sending.
+- Push any corrective code separately for coordinator review before a new deploy SHA. Never deploy branch HEAD or a task/report commit in place of the accepted SHA.
+
