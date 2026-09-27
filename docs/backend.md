@@ -105,8 +105,8 @@ time, normalizes a bounded update, commits the minimal payload to
 `webhook_inbox`, and only then returns 200. The worker performs one inbox or
 outbox unit per idle cycle and during the OCR child tick. Replays share a
 deduplication key. Direct `/start` and `/help` have text responses; attachments
-are directed to mini-app upload. Text FAQ replies are a temporary checkpoint
-until the E3 knowledge adapter is connected. Group content is not stored or
+are directed to mini-app upload. Direct text questions call C's same local
+knowledge function and persist an owner-scoped answer. Group content is not stored or
 answered. The outbox marks unknown network outcomes `uncertain` and does not
 automatically resend them. All inbox and outbox records expire within 24 hours.
 
@@ -125,6 +125,13 @@ produces the answer, including clarification or unsupported status; the API
 stores its version and provenance for 30 days. Reads recalculate stale reasons
 from the receipt revision, source review dates and catalog version. Stale
 cards do not expose their old actions.
+
+The backend validates the installed knowledge bundle at startup. `/meta` reports
+that exact version; `/catalog` derives territories, topics and organizations
+from the same bundle. Profile territory updates accept only catalog IDs.
+Local Moscow/Moscow Oblast routing remains unavailable until a verified
+regional source and organization are added by C; displaying a region in the
+catalog does not imply a verified local instruction.
 
 `POST /api/v1/drafts` uses at most two owned current confirmed receipts and
 the public C draft function. Creation has a 24-hour idempotency record. The

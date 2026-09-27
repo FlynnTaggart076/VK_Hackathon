@@ -3,7 +3,7 @@
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 
-from app.db.models import Base, Outbox, WebhookInbox
+from app.db.models import AssistantAnswer, Base, Outbox, WebhookInbox
 from app.main import Settings, create_app
 from app.services.max_queue import process_inbox_once, process_outbox_once
 
@@ -50,6 +50,15 @@ def test_webhook_replay_and_bounded_outbox(tmp_path):
             group = next(row for row in rows if row.max_user_id is None)
             assert group.max_user_id is None and group.text is None
             assert len(session.scalars(select(Outbox)).all()) == 1
+        assert client.post(route, json=event("m-4", text="Почему изменилась сумма?"),
+                           headers=headers).status_code == 200
+        assert process_inbox_once(app.state.store)
+        with app.state.store.Session() as session:
+            answer = session.scalar(select(AssistantAnswer))
+            assert answer is not None and answer.result["status"] == "answered"
+            assert answer.result["knowledge_version"].startswith("1.0.0-e3-generic+")
+            replies = session.scalars(select(Outbox)).all()
+            assert len(replies) == 2 and any(answer.result["text"] in row.text for row in replies)
 
 
 def test_unknown_delivery_is_not_retried(tmp_path):

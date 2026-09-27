@@ -14,7 +14,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from app.db.models import Outbox, WebhookInbox
+from app.db.models import AssistantAnswer, Outbox, Profile, User, WebhookInbox
 from app.db.store import SqlStore, now
 from app.errors import ApiError
 
@@ -94,9 +94,40 @@ def command_text(item: WebhookInbox) -> str | None:
         return "Можно спросить о начислениях и проверить квитанцию в мини-приложении. Файлы и фото загружайте только там. Голосовые сообщения и отправка обращений не поддерживаются."
     if item.attachment_kind:
         return "Загрузите PDF или фото квитанции в мини-приложении. Голосовые сообщения не обрабатываются."
-    if item.text:
-        return "Вопрос принят. Ответы по справочнику станут доступны после подключения проверенных источников; пока откройте мини-приложение."
     return None
+
+
+def question_text(session, item: WebhookInbox) -> str | None:
+    """Use C's same offline catalog for direct text questions; persist the result."""
+    if not item.max_user_id or not item.text:
+        return None
+    from app.services.assistant_adapter import answer_json
+    from app.services.assistant_store import knowledge
+
+    user = session.scalar(select(User).where(User.max_user_id == item.max_user_id).with_for_update())
+    if user is None:
+        user = User(id=uuid.uuid4(), max_user_id=item.max_user_id, created_at=now())
+        session.add(user)
+        session.add(Profile(user_id=user.id, role="other", territory_id=None,
+                            onboarding_completed=False))
+        session.flush()
+    profile = session.get(Profile, user.id)
+    context = {"territory_id": profile.territory_id, "role": profile.role,
+               "topic_id": None, "organization_id": None, "service_code": None,
+               "document_kind": None, "receipt_id": None, "receipt_revision": None}
+    result = answer_json(item.text, context, [],
+                         {"role": profile.role, "territory_id": profile.territory_id}, knowledge())
+    session.add(AssistantAnswer(id=uuid.uuid4(), user_id=user.id, question=item.text,
+                                result=result, receipt_id=None, receipt_revision=None,
+                                dataset_kind="synthetic" if profile.territory_id == "demo-territory"
+                                else "public_reference", created_at=now(),
+                                expires_at=now() + timedelta(days=30)))
+    response = result["text"]
+    if result["clarification"]:
+        response += "\n" + result["clarification"]["prompt"]
+    if result["steps"]:
+        response += "\n" + "\n".join(result["steps"])
+    return response[:3900]
 
 
 def process_inbox_once(store: SqlStore) -> bool:
@@ -107,7 +138,7 @@ def process_inbox_once(store: SqlStore) -> bool:
                               .with_for_update(skip_locked=True).limit(1))
         if item is None:
             return False
-        reply = command_text(item)
+        reply = command_text(item) or question_text(session, item)
         if reply:
             session.add(Outbox(id=uuid.uuid4(), business_key=item.dedup_key,
                                max_user_id=item.max_user_id, text=reply, state="queued", attempt=0,

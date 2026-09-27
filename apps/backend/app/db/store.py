@@ -176,7 +176,10 @@ class SqlStore:
             return self._profile_value(profile)
 
     def update_profile(self, user_id: str, body: dict) -> dict:
-        if body.get("role") not in {"owner", "tenant", "other"} or body.get("territory_id") != "demo-territory":
+        from app.services.assistant_store import knowledge
+
+        territories = {item["id"] for item in knowledge().territories}
+        if body.get("role") not in {"owner", "tenant", "other"} or body.get("territory_id") not in territories:
             raise ApiError(422, "VALIDATION_FAILED", "Выберите доступную роль и территорию.")
         if body.get("privacy_notice_version") != self.settings.privacy_notice_version or body.get("privacy_acknowledged") is not True:
             raise ApiError(422, "PRIVACY_NOTICE_REQUIRED", "Подтвердите актуальное уведомление.")
