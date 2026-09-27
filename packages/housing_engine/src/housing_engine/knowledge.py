@@ -211,9 +211,14 @@ def answer_question(request: QuestionRequest, knowledge: KnowledgeBundle) -> Ans
             return AnswerResult(status="unsupported", text="Карточка не применима к выбранному контексту.", topic_id=topic["id"], steps=[], sources=[], actions=[], clarification=None, limitations=["Территория, роль, услуга или документ вне области применимости."], knowledge_version=knowledge.version, receipt_ref=receipt_ref)
     if _timestamp(topic["review_after"]) < request.now:
         return AnswerResult(status="unsupported", text="Карточка темы требует обновления.", topic_id=topic["id"], steps=[], sources=[], actions=[], clarification=None, limitations=["Срок проверки карточки истёк."], knowledge_version=knowledge.version, receipt_ref=receipt_ref)
-    if topic["id"] in LOCAL_TOPICS and request.context.territory_id not in {item["id"] for item in knowledge.territories}:
+    territory = next((item for item in knowledge.territories if item["id"] == request.context.territory_id), None)
+    if topic["id"] in LOCAL_TOPICS and territory is None:
         return AnswerResult(status="unsupported", text="Для указанной территории нет проверенной инструкции.", topic_id=topic["id"], steps=[], sources=[], actions=[], clarification=None, limitations=["Территория отсутствует в каталоге."], knowledge_version=knowledge.version, receipt_ref=receipt_ref)
     source_map = {item["id"]: item for item in knowledge.sources}
+    if topic["id"] in LOCAL_TOPICS and territory is not None and not territory["is_synthetic"]:
+        local_sources = [source_map[source_id] for source_id in topic["source_ids"] if source_id in source_map and source_map[source_id]["territory_id"] == territory["id"] and _valid_source(source_map[source_id], territory["id"], request.now)]
+        if not local_sources:
+            return AnswerResult(status="unsupported", text="Для выбранного региона пока нет проверенной местной инструкции.", topic_id=topic["id"], steps=[], sources=[], actions=[], clarification=None, limitations=["Название региона известно, но местный порядок и организация не проверены."], knowledge_version=knowledge.version, receipt_ref=receipt_ref)
     sources = []
     for source_id in topic["source_ids"]:
         item = source_map[source_id]

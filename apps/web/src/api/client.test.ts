@@ -130,3 +130,77 @@ describe('E2 synthetic receipt flow', () => {
       service_line_id: null, related_period: null }] })).toContain('Перерасчёт 1: укажите сумму с двумя цифрами после точки.');
   });
 });
+
+describe('E3 comparison, FAQ, draft and history mock', () => {
+  const august = '10000000-0000-4000-8000-000000000003';
+  const september = '10000000-0000-4000-8000-000000000004';
+  it('paginates history and renders server-owned 70 / 40 / 30 only after valid comparison', async () => {
+    setSessionToken((await demoAuth('mock-only')).access_token);
+    const first = await api.receipts(null, 2);
+    expect(first.items).toHaveLength(2);
+    expect(first.next_cursor).not.toBeNull();
+    const rest = await api.receipts(first.next_cursor, 10);
+    expect(rest.items.some((item) => item.id === september)).toBe(true);
+    const result = await api.compare({ left: { id: august, revision: 3 }, right: { id: september, revision: 3 }, identity_acknowledged: false });
+    expect(result.dataset_kind).toBe('synthetic');
+    expect(result.delta_total_due).toBe('70.00');
+    expect(result.lines[0]).toMatchObject({ quantity_effect: '40.00', tariff_effect: '30.00' });
+    await expect(api.compare({ left: { id: august, revision: 2 }, right: { id: september, revision: 3 }, identity_acknowledged: false }))
+      .rejects.toMatchObject({ status: 409, code: 'REVISION_CONFLICT' });
+  });
+  it('withholds deltas for uncertain identity and keeps ambiguous/partial results partial', async () => {
+    setSessionToken((await demoAuth('mock-only')).access_token);
+    const ref = { id: august, revision: 3 };
+    const identity = await api.compare({ left: ref, right: { id: '10000000-0000-4000-8000-000000000005', revision: 3 }, identity_acknowledged: false });
+    expect(identity.status).toBe('needs_identity_confirmation');
+    expect(identity.delta_total_due).toBeNull();
+    expect(identity.lines).toEqual([]);
+    const ambiguous = await api.compare({ left: ref, right: { id: '10000000-0000-4000-8000-000000000006', revision: 3 }, identity_acknowledged: false });
+    expect(ambiguous.status).toBe('partial');
+    expect(ambiguous.lines[0].match_status).toBe('ambiguous');
+    expect(ambiguous.lines[0].quantity_effect).toBeNull();
+    const partial = await api.compare({ left: ref, right: { id: '10000000-0000-4000-8000-000000000007', revision: 3 }, identity_acknowledged: false });
+    expect(partial.delta_total_due).toBeNull();
+    const history = await api.receipts();
+    expect(history.items.find((item) => item.id === partial.newer.id)?.source_available).toBe(false);
+    await expect(api.source(partial.newer.id)).rejects.toMatchObject({ status: 410, code: 'SOURCE_EXPIRED' });
+  });
+  it('lists all 15 topics, asks for clarification and admits unknown questions', async () => {
+    setSessionToken((await demoAuth('mock-only')).access_token);
+    const catalog = await api.catalog();
+    expect(catalog.topics).toHaveLength(15);
+    expect(catalog.topics.map((topic) => topic.id)).toContain('housing_document');
+    const vague = await api.answer('Нужна справка', { ...context, topic_id: 'housing_document' });
+    expect(vague.status).toBe('needs_clarification');
+    expect(vague.sources).toEqual([]);
+    expect((await api.answer('неизвестный вопрос', context)).status).toBe('unsupported');
+  });
+  it('imports a catalog demo receipt after consent and retains synthetic provenance through the job', async () => {
+    setSessionToken((await demoAuth('mock-only')).access_token);
+    const meta = await api.meta();
+    const catalog = await api.catalog();
+    const sample = catalog.demo_receipts.find((item) => item.fixture_id === 'water-2026-09');
+    expect(sample).toBeTruthy();
+    await api.updateProfile({ role: 'tenant', territory_id: 'demo-territory',
+      privacy_notice_version: meta.privacy_notice.version, privacy_acknowledged: true });
+    const queued = await api.importDemo(sample!.fixture_id, crypto.randomUUID());
+    expect(queued.receipt.dataset_kind).toBe('synthetic');
+    await api.job(queued.job_id); await api.job(queued.job_id); await api.job(queued.job_id);
+    const receipt = await api.receipt(queued.receipt.id);
+    expect(receipt.dataset_kind).toBe('synthetic');
+    expect(receipt.bill_data.period).toBe('2026-09');
+    expect(receipt.bill_data.document_total_due).toBe('270.00');
+  });
+  it('creates and edits a draft with CAS, then marks it stale after source deletion', async () => {
+    setSessionToken((await demoAuth('mock-only')).access_token);
+    const draft = await api.createDraft({ topic_id: 'request_breakdown', organization_id: null,
+      receipt_refs: [{ id: september, revision: 3 }], line_id: null, user_question: 'Поясните начисление' }, crypto.randomUUID());
+    expect(draft.text).toContain('270.00');
+    expect(draft.recipient).toBeNull();
+    await expect(api.editDraft(draft.id, { expected_revision: 99, text: 'Мой текст' })).rejects.toMatchObject({ status: 409, code: 'REVISION_CONFLICT' });
+    expect((await api.editDraft(draft.id, { expected_revision: draft.revision, text: 'Мой текст' })).text).toBe('Мой текст');
+    await api.deleteReceipt(september);
+    expect((await api.draft(draft.id)).stale).toBe(true);
+    expect((await api.receipts()).items.some((item) => item.id === september)).toBe(false);
+  });
+});

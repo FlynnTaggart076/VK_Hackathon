@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
-import type { Job, MetaResponse, Profile, ReceiptQueued } from '../api/types';
+import type { Catalog, Job, MetaResponse, Profile, ReceiptQueued } from '../api/types';
 import { canUpload } from './Onboarding';
 import { ErrorMessage } from './errors';
 
-export function Upload({ meta, profile, onQueued }: {
-  meta: MetaResponse; profile: Profile | null; onQueued: (value: ReceiptQueued) => void;
+export function Upload({ meta, profile, catalog, onQueued }: {
+  meta: MetaResponse; profile: Profile | null; catalog: Catalog | null; onQueued: (value: ReceiptQueued) => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [key, setKey] = useState<string | null>(null);
@@ -22,6 +22,16 @@ export function Upload({ meta, profile, onQueued }: {
     const controller = new AbortController(); pending.current = controller;
     try { onQueued(await api.upload(file, key, controller.signal)); }
     catch (cause) { if (!(cause instanceof DOMException && cause.name === 'AbortError')) setError(cause); }
+    finally { if (pending.current === controller) { pending.current = null; setBusy(false); } }
+  }
+
+  async function uploadDemo(id: string) {
+    if (!canUpload(profile, meta)) return;
+    setBusy(true); setError(null);
+    const controller = new AbortController(); pending.current = controller;
+    try {
+      onQueued(await api.importDemo(id, crypto.randomUUID(), controller.signal));
+    } catch (cause) { if (!(cause instanceof DOMException && cause.name === 'AbortError')) setError(cause); }
     finally { if (pending.current === controller) { pending.current = null; setBusy(false); } }
   }
 
@@ -42,6 +52,7 @@ export function Upload({ meta, profile, onQueued }: {
       <ErrorMessage error={error} />
       {error !== null && <p className="notice">После сетевого сбоя можно повторить тот же файл. При конфликте выберите файл заново.</p>}
     </form>}
+    {canUpload(profile, meta) && !!catalog?.demo_receipts.length && <div className="notice-box"><h3>Учебные образцы</h3><p>Синтетические документы выдаются после входа и обрабатываются сервером. Проверьте цифры перед подтверждением.</p><div className="actions">{catalog.demo_receipts.map((sample) => <button key={sample.fixture_id} type="button" disabled={busy} onClick={() => void uploadDemo(sample.fixture_id)}>Загрузить образец · {sample.label}</button>)}</div></div>}
   </section>;
 }
 

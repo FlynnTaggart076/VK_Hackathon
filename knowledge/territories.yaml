@@ -3,3 +3,11 @@ territories:
     label: Учебная территория
     is_synthetic: true
     source_id: null
+  - id: moscow
+    label: Москва
+    is_synthetic: false
+    source_id: null
+  - id: moscow-oblast
+    label: Московская область
+    is_synthetic: false
+    source_id: null

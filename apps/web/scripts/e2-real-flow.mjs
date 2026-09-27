@@ -23,7 +23,7 @@ try {
   await page.getByRole('status').filter({ hasText: 'Профиль сохранён' }).waitFor();
   await page.getByRole('link', { name: 'Платёжка' }).click();
   await page.getByLabel('Файл платёжки').setInputFiles({ name: 'demo-bill-2026-08.pdf', mimeType: 'application/pdf', buffer: fixture });
-  await page.getByRole('button', { name: 'Загрузить' }).click();
+  await page.getByRole('button', { name: 'Загрузить', exact: true }).click();
   await page.waitForURL(/\/processing\?job=/);
   await page.getByRole('link', { name: 'Проверить данные платёжки' }).waitFor({ timeout: 150000 });
   await page.getByRole('link', { name: 'Проверить данные платёжки' }).click();

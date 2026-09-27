@@ -1,4 +1,4 @@
-import type { AnswerContext, AnswerView, ApiErrorBody, Catalog, ConfirmReceiptRequest, EditReceiptRequest, Job, MeResponse, MetaResponse, Profile, ReceiptExplanation, ReceiptQueued, ReceiptView, UnexpectedErrorBody, UpdateProfileRequest } from './types';
+import type { AnswerContext, AnswerView, ApiErrorBody, Catalog, CompareRequest, ComparisonView, ConfirmReceiptRequest, CreateDraftRequest, DraftView, EditDraftRequest, EditReceiptRequest, Job, MeResponse, MetaResponse, Profile, ReceiptExplanation, ReceiptList, ReceiptQueued, ReceiptView, UnexpectedErrorBody, UpdateProfileRequest } from './types';
 
 export const API_BASE = '/team/zhkh/api/v1';
 let sessionToken: string | null = null;
@@ -65,11 +65,22 @@ export const api = {
     method: 'POST', body: JSON.stringify({ question, context }), signal,
   }),
   receipt: (id: string, signal?: AbortSignal) => request<ReceiptView>(`/receipts/${encodeURIComponent(id)}`, { signal }),
-  upload: (file: File, idempotencyKey: string, signal?: AbortSignal) => {
+  receipts: (cursor?: string | null, limit = 20, signal?: AbortSignal) => request<ReceiptList>(`/receipts?limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { signal }),
+  deleteReceipt: (id: string, signal?: AbortSignal) => request<void>(`/receipts/${encodeURIComponent(id)}`, { method: 'DELETE', signal }),
+  compare: (body: CompareRequest, signal?: AbortSignal) => request<ComparisonView>('/comparisons', { method: 'POST', body: JSON.stringify(body), signal }),
+  createDraft: (body: CreateDraftRequest, key: string, signal?: AbortSignal) => request<DraftView>('/drafts', { method: 'POST', body: JSON.stringify(body), headers: { 'Idempotency-Key': key }, signal }),
+  draft: (id: string, signal?: AbortSignal) => request<DraftView>(`/drafts/${encodeURIComponent(id)}`, { signal }),
+  editDraft: (id: string, body: EditDraftRequest, signal?: AbortSignal) => request<DraftView>(`/drafts/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body), signal }),
+  deleteDraft: (id: string, signal?: AbortSignal) => request<void>(`/drafts/${encodeURIComponent(id)}`, { method: 'DELETE', signal }),
+  upload: (file: File, idempotencyKey: string, signal?: AbortSignal, demoSampleId?: string) => {
     const body = new FormData();
     body.append('file', file);
+    if (demoSampleId) body.append('demo_sample_id', demoSampleId);
     return request<ReceiptQueued>('/receipts', { method: 'POST', body, headers: { 'Idempotency-Key': idempotencyKey }, signal });
   },
+  importDemo: (fixtureId: string, idempotencyKey: string, signal?: AbortSignal) => request<ReceiptQueued>('/receipts/demo', {
+    method: 'POST', body: JSON.stringify({ fixture_id: fixtureId }), headers: { 'Idempotency-Key': idempotencyKey }, signal,
+  }),
   job: (id: string, signal?: AbortSignal) => request<Job>(`/jobs/${encodeURIComponent(id)}`, { signal }),
   page: (id: string, page: number, signal?: AbortSignal) => requestBlob(`/receipts/${encodeURIComponent(id)}/pages/${page}`, signal),
   source: (id: string, signal?: AbortSignal) => requestBlob(`/receipts/${encodeURIComponent(id)}/source`, signal),

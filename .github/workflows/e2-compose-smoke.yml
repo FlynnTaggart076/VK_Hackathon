@@ -153,4 +153,11 @@ jobs:
             echo "::error title=E2 UI receipt persistence::$(tail -n 15 /tmp/zhkh-e2-ui-restart.log | tr '\r\n' '  ' | tail -c 1800)"
             exit 1
           fi
+          if [[ "$GITHUB_REF_NAME" == integration/e3 ]]; then
+            if ! BASE_URL=http://127.0.0.1:5173/team/zhkh/ CHROME_PATH="$chrome_path" \
+                node apps/web/scripts/e3-real-flow.mjs > /tmp/zhkh-e3-browser.log 2>&1; then
+              echo "::error title=E3 real browser::$(tail -n 20 /tmp/zhkh-e3-browser.log | tr '\r\n' '  ' | tail -c 1800)"
+              exit 1
+            fi
+          fi
           echo 'E2 Compose PG17, real PDF/PNG OCR, 360px browser edit/confirm/explain, same receipt after restart, Linux OCR tree kill: OK'

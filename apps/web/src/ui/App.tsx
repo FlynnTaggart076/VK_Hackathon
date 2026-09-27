@@ -6,14 +6,14 @@ import { Onboarding, canUpload } from './Onboarding';
 import { Processing, Upload } from './Upload';
 import { ReceiptReview } from './ReceiptReview';
 import { ReceiptExplanation } from './ReceiptExplanation';
+import { History } from './History';
+import { Comparison } from './Comparison';
+import { Draft } from './Draft';
 import { ErrorMessage } from './errors';
 
 const mockEnabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_MOCK === 'true';
 const screens = [
   { path: '/', title: 'Главная', text: 'Вопросы, платёжки, история и учебные примеры.', states: 'пустая история, demo-пометка' },
-  { path: '/comparison', title: 'Сравнение', text: 'Выбор двух документов и объяснение различий.', states: 'incompatible, identity confirmation, ambiguous, partial' },
-  { path: '/draft', title: 'Черновик', text: 'Проверка, редактирование и копирование текста.', states: 'copied, clipboard unavailable, stale' },
-  { path: '/history', title: 'История и настройки', text: 'Документы, удаление и профиль.', states: 'empty, pagination, deleting, error' },
 ] as const;
 
 function Entry({ meta, onAuth }: { meta: MetaResponse | null; onAuth: (profile: Profile) => void }) {
@@ -53,8 +53,10 @@ function Entry({ meta, onAuth }: { meta: MetaResponse | null; onAuth: (profile: 
   </section>;
 }
 
-function Assistant({ enabled }: { enabled: boolean }) {
+function Assistant({ enabled, profile, catalog }: { enabled: boolean; profile: Profile | null; catalog: Catalog | null }) {
   const [question, setQuestion] = useState('Почему выросла сумма за воду?');
+  const [topicId, setTopicId] = useState('');
+  const [clarified, setClarified] = useState<Partial<AnswerContext>>({});
   const [answer, setAnswer] = useState<AnswerView | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -62,13 +64,13 @@ function Assistant({ enabled }: { enabled: boolean }) {
   useEffect(() => {
     return () => pending.current?.abort();
   }, []);
-  async function ask(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function ask(event?: React.FormEvent<HTMLFormElement>, extra: Partial<AnswerContext> = {}) {
+    event?.preventDefault();
     if (!question.trim()) return;
     const context: AnswerContext = {
-      territory_id: 'demo-territory', role: 'tenant', topic_id: null,
+      territory_id: profile?.territory_id ?? null, role: profile?.role ?? null, topic_id: topicId || null,
       organization_id: null, service_code: null, document_kind: null,
-      receipt_id: null, receipt_revision: null,
+      receipt_id: null, receipt_revision: null, ...clarified, ...extra,
     };
     setBusy(true); setError(null); setAnswer(null);
     pending.current?.abort();
@@ -82,6 +84,7 @@ function Assistant({ enabled }: { enabled: boolean }) {
   return <section className="panel">
     <h2>Помощник</h2>
     <form onSubmit={(event) => void ask(event)}>
+      <label htmlFor="answer-topic">Тема</label><select id="answer-topic" value={topicId} onChange={(event) => { setTopicId(event.target.value); setClarified({}); }}><option value="">Определить по вопросу</option>{catalog?.topics.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
       <label htmlFor="question">Ваш вопрос</label>
       <textarea id="question" value={question} onChange={(event) => setQuestion(event.target.value)} maxLength={2000} rows={3} />
       <button disabled={busy || !hasSessionToken()}>{busy ? 'Ищем ответ…' : 'Спросить'}</button>
@@ -92,8 +95,11 @@ function Assistant({ enabled }: { enabled: boolean }) {
       <p className="badge">{answer.dataset_kind === 'synthetic' ? 'Синтетический пример' : answer.dataset_kind}</p>
       <h3>{answer.status === 'unsupported' ? 'Пока нет проверенного ответа' : answer.status === 'needs_clarification' ? 'Нужно уточнение' : 'Ответ'}</h3>
       <p>{answer.text}</p>
-      {answer.clarification && <p>{answer.clarification.prompt}</p>}
-      {answer.sources.map((source) => <p key={source.id}>Источник: {source.title}{source.url && <a href={source.url} target="_blank" rel="noopener noreferrer"> {source.url}</a>}</p>)}
+      {answer.clarification && <div className="notice-box"><p>{answer.clarification.prompt}</p>{answer.clarification.options.map((option) => <button key={option.value} type="button" onClick={() => { const extra = { [answer.clarification!.field]: option.value }; setClarified((value) => ({ ...value, ...extra })); void ask(undefined, extra); }}>{option.label}</button>)}</div>}
+      {answer.stale && <p className="review-warning">Ответ устарел: проверьте сведения перед действием.</p>}
+      <p>Территория: {catalog?.territories.find((item) => item.id === profile?.territory_id)?.label ?? 'не выбрана'} · версия знаний {answer.knowledge_version}</p>
+      {answer.sources.map((source) => <p key={source.id}>Источник: {source.title} · {source.territory_id ? catalog?.territories.find((item) => item.id === source.territory_id)?.label ?? source.territory_id : 'общий'} · проверен {source.verified_at} · пересмотреть после {source.review_after}{source.is_synthetic && ' · учебный'}{source.url && <a href={source.url} target="_blank" rel="noopener noreferrer"> Открыть</a>}</p>)}
+      {answer.actions.map((action) => <p key={action.id}>{action.label}</p>)}
       {answer.limitations.map((item) => <p key={item}>{item}</p>)}
     </article>}
   </section>;
@@ -163,11 +169,14 @@ export function App() {
       <Routes>
         {screens.map(({ path }) => <Route key={path} path={path} element={<Page path={path} />} />)}
         <Route path="/onboarding" element={!authenticated ? needsLogin : meta && catalog && profile ? <Onboarding meta={meta} catalog={catalog} profile={profile} onSaved={setProfile} /> : waiting} />
-        <Route path="/upload" element={!authenticated ? needsLogin : meta ? <Upload meta={meta} profile={profile} onQueued={(value) => navigate(`/processing?job=${encodeURIComponent(value.job_id)}`)} /> : waiting} />
+        <Route path="/upload" element={!authenticated ? needsLogin : meta ? <Upload meta={meta} profile={profile} catalog={catalog} onQueued={(value) => navigate(`/processing?job=${encodeURIComponent(value.job_id)}`)} /> : waiting} />
         <Route path="/processing" element={!authenticated ? needsLogin : <Processing stub={!!meta?.features.engine_stub} />} />
         <Route path="/review" element={!authenticated ? needsLogin : <ReceiptReview />} />
         <Route path="/explanation" element={!authenticated ? needsLogin : <ReceiptExplanation />} />
-        <Route path="/assistant" element={<Assistant enabled={mockEnabled} />} />
+        <Route path="/history" element={!authenticated ? needsLogin : <History />} />
+        <Route path="/comparison" element={!authenticated ? needsLogin : <Comparison />} />
+        <Route path="/draft" element={!authenticated ? needsLogin : <Draft catalog={catalog} />} />
+        <Route path="/assistant" element={<Assistant enabled={mockEnabled} profile={profile} catalog={catalog} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </main>

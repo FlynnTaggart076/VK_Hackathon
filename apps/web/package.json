@@ -11,7 +11,9 @@
     "generate:types": "openapi-typescript ../../contracts/http/openapi.yaml -o src/api/openapi.generated.ts",
     "test": "vitest run",
     "test:browser:e2": "node scripts/e2-mock-flow.mjs",
-    "test:browser:e2:real": "node scripts/e2-real-flow.mjs"
+    "test:browser:e2:real": "node scripts/e2-real-flow.mjs",
+    "test:browser:e3:mock": "node scripts/e3-mock-flow.mjs",
+    "test:browser:e3:real": "node scripts/e3-real-flow.mjs"
   },
   "dependencies": {
     "react": "19.3.0",
