@@ -1,4 +1,30 @@
-# Отчёт агента C — E3-C-01
+# Отчёт агента C — E3-C-01 и E4-C-01
+
+## E4-C-01 — OCR holdout, крайние случаи, FAQ
+
+- Ветка `agent-c/e4`; принятая база E3 `d223c4e49a12c4ebc5d98c3c8da8fc6c0202e16f`; задание `tasks/e4/agent-c.md` из main `40f0e8a1995f4a44f44f174cfa51f2f6acdae2c5`.
+- Pushed gold freeze SHA `637fe574f583e40e7b1b6e96fc1ec49b7fb49f94`: `fixtures/receipts/e4-holdout/gold.json`, генератор и 12 чистых синтетических файлов были зафиксированы до первого E4 прогона извлечения и правок парсера/FAQ. SHA-256, размер, тип и ожидаемые значения есть в gold. Эталоны не менялись после заморозки.
+- Pushed code SHA `8042a0af0dfc31eeb0ee9d6712ef07ac4b7c0c94`: воспроизводимый `eval_ocr_e4.py`, документация и общие правила FAQ для шести открытых E3 ошибок `S247,S249,S251,S252,S299,A30`. Код парсера квитанций менять не потребовалось; DTO, источник знаний и каналы не менялись.
+
+**Точный знаменатель OCR.** 12 чистых документов английского учебного макета `DEMO-BILL-V1`, по 11 заранее размеченных критических полей в каждом: период, число/название строк, сумма строки, текущие начисления, начальный долг, зачтённая оплата, пени, прочие изменения счёта, конечный баланс, итог к оплате. Три PNG, три JPG и три PDF без текстового слоя проходят Tesseract: **99/99 (100%)**. Три PDF с текстовым слоем: **33/33 (100%)** отдельно. Весь чистый корпус: **132/132 (100%)**. Ошибка извлечения и отсутствующее поле остаются в знаменателе; все 12 исходов `recognized`. Все OCR evidence имеют `source=ocr`, `needs_review=true` и `OCR_REVIEW_REQUIRED`; ручное подтверждение обязательно. Восемь отдельных синтетических контролей — обрезанный, нечитаемый, неизвестный макет, повреждённый PDF, перерасчёт, долг с оплатой, переплата и неизвестная услуга — прошли **8/8** по ожидаемым исходам и полям; они не включены в 132.
+
+Окружение проверки: чистая временная Python 3.13 venv с точными `requirements.lock` и `generator-requirements.lock`, пакет установлен через `pip install --no-build-isolation --no-deps -e packages/housing_engine`; локальный официальный Tesseract `v5.5.3.20260724`, `eng`, `osd`, `rus`, добавлен в `PATH`. Команды из корня checkout:
+
+```powershell
+$env:PATH = "$env:TEMP\zhkh-ocr-tesseract;$env:PATH"
+& "$env:TEMP\zhkh-c-e4-venv\Scripts\python.exe" packages/housing_engine/eval_ocr_e4.py --json-out "$env:TEMP\zhkh-e4-ocr-eval.json"
+& "$env:TEMP\zhkh-c-e4-venv\Scripts\python.exe" packages/housing_engine/verify_contract.py
+& "$env:TEMP\zhkh-c-e4-venv\Scripts\python.exe" -m unittest discover -s packages/housing_engine/tests -q
+& "$env:TEMP\zhkh-c-e4-venv\Scripts\python.exe" -m pip check
+$corpora = @('e3-qa-holdout.json', 'e3-independent-holdout.json', 'e3-final-holdout.json', 'e3-audit-holdout.json', 'e3-structural-holdout.json')
+foreach ($corpus in $corpora) { & "$env:TEMP\zhkh-c-e4-venv\Scripts\python.exe" packages/housing_engine/eval_questions.py --corpus "fixtures/questions/$corpus" }
+```
+
+Результат: OCR 99/99, PDF text 33/33, edge 8/8; verifier OK; 46 unittest OK; `pip check` OK; `git diff --cached --check` OK. `EOF marker not found` относится к ожидаемому повреждённому PDF контролю, оценка завершилась кодом 0. После общих правил намерения все пять опубликованных E3 корпусов (`e3-qa`, `e3-independent`, `e3-final`, `e3-audit`, `e3-structural`) дали каждый S60/60, A5/5, U10/10, `unsafe_unsupported=0`; после раскрытия это **калибровочная регрессия**, а не новая независимая оценка. Шесть конкретных прежних ошибок теперь имеют ожидаемые результаты: `S247` → `bill_terms/answered`; `S249`, `S251`, `S252` → `bill_change/answered`; `S299` → `new_resident/answered`; `A30` → `topic/needs_clarification`. Для post-fix качества FAQ координатору нужен новый ранее не виденный корпус.
+
+Границы: 100% относится только к чистому синтетическому английскому макету с фиксированным рендерингом и 11 полями. Реальные российские квитанции, снимки телефона, другие шаблоны, локальные тарифы, выбранная УК/поставщик, VM и MAX здесь не проверялись. Для Москвы и МО нет проверенного местного порядка/получателя: локальные ответы остаются `unsupported`, черновик не отправляется. Текущий шаг C — передать E4 code/report SHA координатору для review; E5 не начинался.
+
+---
 
 - Ветка `agent-c/e3`; BASE_SHA `b33ed1e0493d76dfd7051a141e2075c698f8e967`; TASK_COMMIT `c11b5235319c12ecb18a6c4ca05c35a54f5c0560`.
 - Статус: E3-C-01 передан координатору на review. Контракт engine/HTTP 1.0, DTO и JSON Schema v1 не изменены.
