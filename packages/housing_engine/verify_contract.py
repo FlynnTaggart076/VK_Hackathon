@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import hashlib
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
@@ -88,6 +89,18 @@ def verify() -> None:
         "delta_current_charges": "70.00", "delta_total_due": "70.00",
         "quantity_effect": "40.00", "tariff_effect": "30.00", "rounding_effect": "0.00",
     }
+    manifest_schema = json.loads((SCHEMAS / "fixture-manifest.schema.json").read_text(encoding="utf-8"))
+    manifest = json.loads((FIXTURES / "manifest.json").read_text(encoding="utf-8"))
+    Draft202012Validator.check_schema(manifest_schema)
+    Draft202012Validator(manifest_schema).validate(manifest)
+    listed = set()
+    for sample in manifest["samples"]:
+        name = sample["file"]
+        assert name not in listed
+        listed.add(name)
+        payload = (FIXTURES / name).read_bytes()
+        assert len(payload) == sample["bytes"]
+        assert hashlib.sha256(payload).hexdigest() == sample["sha256"]
     for name in ("manifest", "sources", "territories", "organizations", "glossary", "aliases"):
         schema = json.loads((SCHEMAS / "knowledge" / f"{name}.schema.json").read_text(encoding="utf-8"))
         Draft202012Validator.check_schema(schema)
