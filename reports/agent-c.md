@@ -1,42 +1,41 @@
-﻿# Отчёт агента C — E2-C-01
+# Отчёт агента C — E3-C-01
 
-- Этап E2, ветка `agent-c/e2`, статус `review`.
-- BASE_SHA `dae14d9a838154b72e4cf122881b190032ae0a74`; TASK_COMMIT `f613288e5b0a9bc733e6653ba9706bea7e3313d9`; engine/HTTP 1.0, DTO/schema v1 не менялись.
-- Pushed code SHA: checkpoint `7242082cb940c8b05c0435b4802d2220710fa8e7`; основной E2 код `6b251b0e1770a2ca19c169943da38099c7076b7f`; дополнительный E2 public API QA тест `f88d647e55983741c8c9aa95b5edd77b926a40b2`. SHA нового commit отчёта передаётся координатору после push.
-- E1-C-01 принят до начала E2. Чужие компоненты, main, Dockerfile B и VM не менялись.
+- Ветка `agent-c/e3`; BASE_SHA `b33ed1e0493d76dfd7051a141e2075c698f8e967`; TASK_COMMIT `c11b5235319c12ecb18a6c4ca05c35a54f5c0560`.
+- Статус: E3-C-01 передан координатору на review. Контракт engine/HTTP 1.0, DTO и JSON Schema v1 не изменены.
+- Pushed code SHA: ранний compare checkpoint `5c1adc523d19f4e5c9ea3fabb1f27c71bfb1cd73`; исправление §7.5 и математические tests `b2cdf1b41ed50319e5e91a451fdcfc2511a4160d`; итоговый код/каталог/документация `8d4cd0cd49134735b05c6957c98c6ac5525cdbba`. SHA commit этого отчёта сообщу отдельно после push.
+- Изменены только разрешённые C пути. Main, backend/web, Dockerfile B и VM не менялись. E4 не начат.
 
-## Реализовано
+## Публичный compare checkpoint
 
-`explain_receipt(ExplainRequest, KnowledgeBundle)` объясняет подтверждённый BillData через Decimal и общий `calculate_bill`: формула строки, разница с напечатанной суммой, услуги и отдельные перерасчёты без повторного учёта, долг, платежи, кредитовый остаток и три сверки итогов. Недостаток данных даёт `incomplete`, неподдерживаемая формула — `unsupported`, расхождение — `mismatch` с сохранением напечатанного числа. Ошибочная квитанция и агрегат вне Money вызывают безопасный `EngineError(INVALID_BILL)`; слишком большое произведение строки остаётся неизвестным с предупреждением. Проверенных нормативов/тарифов/ссылок нет: `sources=[]`, `actions=[]`, `ARITHMETIC_ONLY`.
+`compare_receipts(CompareRequest, KnowledgeBundle)` сортирует по периоду, блокирует один месяц, явные разные счёт/поставщик/адрес и редакции одного документа. Счёт нормализуется удалением пробелов/дефисов с сохранением ведущих нулей; адрес — только регистр, пробелы, знаки разделения и словарные `ул./д./кв.`. Когда реквизит отсутствует и `identity_acknowledged=false`, возвращает `needs_identity_confirmation`: older/newer и конкретные `IDENTITY_UNVERIFIED` paths, action проверки, все `delta_*`/`unexplained_delta=null`, строки и settlement deltas пусты. ACK=true разрешает предупреждённый расчёт; явное противоречие остаётся ошибкой `INCOMPARABLE_RECEIPTS`.
 
-`extract_receipt` читает только bytes. Шесть текстовых PDF учебного DEMO-BILL-V1 покрывают 200.00, изменение объёма/тарифа до 270.00, отдельный -50.00 перерасчёт, долг 100.00 с оплатой 80.00, переплату с закрытием -30.00 и неизвестную услугу `other`. Шесть PNG/JPEG рендеров и image-only PDF покрывают OCR. Для текстового PDF возвращаются page и нормализованный bbox найденной строки, иначе bbox=null. OCR возвращает page, bbox=null и `needs_review=true` для распознанных полей. Неизвестная услуга сохраняется как `other`, отмечается `SERVICE_UNMAPPED` и даёт `partial`.
+По байтам двух сгенерированных текстовых PDF через публичный `extract_receipt` и две confirmed DTO получено: август `5 × 40 = 200.00`, сентябрь `6 × 45 = 270.00`; `delta_current_charges=70.00`, `delta_total_due=70.00`, `quantity_effect=40.00`, `tariff_effect=30.00`, `rounding_effect=0.00`, `unexplained_delta=0.00`, `status=complete`. Ожидания независимо заданы в `fixtures/receipts/water-comparison.json`. Это синтетические bytes, не реальная квитанция и не измерение потребления.
 
-Негативные fixtures: пустой растр, обрезанный PDF без итогов, чужой макет, повреждённый PDF и PDF с напечатанным 271.00 против рассчитанного 270.00. Сымитированный сырой OCR `2O0.00` на bytes PNG не исправляется скрыто до 200.00: результат `partial` без строки. Это unit проверка парсера после подмены текста OCR, а не фактическое чтение такого символа Tesseract. Все образцы перечислены с SHA-256/provenance в manifest, генератор закреплён lock файлом.
+Сопоставление строк по коду, области, единице, поставщику и сегменту; для `other` учитывает название и подпись единицы. Отдельные день/ночь не объединяются, несовместимые единицы не получают эффект объёма/тарифа, дубликаты дают `ambiguous`, а не произвольную пару. `added/removed` описывают присутствие строки в документах, не факт подключения услуги. Проверены только объём, только тариф, дробное округление с `rounding_effect=-0.01`, несоседние периоды и явные реквизитные противоречия.
+
+`delta_current_charges` включает adjustment один раз. Отдельный `delta_adjustments` раскрывает его долю, не добавляя второй раз. `settlement_deltas` разделяют opening balance, оплаты со знаком отрицательного вклада, пени, прочие изменения и credit clamp. В синтетическом случае 200→190: услуги 200→270, новый adjustment -50, оплаты 0→30: текущие начисления +20, вклад оплаты -30, итог -10, остаток 0. Если оплаты неизвестны, `unexplained_delta=null` и status partial; переплата 0 к оплате объясняется clamp; напечатанные итоги сохраняются независимо. Mismatch 220 рассчитано / 230 напечатано даёт partial и видимый residual 10 без обвинения организации.
+
+## Каталог, вопросы и черновик
+
+`load_knowledge` читает только локальные YAML, проверяет 15 уникальных тем, территории, ссылки на источники, сроки и host allowlist; `knowledge_version` меняется вместе с содержимым. Текущая allowlist пуста. `answer_question` использует явный topic_id либо контролируемые utterances/keywords/aliases (`MIN_SCORE=2`, `MIN_MARGIN=2`), не вызывает сеть. Неизвестная тема даёт unsupported либо уточнение из максимум трёх вариантов. «Справка» сначала уточняет вид документа, затем территорию и роль по одному полю. Просроченная карточка, синтетический/просроченный/чужой источник не превращается в местную инструкцию. Все 15 карточек дают только общий безопасный текст; локальные темы явно сообщают об отсутствии проверенной местной инструкции.
+
+`compose_draft` берёт только подтверждённые поля текущих receipt refs и `line_id`. Пользовательский вопрос показан как отдельная неподтверждённая формулировка и не управляет алгоритмом. Неизвестные поля не подставляются. Без проверенного канала `recipient=null`, `actions=[]`, `RECIPIENT_UNVERIFIED`; отправки нет. B остаётся владельцем проверки актуальности ревизий, сохранения/stale черновика, UI копирования и внешних переходов.
 
 ## Проверки
 
-Среда: Windows, Python 3.13.14, временная venv вне Git по `requirements.lock`; для генератора добавлен `generator-requirements.lock`. Из корня checkout:
+Чистая временная Windows Python 3.13 venv вне Git: `$env:TEMP\zhkh-c-e3-venv`. Установка из `packages/housing_engine/requirements.lock`, затем `pip install --no-build-isolation --no-deps -e packages/housing_engine` прошла. Из корня checkout:
 
 ```powershell
-& "$env:TEMP\zhkh-c-e1-lockcheck\Scripts\python.exe" packages/housing_engine/verify_contract.py
-& "$env:TEMP\zhkh-c-e1-lockcheck\Scripts\python.exe" -m unittest discover -s packages/housing_engine/tests -q
-& "$env:TEMP\zhkh-c-e1-lockcheck\Scripts\python.exe" -m pip check
-$env:PATH = "$env:TEMP\zhkh-ocr-tesseract;$env:PATH"
-& "$env:TEMP\zhkh-c-e1-lockcheck\Scripts\python.exe" packages/housing_engine/tests/smoke_e2_ocr.py
+& "$env:TEMP\zhkh-c-e3-venv\Scripts\python.exe" packages/housing_engine/verify_contract.py
+& "$env:TEMP\zhkh-c-e3-venv\Scripts\python.exe" -m unittest discover -s packages/housing_engine/tests -q
+& "$env:TEMP\zhkh-c-e3-venv\Scripts\python.exe" -m pip check
+git diff --cached --check
 ```
 
-Результат: verifier 0 (schemas, SHA manifest, 200→270, knowledge structure OK); unittest 0 (`Ran 25 tests ... OK`); pip check 0 (`No broken requirements found`); Git staged diff check 0. Текстовые PDF bytes отдают реальные 200.00/270.00 и `source=pdf_text`; adjustment 270-50=220, долг/платёж 100+270-80=290, кредит max(-30,0)=0. Mismatch сохраняет напечатанное 271.00 и `unexplained_difference=1.00`.
+Результат после итогового code SHA: verifier 0 (`15 schema-valid topics`, DTO/schema/fixtures/manifest OK), unittest 0 (`Ran 42 tests ... OK`), pip check 0 (`No broken requirements found`), staged diff check 0. `EOF marker not found` дважды выводится существующими негативными PDF fixtures при общем unittest, но suite завершается успешно. Проверка synthetic OCR на Tesseract выполнена и задокументирована в принятом E2 отчёте; E3 сравнение использовало PDF text bytes. Не проверялись реальная квитанция, фото, Python 3.12/Linux, Docker, VM или MAX.
 
-Фактический OCR smoke: локальный user-scoped Tesseract `v5.5.3.20260724`; `--list-langs`: `eng`, `osd`, `rus`. Семь синтетических raster/scan inputs: пять обычных/adjustment/debt/credit PNG/JPEG `recognized` с ожидаемыми 200.00/270.00/220.00/290.00/0.00, unknown-service JPEG `partial` с `other`, image-only PDF `recognized` 200.00. У всех OCR evidence `needs_review=true`, есть `OCR_REVIEW_REQUIRED`. Это реальный OCR по сгенерированным изображениям, не проверка настоящих квитанций, телефонных фото, Docker, VM или MAX.
+## Ограничения и передача B
 
-## Зависимости и ограничения для B
+Пилотная территория, реальные квитанции, проверенные источники, организации и каналы не предоставлены. `pilot_territory_id=null`, `sources=[]`, `organizations=[]`, `source-host-allowlist=[]`; ни один `verified_at` не выдуман. Карточки generic/synthetic, `review_after` — редакционный срок, не факт проверки внешнего материала. Два точно названных вида жилищных справок для пилотной территории (§10.1) пока заблокированы отсутствием территории/первичных источников; локальные инструкции и получатель черновика не объявляются готовыми.
 
-Python зависимости строго заданы `packages/housing_engine/requirements.lock`; runtime нужны pydantic, pypdf, pypdfium2, Pillow. Системно нужен Tesseract 5 с `eng+rus`, устанавливаемый в образ при сборке; проверить `tesseract --version` и `tesseract --list-langs`. `ExtractionConfig.workspace` — существующий доверенный временный каталог. Лимиты: 10 MiB bytes, 3 PDF страницы, 25 млн пикселей на страницу, OCR до 90 секунд. B отвечает за 120-секундный внешний timeout, RSS/контейнерный лимит и завершение дочерних процессов. Реальная пилотная территория, проверенные внешние источники и реальные макеты отсутствуют; объяснение остаётся арифметическим. Python 3.12 и Linux-контейнер этим отчётом не проверены.
-
-Координатору проверить pushed SHA, схему/manifest, тесты и OCR evidence, затем передать B итоговый public API SHA. E3 самостоятельно не начинаю.
-
-## Дополнительная E2 QA по заданию координатора
-
-Публичный тест `test_manual_required_bytes_and_explicit_unsupported_manual_bill` добавлен без изменения DTO или runtime-кода. `unknown-layout.pdf` читается из bytes и даёт `manual_required` без периода, услуг, начислений и итога. `validate_bill` возвращает `can_confirm=false`; `explain_receipt` не принимает эту неподтверждённую квитанцию (`EngineError(INVALID_BILL)`). Отдельно вручную введённые синтетические значения из `water-2026-09.json` помечены `manual-v1`, `formula_kind=unsupported`, `calculation_kind=document_amount`: подтверждение допустимо, `current_charges` и напечатанный `document_total_due` равны 270.00, но рассчитанные баланс/итог, unexplained difference и формула строки остаются `null`; сверки `matched/unsupported/unsupported`, источников нет. JSON служит тестовыми ручными значениями и не подставляется как результат OCR неизвестного PDF.
-
-На Windows/Python 3.13.14 после commit `f88d647e55983741c8c9aa95b5edd77b926a40b2`: `python -m unittest discover -s packages/housing_engine/tests -q` — `Ran 26 tests ... OK`; `python packages/housing_engine/verify_contract.py` — оба блока OK; `git diff --cached --check` — ошибок нет. Прежние ограничения реальных счетов, Docker/VM/MAX и Python 3.12 сохраняются. Это дополнительная проверка E2, не начало E3.
+B может принимать engine SHA после ревью, вызывать публичные функции без dev stub и проверять владельца/актуальность ревизий перед каждым запросом. Для source/knowledge deployment нужно включить каталог `knowledge/` рядом с пакетом и передать локальный путь в `load_knowledge`; runtime сеть не нужна. Готовность E3 в интеграции и E4 выдаёт только координатор после проверки B/A. Следующий шаг C — устранить конкретные замечания ревью E3 или принять новое задание E4 после общей приёмки.
