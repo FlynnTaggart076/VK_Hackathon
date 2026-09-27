@@ -68,6 +68,11 @@ docker compose --env-file ../runtime/app.env -p vk-zhkh -f compose.yaml -f compo
 
 ## E4 production topology
 
+Корневой сертификат Минцифры для исходящего HTTPS worker закреплён в образе
+backend: источник, два SHA-256 и правило обновления — в
+[`infra/certs/README.md`](../infra/certs/README.md). `update-ca-certificates`
+обновляет только trust store образа; проверка TLS и имени хоста остаётся включённой.
+
 `/srv/team/vk-hackathon/deploy` — чистый checkout принятого SHA;
 `/srv/team/vk-hackathon/runtime` — приватные `app.env`, backup и запись SHA.
 Compose project `vk-zhkh`; публичный путь `/team/zhkh/`; общий вход остаётся
