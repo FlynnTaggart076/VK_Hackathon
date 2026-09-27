@@ -5,6 +5,7 @@ from sqlalchemy import create_engine, select
 
 from app.db.models import AssistantAnswer, Base, Outbox, WebhookInbox
 from app.main import Settings, create_app
+from app.services.assistant_store import knowledge
 from app.services.max_queue import process_inbox_once, process_outbox_once
 
 
@@ -56,7 +57,7 @@ def test_webhook_replay_and_bounded_outbox(tmp_path):
         with app.state.store.Session() as session:
             answer = session.scalar(select(AssistantAnswer))
             assert answer is not None and answer.result["status"] == "answered"
-            assert answer.result["knowledge_version"].startswith("1.0.0-e3-generic+")
+            assert answer.result["knowledge_version"] == knowledge().version
             replies = session.scalars(select(Outbox)).all()
             assert len(replies) == 2 and any(answer.result["text"] in row.text for row in replies)
 
