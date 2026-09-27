@@ -13,6 +13,13 @@ from .receipts import LINE_TOLERANCE, calculate_bill, money, rounded, validate_b
 
 
 ENGINE_VERSION = "0.1.0"
+MAX_MONEY = Decimal("999999999.99")
+
+
+def _public_money(value: str | None) -> str | None:
+    if value is not None and abs(Decimal(value)) > MAX_MONEY:
+        raise EngineError("INVALID_BILL", "Расчётная сумма не помещается в денежный формат договора; проверьте значения квитанции.")
+    return value
 
 
 def _line(index, line) -> ExplanationLine:
@@ -25,11 +32,18 @@ def _line(index, line) -> ExplanationLine:
         if line.quantity is not None and line.tariff is not None:
             with localcontext() as context:
                 context.prec = 50
-                calculated = money(rounded(Decimal(line.quantity) * Decimal(line.tariff)))
-            formula = f"{line.quantity} × {line.tariff} = {calculated} RUB"
-            if line.charge_amount is not None:
+                product = rounded(Decimal(line.quantity) * Decimal(line.tariff))
+            if abs(product) > MAX_MONEY:
+                issues.append(Issue(code="LINE_CALCULATION_OUT_OF_RANGE", severity="warning", path=path, message="Произведение объёма и тарифа не помещается в денежный формат договора; проверьте исходные значения."))
+            else:
+                calculated = money(product)
+                formula = f"{line.quantity} × {line.tariff} = {calculated} RUB"
+            if line.charge_amount is not None and calculated is not None:
                 difference = money(Decimal(line.charge_amount) - Decimal(calculated))
-                if abs(Decimal(difference)) > LINE_TOLERANCE:
+                if abs(Decimal(difference)) > MAX_MONEY:
+                    difference = None
+                    issues.append(Issue(code="LINE_DIFFERENCE_OUT_OF_RANGE", severity="warning", path=path, message="Разница строки не помещается в денежный формат договора."))
+                elif abs(Decimal(difference)) > LINE_TOLERANCE:
                     issues.append(Issue(code="LINE_AMOUNT_MISMATCH", severity="warning", path=path + "/charge_amount", message="Напечатанная сумма строки отличается от произведения объёма и тарифа."))
         else:
             issues.append(Issue(code="LINE_FORMULA_INCOMPLETE", severity="warning", path=path, message="Объём или тариф неизвестен; строку нельзя пересчитать."))
@@ -52,15 +66,23 @@ def explain_receipt(request: ExplainRequest, knowledge: KnowledgeBundle) -> Rece
     if not validation.can_confirm:
         raise EngineError("INVALID_BILL", "Подтвердите обязательные поля квитанции перед объяснением.")
     arithmetic = calculate_bill(bill)
+    for value in (arithmetic.current_charges, arithmetic.calculated_closing_balance, arithmetic.calculated_total_due, *(part for check in arithmetic.checks for part in (check.calculated_value, check.difference))):
+        _public_money(value)
     settlement = bill.settlement
+    service_charges = _public_money(money(sum((Decimal(line.charge_amount) for line in bill.services), Decimal(0))))
+    adjustment_charges = _public_money(money(sum((Decimal(item.amount) for item in bill.adjustments), Decimal(0))))
     components = [
         BalanceComponent(code="opening_balance", label="Остаток на начало", amount=settlement.opening_balance),
-        BalanceComponent(code="current_charges", label="Начисления с корректировками", amount=arithmetic.current_charges),
+        BalanceComponent(code="service_charges", label="Начисления по услугам", amount=service_charges),
+        BalanceComponent(code="adjustments", label="Отдельные перерасчёты", amount=adjustment_charges),
         BalanceComponent(code="penalties", label="Пени", amount=settlement.penalties),
         BalanceComponent(code="other_account_changes", label="Прочие изменения счёта", amount=settlement.other_account_changes),
         BalanceComponent(code="payments_credited", label="Зачтённые платежи (вычитаются)", amount=settlement.payments_credited),
     ]
     issues = list(validation.warnings)
+    for index, item in enumerate(bill.adjustments):
+        period = f" за {item.related_period}" if item.related_period else ""
+        issues.append(Issue(code="ADJUSTMENT_APPLIED", severity="info", path=f"/adjustments/{index}/amount", message=f"Отдельный перерасчёт {item.amount} RUB{period} учтён один раз в текущих начислениях."))
     issues.append(Issue(
         code="ARITHMETIC_ONLY", severity="info", path=None,
         message="Объяснение проверяет числа подтверждённой квитанции. Тарифы, нормативы и правомерность начислений внешними источниками не подтверждены.",

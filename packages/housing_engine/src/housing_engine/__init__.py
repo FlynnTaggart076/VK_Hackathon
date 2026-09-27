@@ -1,4 +1,4 @@
-"""Housing engine v1 contract. Processing functions are scheduled for E1-E3."""
+"""Housing engine v1 public API; later-stage functions remain explicit stubs."""
 
 from datetime import datetime
 
@@ -16,7 +16,7 @@ __version__ = "0.1.0"
 
 
 def _not_implemented() -> None:
-    raise NotImplementedError("housing_engine processing starts in E1; E0 publishes DTO only")
+    raise NotImplementedError("housing_engine function is not implemented in this stage")
 
 
 def compare_receipts(request: CompareRequest, knowledge: KnowledgeBundle) -> ComparisonResult:

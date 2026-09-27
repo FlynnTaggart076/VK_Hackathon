@@ -26,7 +26,8 @@ ENGINE_VERSION = "0.1.0"
 TEMPLATE_ID = "demo-bill-v1"
 AMOUNT = r"-?(?:0|[1-9][0-9]{0,8})\.[0-9]{2}"
 DECIMAL = r"(?:0|[1-9][0-9]{0,8})(?:\.[0-9]{1,6})?"
-ROW_RE = re.compile(rf"^Cold water\s*\(m3\)\s*(?:\|\s*)?({DECIMAL})\s*(?:\|\s*)?({DECIMAL})\s*(?:\|\s*)?({AMOUNT})\s*$", re.I)
+ROW_RE = re.compile(rf"^(?P<name>[A-Za-z][A-Za-z0-9 ()/_-]*?)\s*\|\s*(?P<quantity>{DECIMAL})\s*\|\s*(?P<tariff>{DECIMAL})\s*\|\s*(?P<charge>{AMOUNT})\s*$", re.I)
+ADJUSTMENT_RE = re.compile(rf"^ADJUSTMENT\s*\|\s*(?P<amount>{AMOUNT})(?:\s*\|\s*(?P<period>[0-9]{{4}}-(?:0[1-9]|1[0-2])))?\s*$", re.I)
 
 
 def _empty_bill() -> BillData:
@@ -78,6 +79,38 @@ def _pdf_text(document: DocumentInput, config: ExtractionConfig) -> tuple[list[s
         raise
     except Exception as exc:
         raise EngineError("CORRUPT_DOCUMENT", "Не удалось прочитать PDF.") from exc
+
+
+def _page_positions(content: bytes, pages: list[str]) -> dict[str, tuple[int, tuple[float, float, float, float] | None]]:
+    """Locate exact text lines. Missing positions remain null, never estimated."""
+    positions: dict[str, tuple[int, tuple[float, float, float, float] | None]] = {}
+    try:
+        with pypdfium2.PdfDocument(content) as pdf:
+            for page_index, text in enumerate(pages):
+                page = pdf[page_index]
+                width, height = page.get_size()
+                text_page = page.get_textpage()
+                for line in text.splitlines():
+                    key = line.strip()
+                    if not key or key in positions:
+                        continue
+                    bbox = None
+                    searcher = text_page.search(key)
+                    found = searcher.get_next()
+                    if found is not None:
+                        start, count = found
+                        boxes = [text_page.get_charbox(char_index) for char_index in range(start, start + count)]
+                        boxes = [box for box in boxes if box[2] > box[0] and box[3] > box[1]]
+                        if boxes:
+                            left = min(box[0] for box in boxes)
+                            bottom = min(box[1] for box in boxes)
+                            right = max(box[2] for box in boxes)
+                            top = max(box[3] for box in boxes)
+                            bbox = (max(0.0, left / width), max(0.0, 1 - top / height), min(1.0, right / width), min(1.0, 1 - bottom / height))
+                    positions[key] = (page_index + 1, bbox)
+    except Exception:
+        return {line.strip(): (index + 1, None) for index, text in enumerate(pages) for line in text.splitlines() if line.strip()}
+    return positions
 
 
 def _image_from_bytes(document: DocumentInput, config: ExtractionConfig) -> Image.Image:
@@ -150,7 +183,7 @@ def _field(lines: list[str], label: str, pattern: str | None = None) -> tuple[st
     return None, None
 
 
-def _parse(text: str, receipt_id, source: str) -> ExtractionResult:
+def _parse(text: str, receipt_id, source: str, positions: dict[str, tuple[int, tuple[float, float, float, float] | None]] | None = None) -> ExtractionResult:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     upper = text.upper()
     has_table_header = any(all(word in line.upper() for word in ("SERVICE", "QTY", "TARIFF", "CHARGE")) for line in lines)
@@ -158,14 +191,15 @@ def _parse(text: str, receipt_id, source: str) -> ExtractionResult:
         return _manual("TEMPLATE_UNKNOWN", "Учебный макет не распознан; проверьте квитанцию вручную.")
     evidence: list[FieldEvidence] = []
 
-    def add(path: str, original: str | None, *, default: bool = False) -> None:
+    def add(path: str, original: str | None, *, default: bool = False, review: bool = False) -> None:
         if original is not None or default:
+            location = (positions or {}).get(original.strip(), (1, None)) if original is not None else (None, None)
             evidence.append(FieldEvidence(
                 path=path, source="template_default" if default else source,
-                page_number=None if default else 1, bbox=None,
+                page_number=None if default else location[0], bbox=None if default else location[1],
                 source_text=None if default else original,
-                needs_review=source == "ocr" and not default,
-                reason="Подтвердите распознанное значение." if source == "ocr" and not default else None,
+                needs_review=(source == "ocr" or review) and not default,
+                reason="Подтвердите распознанное значение или классификацию." if (source == "ocr" or review) and not default else None,
             ))
 
     period, period_line = _field(lines, "PERIOD", r"[0-9]{4}-(?:0[1-9]|1[0-2])")
@@ -174,22 +208,48 @@ def _parse(text: str, receipt_id, source: str) -> ExtractionResult:
     address, address_line = _field(lines, "ADDRESS")
     for path, line in (("/period", period_line), ("/issuer_name", issuer_line), ("/account_number", account_line), ("/address_text", address_line)):
         add(path, line)
-    row = next(((match, line) for line in lines if (match := ROW_RE.fullmatch(line))), None)
     services = []
-    if row is not None:
-        match, row_text = row
-        line_id = uuid5(receipt_id, "demo-bill-v1:service:0")
+    parser_issues: list[Issue] = []
+    for row_text in lines:
+        match = ROW_RE.fullmatch(row_text)
+        if match is None:
+            continue
+        index = len(services)
+        line_id = uuid5(receipt_id, f"demo-bill-v1:service:{index}")
+        raw_name = match.group("name").strip()
+        unit_match = re.search(r"\(([A-Za-z0-9]+)\)$", raw_name)
+        unit_label = unit_match.group(1) if unit_match else None
+        known = raw_name.casefold() == "cold water (m3)"
+        if not known:
+            parser_issues.append(Issue(code="SERVICE_UNMAPPED", severity="warning", path=f"/services/{index}/service_code", message="Неизвестное название услуги сохранено как other; проверьте его вручную."))
         services.append({
-            "line_id": line_id, "raw_name": "Cold water (m3)", "service_code": "cold_water",
-            "scope": "individual", "unit": "m3", "unit_label": None,
-            "quantity": match.group(1), "tariff": match.group(2),
-            "charge_amount": match.group(3), "supplier_key": "demo-provider",
+            "line_id": line_id, "raw_name": raw_name, "service_code": "cold_water" if known else "other",
+            "scope": "individual" if known else "unspecified", "unit": "m3" if unit_label == "m3" else ("other" if unit_label else None), "unit_label": None if unit_label == "m3" else unit_label,
+            "quantity": match.group("quantity"), "tariff": match.group("tariff"),
+            "charge_amount": match.group("charge"), "supplier_key": "demo-provider",
             "segment_key": None, "calculation_kind": "simple_product",
         })
         for name in ("raw_name", "service_code", "unit", "quantity", "tariff", "charge_amount", "calculation_kind"):
-            add(f"/services/0/{name}", row_text)
+            add(f"/services/{index}/{name}", row_text, review=name == "service_code" and not known)
         for name in ("scope", "supplier_key"):
-            add(f"/services/0/{name}", None, default=True)
+            add(f"/services/{index}/{name}", None, default=True)
+    adjustments = []
+    for line in lines:
+        match = ADJUSTMENT_RE.fullmatch(line)
+        if match is None:
+            continue
+        index = len(adjustments)
+        adjustments.append({
+            "adjustment_id": uuid5(receipt_id, f"demo-bill-v1:adjustment:{index}"),
+            "label": "Adjustment", "amount": match.group("amount"),
+            "service_line_id": services[0]["line_id"] if services else None,
+            "related_period": match.group("period"),
+        })
+        add(f"/adjustments/{index}/amount", line)
+        if match.group("period") is not None:
+            add(f"/adjustments/{index}/related_period", line)
+        add(f"/adjustments/{index}/label", line)
+        add(f"/adjustments/{index}/service_line_id", None, default=True)
     values = {}
     for key, label in (
         ("opening_balance", "OPENING BALANCE"), ("payments_credited", "PAYMENTS CREDITED"),
@@ -211,11 +271,11 @@ def _parse(text: str, receipt_id, source: str) -> ExtractionResult:
         schema_version="1.0", period=period, currency="RUB", issuer_name=issuer,
         provider_id="demo-provider", account_number=account, address_text=address,
         template_id=TEMPLATE_ID, template_version="1.0", services=services,
-        adjustments=[], settlement={"formula_kind": "signed_balance_v1", **values},
+        adjustments=adjustments, settlement={"formula_kind": "signed_balance_v1", **values},
         document_current_charges=current, document_total_due=total,
     )
     validation = validate_bill(bill)
-    issues = validation.errors + validation.warnings
+    issues = parser_issues + validation.errors + validation.warnings
     outcome = "recognized" if validation.can_confirm and validation.reconciliation_status == "matched" and not issues else ("partial" if period or services else "manual_required")
     if source == "ocr":
         issues.append(Issue(code="OCR_REVIEW_REQUIRED", severity="warning", path=None, message="Проверьте все распознанные значения перед подтверждением."))
@@ -235,14 +295,18 @@ def extract_receipt(document: DocumentInput, config: ExtractionConfig) -> Extrac
         text = "\n".join(pages)
         useful = "DEMO-BILL-V1" in text.upper() and any("SERVICE" in line.upper() and "QTY" in line.upper() for line in text.splitlines()) and any(char.isdigit() for char in text)
         if useful:
-            return _parse(text, document.receipt_id, "pdf_text")
+            return _parse(text, document.receipt_id, "pdf_text", _page_positions(document.content, pages))
         meaningful_lines = [line for line in text.splitlines() if any(ch.isalpha() for ch in line) and any(ch.isdigit() for ch in line)]
         if len(text.strip()) >= 50 and len(meaningful_lines) >= 3:
             return _manual("TEMPLATE_UNKNOWN", "Текстовый PDF не соответствует учебному макету; используйте ручной ввод.")
         recognized = []
-        for image in _pdf_images(document.content, config):
-            recognized.append(_ocr(image, config, config.timeout_seconds - (time.monotonic() - start)))
-        return _parse("\n".join(recognized), document.receipt_id, "ocr")
+        positions = {}
+        for page_number, image in enumerate(_pdf_images(document.content, config), start=1):
+            page_text = _ocr(image, config, config.timeout_seconds - (time.monotonic() - start))
+            recognized.append(page_text)
+            for line in page_text.splitlines():
+                positions.setdefault(line.strip(), (page_number, None))
+        return _parse("\n".join(recognized), document.receipt_id, "ocr", positions)
     image = _image_from_bytes(document, config)
     text = _ocr(image, config, config.timeout_seconds - (time.monotonic() - start))
     return _parse(text, document.receipt_id, "ocr")
