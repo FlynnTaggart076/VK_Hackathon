@@ -8,7 +8,7 @@ from decimal import Decimal, localcontext
 
 from .dto import (
     CompareRequest, ComparedLine, ComparisonResult, Issue, KnowledgeBundle,
-    PeriodReceiptRef, SettlementDelta,
+    NextAction, PeriodReceiptRef, SettlementDelta,
 )
 from .errors import EngineError
 from .receipts import LINE_TOLERANCE, calculate_bill, money, rounded, validate_bill
@@ -184,6 +184,21 @@ def compare_receipts(request: CompareRequest, knowledge: KnowledgeBundle) -> Com
     older, newer = sorted((left, right), key=lambda item: item.bill_data.period)
     old, new = older.bill_data, newer.bill_data
     missing_identity, issues = _identity(old, new)
+    if missing_identity and not request.identity_acknowledged:
+        issues.append(Issue(code="IDENTITY_ACK_REQUIRED", severity="warning", path=None, message="Проверьте недостающие реквизиты обеих квитанций и подтвердите сравнение."))
+        return ComparisonResult(
+            status="needs_identity_confirmation",
+            older=PeriodReceiptRef(id=older.receipt_ref.id, revision=older.receipt_ref.revision, period=old.period),
+            newer=PeriodReceiptRef(id=newer.receipt_ref.id, revision=newer.receipt_ref.revision, period=new.period),
+            engine_version="0.1.0", knowledge_version=knowledge.version,
+            delta_current_charges=None, delta_adjustments=None, delta_total_due=None,
+            lines=[], settlement_deltas=[], unexplained_delta=None,
+            issues=issues, actions=[NextAction(
+                id="review-receipt-identity", type="navigate", label="Проверить реквизиты и подтвердить",
+                url=None, topic_id=None, organization_id=None, source_id=None,
+                target="comparison", receipt_ref=None, requires=["identity_acknowledged"],
+            )],
+        )
     rows, line_issues = _lines(old, new)
     issues += line_issues
     old_math, new_math = calculate_bill(old), calculate_bill(new)
@@ -212,9 +227,7 @@ def compare_receipts(request: CompareRequest, knowledge: KnowledgeBundle) -> Com
     if full_formula and delta_current is not None and delta_due is not None and all(item.contribution is not None for item in deltas):
         explained = Decimal(delta_current) + sum((Decimal(item.contribution) for item in deltas), Decimal(0))
         unexplained = _amount(Decimal(delta_due) - explained)
-    if missing_identity and not request.identity_acknowledged:
-        status = "needs_identity_confirmation"
-    elif unexplained is None or old_math.reconciliation_status != "matched" or new_math.reconciliation_status != "matched" or line_issues:
+    if unexplained is None or old_math.reconciliation_status != "matched" or new_math.reconciliation_status != "matched" or line_issues:
         status = "partial"
     else:
         status = "complete"
