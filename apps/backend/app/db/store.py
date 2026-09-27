@@ -140,6 +140,34 @@ class SqlStore:
                 raise ApiError(401, "AUTH_REQUIRED", "Войдите в приложение.")
             row.revoked_at = now()
 
+    def comparison_snapshots(self, user_id: str, refs: list[dict]) -> tuple[list[dict], str | None]:
+        """Read two current confirmed versions atomically with owner checks."""
+        uid = uuid.UUID(user_id)
+        ids = [uuid.UUID(item["id"]) for item in refs]
+        with self.Session.begin() as session:
+            receipts = {row.id: row for row in session.scalars(select(Receipt).where(
+                Receipt.id.in_(ids), Receipt.user_id == uid
+            ).order_by(Receipt.id).with_for_update()).all()}
+            profile = session.get(Profile, uid)
+            snapshots = []
+            for item, rid in zip(refs, ids):
+                receipt = receipts.get(rid)
+                if receipt is None:
+                    raise ApiError(404, "NOT_FOUND", "Квитанция не найдена.")
+                if receipt.current_revision != item["revision"]:
+                    raise ApiError(409, "REVISION_CONFLICT", "Квитанция изменена; обновите данные.",
+                                   details={"current_revision": receipt.current_revision})
+                if receipt.status != "confirmed":
+                    raise ApiError(409, "RECEIPT_NOT_CONFIRMED", "Сначала подтвердите обе квитанции.")
+                revision = session.get(ReceiptRevision, (rid, receipt.current_revision))
+                if revision is None or revision.confirmed_at is None:
+                    raise ApiError(409, "RECEIPT_NOT_CONFIRMED", "Сначала подтвердите обе квитанции.")
+                snapshots.append({"id": rid, "revision": receipt.current_revision,
+                                  "bill_data": deepcopy(revision.bill_data),
+                                  "confirmed_at": aware(revision.confirmed_at),
+                                  "dataset_kind": receipt.dataset_kind})
+            return snapshots, profile.territory_id if profile else None
+
     def profile(self, user_id: str) -> dict:
         with self.Session() as session:
             profile = session.get(Profile, uuid.UUID(user_id))
