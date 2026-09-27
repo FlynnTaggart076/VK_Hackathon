@@ -6,6 +6,7 @@ export function ErrorMessage({ error }: { error: unknown }) {
   if (error instanceof ApiRequestError) {
     if (error.status === 401) message = 'Сессия истекла. Войдите снова, чтобы продолжить.';
     else if (error.status === 409) message = `Конфликт данных: ${error.message}`;
+    else if (error.status === 410) message = 'Срок хранения исходного файла истёк. Извлечённые данные остаются в истории.';
     else if (error.status === 413) message = `Файл не принят: ${error.message}`;
     else if (error.status === 422) message = `Проверьте данные: ${error.message}`;
   } else if (error instanceof TypeError) message = 'Нет соединения с сервером. Проверьте сеть и повторите попытку.';

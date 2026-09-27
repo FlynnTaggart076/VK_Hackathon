@@ -161,6 +161,9 @@ describe('E3 comparison, FAQ, draft and history mock', () => {
     expect(ambiguous.lines[0].quantity_effect).toBeNull();
     const partial = await api.compare({ left: ref, right: { id: '10000000-0000-4000-8000-000000000007', revision: 3 }, identity_acknowledged: false });
     expect(partial.delta_total_due).toBeNull();
+    const history = await api.receipts();
+    expect(history.items.find((item) => item.id === partial.newer.id)?.source_available).toBe(false);
+    await expect(api.source(partial.newer.id)).rejects.toMatchObject({ status: 410, code: 'SOURCE_EXPIRED' });
   });
   it('lists all 15 topics, asks for clarification and admits unknown questions', async () => {
     setSessionToken((await demoAuth('mock-only')).access_token);
@@ -171,6 +174,22 @@ describe('E3 comparison, FAQ, draft and history mock', () => {
     expect(vague.status).toBe('needs_clarification');
     expect(vague.sources).toEqual([]);
     expect((await api.answer('неизвестный вопрос', context)).status).toBe('unsupported');
+  });
+  it('imports a catalog demo receipt after consent and retains synthetic provenance through the job', async () => {
+    setSessionToken((await demoAuth('mock-only')).access_token);
+    const meta = await api.meta();
+    const catalog = await api.catalog();
+    const sample = catalog.demo_receipts.find((item) => item.fixture_id === 'water-2026-09');
+    expect(sample).toBeTruthy();
+    await api.updateProfile({ role: 'tenant', territory_id: 'demo-territory',
+      privacy_notice_version: meta.privacy_notice.version, privacy_acknowledged: true });
+    const queued = await api.importDemo(sample!.fixture_id, crypto.randomUUID());
+    expect(queued.receipt.dataset_kind).toBe('synthetic');
+    await api.job(queued.job_id); await api.job(queued.job_id); await api.job(queued.job_id);
+    const receipt = await api.receipt(queued.receipt.id);
+    expect(receipt.dataset_kind).toBe('synthetic');
+    expect(receipt.bill_data.period).toBe('2026-09');
+    expect(receipt.bill_data.document_total_due).toBe('270.00');
   });
   it('creates and edits a draft with CAS, then marks it stale after source deletion', async () => {
     setSessionToken((await demoAuth('mock-only')).access_token);

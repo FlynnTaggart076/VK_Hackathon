@@ -169,7 +169,7 @@ export function App() {
       <Routes>
         {screens.map(({ path }) => <Route key={path} path={path} element={<Page path={path} />} />)}
         <Route path="/onboarding" element={!authenticated ? needsLogin : meta && catalog && profile ? <Onboarding meta={meta} catalog={catalog} profile={profile} onSaved={setProfile} /> : waiting} />
-        <Route path="/upload" element={!authenticated ? needsLogin : meta ? <Upload meta={meta} profile={profile} onQueued={(value) => navigate(`/processing?job=${encodeURIComponent(value.job_id)}`)} /> : waiting} />
+        <Route path="/upload" element={!authenticated ? needsLogin : meta ? <Upload meta={meta} profile={profile} catalog={catalog} onQueued={(value) => navigate(`/processing?job=${encodeURIComponent(value.job_id)}`)} /> : waiting} />
         <Route path="/processing" element={!authenticated ? needsLogin : <Processing stub={!!meta?.features.engine_stub} />} />
         <Route path="/review" element={!authenticated ? needsLogin : <ReceiptReview />} />
         <Route path="/explanation" element={!authenticated ? needsLogin : <ReceiptExplanation />} />
