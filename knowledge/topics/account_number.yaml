@@ -1,0 +1,16 @@
+id: account_number
+title: "Лицевой счёт"
+utterances: ["где лицевой счет", "найти номер счета"]
+keywords: ["лицевой", "счет", "номер"]
+required_context: []
+applicability:
+  territory_ids: []
+  roles: []
+  service_codes: []
+  document_kinds: []
+answer_template: "Ищите реквизит «лицевой счёт» в своей квитанции. Если поле не распознано, проверьте оригинал вручную."
+steps: ["Откройте реквизиты своей квитанции."]
+source_ids: []
+action_templates: []
+review_after: "2026-12-31T00:00:00Z"
+content_version: "1.0"

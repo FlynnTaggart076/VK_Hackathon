@@ -1,1 +1,9 @@
-aliases: []
+aliases:
+  - {phrase: "жировка", topic_id: first_bill}
+  - {phrase: "лицевой", topic_id: account_number}
+  - {phrase: "счетчик", topic_id: meter_readings}
+  - {phrase: "срок показаний", topic_id: meter_deadline}
+  - {phrase: "ук", topic_id: management_contacts}
+  - {phrase: "переплата", topic_id: arrears_or_credit}
+  - {phrase: "корректировка", topic_id: adjustment}
+  - {phrase: "справка", topic_id: housing_document}

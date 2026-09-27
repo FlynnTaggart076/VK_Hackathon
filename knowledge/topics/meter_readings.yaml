@@ -1,0 +1,16 @@
+id: meter_readings
+title: "Показания счётчика"
+utterances: ["как передать показания", "куда отправить показания"]
+keywords: ["показания", "передать", "счетчик"]
+required_context: [territory_id]
+applicability:
+  territory_ids: []
+  roles: []
+  service_codes: []
+  document_kinds: []
+answer_template: "Канал передачи зависит от вашего поставщика. Проверенного местного канала сейчас нет; уточните организацию по документу."
+steps: ["Уточните поставщика услуги по квитанции."]
+source_ids: []
+action_templates: []
+review_after: "2026-12-31T00:00:00Z"
+content_version: "1.0"

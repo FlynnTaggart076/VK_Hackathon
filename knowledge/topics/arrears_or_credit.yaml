@@ -1,0 +1,16 @@
+id: arrears_or_credit
+title: "Долг или переплата"
+utterances: ["что значит долг", "почему переплата"]
+keywords: ["долг", "переплата", "остаток"]
+required_context: []
+applicability:
+  territory_ids: []
+  roles: []
+  service_codes: []
+  document_kinds: []
+answer_template: "Остаток на начало, текущие начисления и учтённые оплаты являются разными полями. Проверьте их значения в подтверждённой квитанции."
+steps: ["Откройте расчёт своей квитанции."]
+source_ids: []
+action_templates: []
+review_after: "2026-12-31T00:00:00Z"
+content_version: "1.0"

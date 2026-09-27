@@ -6,6 +6,7 @@ import json
 import os
 import sys
 import hashlib
+from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
@@ -15,7 +16,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "packages" / "housing_engine" / "src"))
-from housing_engine import dto  # noqa: E402
+from housing_engine import dto, load_knowledge  # noqa: E402
 
 
 MODELS = {
@@ -115,8 +116,10 @@ def verify() -> None:
     territory_ids = {item["id"] for item in territories}
     assert territory_ids == set(manifest["territory_ids"])
     assert manifest["pilot_territory_id"] is None or manifest["pilot_territory_id"] in territory_ids
+    bundle = load_knowledge(str(KNOWLEDGE), datetime.now(timezone.utc))
+    assert len(bundle.topics) == 15
     print("Engine v1 schemas and synthetic 200 -> 270 fixtures: OK")
-    print("Knowledge catalog structure: OK; real pilot territory and verified sources pending")
+    print("Knowledge catalog: 15 schema-valid topics, local allowlist and references OK; real pilot territory and verified sources pending")
 
 
 if __name__ == "__main__":

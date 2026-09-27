@@ -1,0 +1,16 @@
+id: first_bill
+title: "Первая квитанция"
+utterances: ["первая квитанция", "получил первую платежку"]
+keywords: ["первая", "квитанция"]
+required_context: []
+applicability:
+  territory_ids: []
+  roles: []
+  service_codes: []
+  document_kinds: []
+answer_template: "Сначала проверьте период, реквизиты и строки начислений в своей квитанции. Числа требуют вашего подтверждения."
+steps: ["Откройте разбор своей квитанции."]
+source_ids: []
+action_templates: [{id: "navigate-receipt_upload", type: navigate, label: "Открыть", source_id: null, target: receipt_upload, requires: []}]
+review_after: "2026-12-31T00:00:00Z"
+content_version: "1.0"
