@@ -1,4 +1,16 @@
-﻿# Отчёт агента A — E4-A-01
+﻿# Отчёт агента A — E4: demo и user validation follow-up
+
+Статус: документация подготовлена и pushed для review; текущий этап E4, E5 не начат. Отдельный checkout `.checkouts/agent-a-e4b`, ветка `agent-a/e4b`, принятый технический BASE_SHA `01a271a506db1e65aedd68efc7101c761827d89a`, task commit `b09d930eb767c5cf64348b5d193c9880c0e24c72`. Docs SHA `69809f44bd61915ae2825b11acce8d3ce8e5ee73` — только `docs/demo.md` и `docs/user-validation.md`.
+
+`docs/demo.md` даёт 3–5 минутный синтетический маршрут через текущие UI кнопки: вход/профиль → общий FAQ → каталожные август `200.00` и сентябрь `270.00` → отдельная учебная текстовая правка и подтверждение → серверное сравнение `70.00 = 40.00 + 30.00` → редактирование и копирование черновика → unknown без выдуманного источника. Отдельно описаны 401/409/413, сетевой повтор и `manual_required`. JSON demo import честно отделён от байтового OCR. `docs/user-validation.md` содержит задачи без подсказок, пустой лист наблюдений и отложенный чеклист подписанного MAX Web/mobile после deploy.
+
+Проверка документации без записи в исходники: `knowledge/territories.yaml` — UI label «Учебная территория»; `knowledge/topics/request_breakdown.yaml` — «Запрос расшифровки»; `fixtures/receipts/water-{2026-08,2026-09}.json` — `200.00`/`270.00`; `fixtures/receipts/water-comparison.json` — `70.00`, `40.00`, `30.00`; текущие `apps/web/src/ui/{Upload,ReceiptReview,Comparison,Draft,App}.tsx` и `apps/web/scripts/e3-real-flow.mjs` сверены с шагами. При review кода C обнаружено, что `unit_label` участвует в `_key`/`_effects` сравнения; его изменение только в сентябре убрало бы разложение 40/30. Поэтому инструкции используют `issuer_name` с сохранением исходного `provider_id`, счёта, адреса и единицы; это демонстрация сохранения, не заявленная OCR ошибка. `git diff --cached --check` прошёл. Frontend code не менялся; tests/build заново не запускались. Фактический E4 dev browser baseline — [CI 36333584617](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36333584617), не новый прогон этой документации.
+
+Ограничения: VM deploy, подписанный MAX Web/mobile, реальные пользовательские сеансы и реальные квитанции не подтверждены. Перед публичным показом ведущий записывает фактически развёрнутый release SHA; B выполняет deploy/регистрацию, A затем заполняет платформенные результаты без персональных данных. Никакой отправки обращений или обработки голоса не описано как действующей функции.
+
+---
+
+# Отчёт агента A — E4-A-01
 
 Статус: независимый frontend код, локальные проверки и E4 Compose browser gate завершены; MAX Web/mobile ожидают развёртывания и регистрации. Ветка `agent-a/e4`, BASE_SHA `d223c4e49a12c4ebc5d98c3c8da8fc6c0202e16f`, TASK_COMMIT `40f0e8a1995f4a44f44f174cfa51f2f6acdae2c5`. Pushed code SHA: `3116955d4d7eceac08c08ba4ca8bd0a082c304ed`, `671c3513580c71efa47d4e36f47d03e74213fbe0`, `802f26d867179b6e221f79d8318e7dbdb00f8d56`, `2a9e7c43c791dbba3d78f2077d8f9f2513bf2854`, `aae1e25c77cf423afd4e28f0b53e212214c4472b` (точный селектор browser test).
 
