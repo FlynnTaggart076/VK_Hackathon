@@ -203,7 +203,7 @@ export function ReceiptReview() {
         <h3>Итоги документа</h3>
         <Field label="Начислено за текущий период, ₽" value={draft.document_current_charges} inputMode="decimal" onChange={(value) => update('document_current_charges', value)} hint={<Evidence path="/document_current_charges" evidence={receipt.field_evidence} issues={receipt.issues} />} />
         <Field label="К оплате по документу, ₽" value={draft.document_total_due} inputMode="decimal" onChange={(value) => update('document_total_due', value)} hint={<Evidence path="/document_total_due" evidence={receipt.field_evidence} issues={receipt.issues} />} />
-        <label htmlFor="formula-kind">Формула остатка</label><select id="formula-kind" value={draft.settlement.formula_kind} onChange={(event) => updateSettlement('formula_kind', event.target.value as BillData['settlement']['formula_kind'])}><option value="unsupported">Неизвестна</option><option value="signed_balance_v1">Остаток с учётом оплат</option></select>
+        <p>Формула остатка: <strong>{draft.settlement.formula_kind === 'signed_balance_v1' ? 'Остаток с учётом оплат' : 'Не определена'}</strong>. Её определяет сервер по макету документа; изменить выбор в форме нельзя.</p>
         <Field label="Остаток на начало, ₽" value={draft.settlement.opening_balance} inputMode="decimal" onChange={(value) => updateSettlement('opening_balance', value)} />
         <Field label="Учтённые оплаты, ₽" value={draft.settlement.payments_credited} inputMode="decimal" onChange={(value) => updateSettlement('payments_credited', value)} />
         <Field label="Пени, ₽" value={draft.settlement.penalties} inputMode="decimal" onChange={(value) => updateSettlement('penalties', value)} />

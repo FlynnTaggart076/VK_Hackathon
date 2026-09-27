@@ -102,8 +102,11 @@ describe('E2 synthetic receipt flow', () => {
     const bill = normalizeBill({ ...receipt.bill_data, services: [{ ...receipt.bill_data.services[0], tariff: '40,00', charge_amount: '200' }] });
     expect(billErrors(bill)).toEqual([]);
     await expect(api.editReceipt(receipt.id, { expected_revision: 20, bill_data: bill })).rejects.toMatchObject({ status: 409, code: 'REVISION_CONFLICT' });
-    const edited = await api.editReceipt(receipt.id, { expected_revision: receipt.revision, bill_data: bill });
+    const edited = await api.editReceipt(receipt.id, { expected_revision: receipt.revision,
+      bill_data: { ...bill, settlement: { ...bill.settlement, formula_kind: 'unsupported' } } });
     expect(edited.revision).toBe(receipt.revision + 1);
+    expect((await api.receipt(edited.id)).bill_data.services[0].tariff).toBe('40.00');
+    expect(edited.bill_data.settlement.formula_kind).toBe('signed_balance_v1');
     expect(edited.field_evidence[0].source).toBe('manual');
     await expect(api.confirmReceipt(edited.id, { expected_revision: edited.revision, acknowledged_warning_codes: [] }, crypto.randomUUID()))
       .rejects.toMatchObject({ status: 422, code: 'WARNINGS_NOT_ACKNOWLEDGED' });
