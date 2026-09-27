@@ -39,10 +39,19 @@ def test_answer_draft_owner_stale_delete(tmp_path):
             {item["id"] for item in knowledge().topics}
         assert {item["id"] for item in catalog.json()["territories"]} == \
             {item["id"] for item in knowledge().territories}
+        assert {"demo-territory", "moscow", "moscow-oblast"} <= \
+            {item["id"] for item in catalog.json()["territories"]}
         assert meta["knowledge_version"] == knowledge().version
         profile = {"role": "owner", "territory_id": "demo-territory",
                    "privacy_notice_version": meta["privacy_notice"]["version"],
                    "privacy_acknowledged": True}
+        for region in ("moscow", "moscow-oblast"):
+            regional = client.put("/api/v1/me/profile", headers=other,
+                                  json={**profile, "territory_id": region})
+            assert regional.status_code == 200
+            assert regional.json()["territory_id"] == region
+        assert client.put("/api/v1/me/profile", headers=other,
+                          json={**profile, "territory_id": "untrusted-region"}).status_code == 422
         assert client.put("/api/v1/me/profile", headers=auth, json=profile).status_code == 200
         bill = json.loads((ROOT / "fixtures" / "receipts" / "water-2026-08.json").read_text(encoding="utf-8"))
         with app.state.store.Session.begin() as session:

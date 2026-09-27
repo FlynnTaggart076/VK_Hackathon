@@ -11,7 +11,7 @@
     "period": "2026-09"
   },
   "engine_version": "0.1.0",
-  "knowledge_version": "1.0.0-e3-generic+8c2fcf4b3412",
+  "knowledge_version": "1.0.2-e3-regions+dae01cb7efe7",
   "delta_current_charges": "70.00",
   "delta_adjustments": "0.00",
   "delta_total_due": "70.00",
