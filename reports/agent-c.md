@@ -1,32 +1,59 @@
 # Отчёт агента C
 
-- Task ID: `E0-C-01`; этап E0; ветка `agent-c/e0`; статус: `review`.
-- BASE_SHA: `522757f58ad61951c7d66c4e97f2d5e65a433624`; TASK_COMMIT: `b5f0d55d96761fdb4fe495f719ad6eaa2a0fee94`; контракт: engine v1 / BillData schema_version 1.0.
-- Commit первичного DTO/fixture checkpoint: `1710e8555678e56b3e931e04987b94e1fbbb2852`.
-- Проверенный финальный commit реализации, последний pushed SHA до отчёта: `8114fd6de0d7112f529012967aaadb6fadedbf92`.
+- Task ID: `E1-C-01`; этап E1; ветка `agent-c/e1`; статус: `review`.
+- BASE_SHA: `feb1fc7ab12201e6d5a93989d64a8374fe44a139`; TASK_COMMIT: `4449864e24686472130b2569be04b349ed862834`; контракт: engine/HTTP 1.0, DTO v1 не менялись.
+- Code commits: `e58a28aedddad3a8433368f19f3db45c299cd0da` (основная реализация), `d1d6426502a5ddbc0591302903b0e311036fc3d3` (точность Decimal на максимальных значениях). Документация фактического OCR: `ed649aa3c3d4f2850f67ff3b84b5161351c72a3d` (последний pushed SHA до отчёта). SHA отдельного commit отчёта передаётся координатору после push.
+- Принятая история E0: code `8114fd6de0d7112f529012967aaadb6fadedbf92`, report `09a20b1ea6b271138351775b5c38a7d5465e718b`.
 
-## Результат
+## Реализовано
 
-Опубликованы Pydantic DTO, JSON Schema для BillData, FieldEvidence, Issue и входов/выходов семи функций §8.2, сигнатуры и EngineError. Оба BillData из §7.7 и самостоятельный эталон сравнения фиксируют 200.00 → 270.00, разницу 70.00 и эффекты 40.00/30.00. Добавлены схема и пустой безопасный каркас knowledge, `demo-territory`, `pilot_territory_id: null`, описание учебного макета и происхождения каждого fixture. Точные версии Python-зависимостей закреплены в `packages/housing_engine/requirements.lock`.
+`validate_bill` проверяет период, непустое название услуги, суммы строк/перерасчётов, IDs и ссылки перерасчётов. Внутренний `calculate_bill` на `Decimal` считает строки, текущие начисления, баланс и сумму к оплате с `ROUND_HALF_UP`; неизвестные операнды остаются `null`. Три напечатанных итога сверяются отдельно. Mismatch даёт предупреждение и не закрывает подтверждение автоматически.
 
-Основные пути: `packages/housing_engine/**`, `contracts/engine/v1/**`, `fixtures/receipts/**`, `knowledge/**`, `docs/engine.md`, `docs/data-provenance.md`. Чужие области и VM не менялись.
+`extract_receipt` принимает только `DocumentInput.content` bytes и проверяет SHA-256, сигнатуру MIME, размер, число страниц PDF и число пикселей. Учебный `demo-bill-v1` читает текстовый PDF через pypdf, а PNG/скан направляет в Tesseract `rus+eng` без shell, с временным PNG только в каталоге задания и тайм-аутом. Неизвестный макет возвращает `manual_required`, повреждённый документ — `EngineError`, не ложный `recognized`. Публичные `explain_receipt`, `compare_receipts`, `answer_question`, `compose_draft`, `load_knowledge` пока явно не реализованы.
 
-## Проверки и среда
+Учебные PDF, PNG и image-only PDF созданы из генератора; `fixtures/receipts/manifest.json` фиксирует SHA-256, размер, представление, происхождение и ожидаемые поля всех шести образцов. `.gitattributes` сохраняет PDF/PNG побайтно в Git. Системные зависимости OCR и границы макета задокументированы в `docs/engine.md`; происхождение — в `docs/data-provenance.md`. Чужие компоненты и VM не менялись.
 
-Windows, Python 3.13.14; новая временная venv вне Git. Из корня checkout последовательно:
+## Проверки и фактический уровень доказательства
+
+Windows, Python 3.13.14; новая временная venv вне Git. Из корня checkout:
 
 ```powershell
-python -m venv "$env:TEMP\zhkh-c-e0-lockcheck"
-& "$env:TEMP\zhkh-c-e0-lockcheck\Scripts\python.exe" -m pip install -r packages/housing_engine/requirements.lock
-& "$env:TEMP\zhkh-c-e0-lockcheck\Scripts\python.exe" -m pip install --no-build-isolation --no-deps -e packages/housing_engine
-& "$env:TEMP\zhkh-c-e0-lockcheck\Scripts\python.exe" packages/housing_engine/verify_contract.py
-& "$env:TEMP\zhkh-c-e0-lockcheck\Scripts\python.exe" -m unittest discover -s packages/housing_engine/tests -v
+python -m venv "$env:TEMP\zhkh-c-e1-lockcheck"
+& "$env:TEMP\zhkh-c-e1-lockcheck\Scripts\python.exe" -m pip install -r packages/housing_engine/requirements.lock
+& "$env:TEMP\zhkh-c-e1-lockcheck\Scripts\python.exe" -m pip install --no-build-isolation --no-deps -e packages/housing_engine
+& "$env:TEMP\zhkh-c-e1-lockcheck\Scripts\python.exe" packages/housing_engine/verify_contract.py
+& "$env:TEMP\zhkh-c-e1-lockcheck\Scripts\python.exe" -m unittest discover -s packages/housing_engine/tests -v
+& "$env:TEMP\zhkh-c-e1-lockcheck\Scripts\python.exe" -m pip check
 ```
 
-Факт: установка завершилась с кодом 0; verifier: `Engine v1 schemas and synthetic 200 -> 270 fixtures: OK`, `Knowledge catalog structure: OK; real pilot territory and verified sources pending`; unittest: `Ran 1 test ... OK`. Негативный тест меняет сумму августовского fixture только во временной копии и требует ненулевого exit code verifier. `git diff --cached --check` перед обоими commit не выявил ошибок. Проверка выполнена локально на синтетических данных, без DB, HTTP, MAX, VM, сети при запуске verifier, OCR и реального документа. Python 3.12 в этой среде не проверялся.
+Факт: установка 0, verifier 0 (`schemas and synthetic 200 -> 270 fixtures: OK`, knowledge structure OK), unittest 0 (`Ran 17 tests ... OK`), `pip check` — `No broken requirements found`. Тесты покрывают 200/270, -50 adjustment, долг+оплату, переплату, неизвестную оплату, unsupported formula, mismatch, округление и предельную точность Decimal, непустое название, неверную ссылку перерасчёта и испорченный fixture. Git staged diff проверен, ошибки пробелов в исходниках отсутствуют. Индексированные в Git bytes PDF/PNG сверены с SHA-256 manifest.
 
-## Ограничения, зависимости, следующий шаг
+**PDF-text:** реальное извлечение из синтетического текстового PDF вернуло `recognized`, период `2026-08`, объём `5.000000`, тариф `40.000000`, сумму `200.00`, evidence `pdf_text`. **Синтетический image OCR:** после исходного блокера отсутствующего бинарника координатор подготовил локальный Tesseract `v5.5.3.20260724`; `--list-langs` подтвердил `eng`, `osd`, `rus`. С `PATH` на этот бинарник я вызвал `extract_receipt(DocumentInput(bytes,SHA256), ExtractionConfig(workspace=tempfile.gettempdir(), enabled_templates=['demo-bill-v1']))` отдельно на PNG и image-only PDF. Оба результата: `recognized`, период `2026-08`, объём `5.000000`, тариф `40.000000`, сумма строки и к оплате `200.00`. Координатор независимо повторил этот прогон на принятом integration SHA `27465869ec507b409e18d867245a034af61a2612`, получил 25 evidence, 18 с `needs_review`, и предупреждение `OCR_REVIEW_REQUIRED`. Это проверка фактического Tesseract на синтетических рендерах того же макета, не измерение качества на реальных квитанциях или телефонных фото. Python 3.12, VM и MAX не проверялись.
 
-E0 публикует интерфейс: семь функций пока явно выбрасывают `NotImplementedError`. Реальные OCR, математика, знание по 15 темам и черновики не объявлены готовыми. Нет PDF/изображения, выбранной реальной территории, проверенных URL или даты проверки источника. Файл `knowledge/manifest.yaml` описывает контрактный каркас, не рабочий справочник для ответа пользователю. В E1 после отдельного задания нужны реализация пакета и содержимое согласно принятому контракту. B может использовать схему/fixtures и явный dev stub, но не вызывать функции C как готовые.
+Команда фактического OCR из checkout (локальный Tesseract находится вне Git):
 
-Предложения изменения публичного формата сейчас отсутствуют. До приёмки координатору нужно проверить code SHA `8114fd6de0d7112f529012967aaadb6fadedbf92` и совместимость с OpenAPI B; затем выдать отдельное E1 задание. SHA commit этого отчёта передаётся координатору сообщением после push.
+```powershell
+$env:PATH = "$env:TEMP\zhkh-ocr-tesseract;$env:PATH"
+& "$env:TEMP\zhkh-ocr-tesseract\tesseract.exe" --version
+& "$env:TEMP\zhkh-ocr-tesseract\tesseract.exe" --list-langs
+@'
+from pathlib import Path
+from uuid import UUID
+import hashlib
+import tempfile
+from housing_engine import DocumentInput, ExtractionConfig, extract_receipt
+config = ExtractionConfig(workspace=tempfile.gettempdir(), enabled_templates=["demo-bill-v1"])
+for name, mime in [("demo-bill-2026-08.png", "image/png"), ("demo-bill-2026-08-scan.pdf", "application/pdf")]:
+    content = (Path("fixtures/receipts") / name).read_bytes()
+    document = DocumentInput(receipt_id=UUID("10000000-0000-4000-8000-000000000001"), content=content, mime_type=mime, sha256=hashlib.sha256(content).hexdigest())
+    result = extract_receipt(document, config)
+    line = result.bill_data.services[0] if result.bill_data.services else None
+    print(name, result.outcome, result.bill_data.period, line.quantity if line else None, line.tariff if line else None, line.charge_amount if line else None, result.bill_data.document_total_due)
+'@ | & "$env:TEMP\zhkh-c-e1-lockcheck\Scripts\python.exe" -
+```
+
+## Ограничения и следующий шаг
+
+Распознаётся только английский синтетический учебный макет. PDF-text, PNG и image-only PDF проверены на нём; качество на квитанциях настоящей УК и телефонных фото неизвестно. Рабочий контейнер B ещё должен включить Tesseract 5 с `rus` и `eng`; локальный пользовательский тест не подтверждает сборку Docker или VM. Пилотная территория, проверенные источники и реальные макеты отсутствуют. B может потреблять `validate_bill`/`extract_receipt` через публичный API пакета, а для оставшихся пяти функций держать явный dev stub. Реальное объяснение/сравнение/FAQ/черновик — задачи E2–E3 после отдельного задания.
+
+Для приёмки координатору проверить SHA реализации, v1-схемы/fixture manifest, результаты тестов и границу OCR. Отдельного предложения изменения контракта нет. Следующий этап самостоятельно не начинаю.
