@@ -1,4 +1,28 @@
-﻿# Отчёт агента A — E3-A-01
+﻿# Отчёт агента A — E4-A-01
+
+Статус: независимый frontend код и локальные проверки завершены; реальный E4 Compose browser gate и MAX Web/mobile ожидают внешнего запуска. Ветка `agent-a/e4`, BASE_SHA `d223c4e49a12c4ebc5d98c3c8da8fc6c0202e16f`, TASK_COMMIT `40f0e8a1995f4a44f44f174cfa51f2f6acdae2c5`. Pushed code SHA: `3116955d4d7eceac08c08ba4ca8bd0a082c304ed`, `671c3513580c71efa47d4e36f47d03e74213fbe0`, `802f26d867179b6e221f79d8318e7dbdb00f8d56`, `2a9e7c43c791dbba3d78f2077d8f9f2513bf2854`.
+
+## Изменения
+
+- Production UI загружает MAX Bridge и отправляет только `window.WebApp.initData` в `POST /auth/max`. Подпись проверяет backend; `initDataUnsafe` не используется. Session token остаётся в памяти. После 401 UI просит переоткрыть mini-app, не повторяет автоматически обмен старыми стартовыми данными. Внешний браузер без Bridge не предлагает демовход.
+- История после сбоя сети предлагает повтор и не показывает ложное пустое состояние. 413 даёт понятное действие с размером файла; preview можно повторить после ошибки или `PREVIEW_NOT_READY`. Серверный 409 сохраняет локальные правки и предлагает выбор ревизии.
+- `apps/web/scripts/e4-real-resilience.mjs` предназначен для Vite `dev:real` → Compose API/worker/PG17: network abort/retry, реальные ответы 413/409/401, `manual_required` на синтетическом unknown-layout PDF, provenance, unknown без придуманного источника, 360/1280 px и deep-link reload. `e4-bridge-sim.mjs` проверяет production ветку с подставленным Bridge и API; это явно симуляция.
+
+## Фактические проверки
+
+Среда A: Windows PowerShell, Node 22.23.3 (`C:\Users\Stepan\AppData\Local\Temp\codex-node-v22.23.3\node-v22.23.3-win-x64`), Chrome headless `C:\Program Files\Google\Chrome\Application\chrome.exe`. Из `apps/web`: `npm ci --no-audit --no-fund` — 133 пакета; `npm test` — 14/14; `npm run build` — успешно; `node --check scripts/e4-real-resilience.mjs` и `node --check scripts/e4-bridge-sim.mjs` — успешно. Поиск в production `dist` по `mockServiceWorker|mock-only|auth/demo|DEMO_ACCESS_CODE|synthetic-receipt` не дал совпадений.
+
+Для браузерной симуляции: `npm exec vite preview -- --host 127.0.0.1 --port 5175 --strictPort`; затем `BASE_URL=http://127.0.0.1:5175/team/zhkh/`, `CHROME_PATH=<локальный Chrome>`, `npm run test:browser:e4:bridge-sim` — **SUCCESS**. Подставленная сырая строка ушла в тело `/auth/max`, не в URL; после подставленного 401 сохранился `/team/zhkh/review?id=...`, повторной авторизации не было, session token не появился в localStorage. Отдельная страница без Bridge показала вход только внутри MAX. Это не подписанный вход MAX и не реальный backend.
+
+[GitHub Actions E4 run 36332663523](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36332663523) на `integration/e4` SHA `71b7096f0289a6c561f3f0d0b0c18cf3ba55c64a` завершился Failure на проверке MAX egress (`urllib.error.URLError: CERTIFICATE_VERIFY_FAILED`). Результата `e4-real-resilience.mjs` из этого run нет; не считать E4 real API сценарий пройденным. Более ранний [E3 real Compose CI](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36329625261) прошёл stale draft/copy-only, FAQ unknown и 360 px на E3 SHA `065c8e0575a0ad97b83a6202c7a1988032816a6e`; это базовая проверка прошлого этапа, не повторный E4 результат.
+
+## Ограничения и следующий шаг
+
+Реальные MAX Web/mobile, подписанный `initData`, VM URL и реальная пилотная квитанция ещё не проверены. На Windows нет локального Compose daemon. Нужен повтор CI после исправления TLS preflight и фактический запуск `npm run test:browser:e4:real` с внешним `BASE_URL`, `DEMO_ACCESS_CODE`, `CHROME_PATH`; затем тот же сценарий внутри зарегистрированного MAX Web и мобильного клиента по развёрнутому release SHA. `apps/web/public/mockServiceWorker.js` имеет только CRLF локальную разницу, не включён в commits. Старые worktrees не тронуты. Голос и отправка обращений не реализованы.
+
+---
+
+# Отчёт агента A — E3-A-01
 
 Статус A: review, frontend browser gate прошёл; E3 в целом ожидает независимой проверки качества FAQ. Окончательная приёмка E3 у координатора. Ветка `agent-a/e3`, `BASE_SHA` `b33ed1e0493d76dfd7051a141e2075c698f8e967`, `TASK_COMMIT` `c11b5235319c12ecb18a6c4ca05c35a54f5c0560`, контракт engine/HTTP 1.0.
 
