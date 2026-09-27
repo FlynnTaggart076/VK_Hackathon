@@ -1,4 +1,5 @@
 import { chromium } from 'playwright-core';
+import { readFile } from 'node:fs/promises';
 
 const browserPath = process.env.CHROME_PATH;
 if (!browserPath) throw new Error('Set CHROME_PATH to the local Chrome or Chromium executable');
@@ -15,7 +16,8 @@ try {
   await page.getByRole('button', { name: 'Сохранить' }).click();
   await page.getByRole('status').filter({ hasText: 'Профиль сохранён' }).waitFor();
   await page.getByRole('link', { name: 'Платёжка' }).click();
-  await page.getByLabel('Файл платёжки').setInputFiles({ name: 'synthetic.png', mimeType: 'image/png', buffer: Buffer.from('synthetic mock bytes') });
+  const fixture = await readFile(new URL('../public/synthetic-receipt.png', import.meta.url));
+  await page.getByLabel('Файл платёжки').setInputFiles({ name: 'demo-bill-2026-08.png', mimeType: 'image/png', buffer: fixture });
   await page.getByRole('button', { name: 'Загрузить' }).click();
   await page.waitForURL(/\/processing\?job=/);
   await page.getByRole('link', { name: 'Проверить данные платёжки' }).waitFor({ timeout: 20000 });
@@ -36,6 +38,13 @@ try {
   await page.getByRole('button', { name: 'Применить мои правки к актуальной ревизии' }).click();
   await page.getByRole('button', { name: 'Сохранить исправления' }).click();
   await page.getByText('ревизия 3').waitFor();
+  const saved = await page.evaluate(async () => {
+    const { api } = await import('/team/zhkh/src/api/client.ts');
+    return api.receipt('10000000-0000-4000-8000-000000000001');
+  });
+  if (saved.bill_data.services[0].tariff !== '41.00' || saved.bill_data.settlement.formula_kind !== 'signed_balance_v1')
+    throw new Error('Saved values differ from review form or server formula');
+  if (await page.getByRole('combobox', { name: 'Формула остатка' }).count()) throw new Error('Server formula is editable');
   await page.getByLabel(/Принимаю предупреждение/).check();
   await page.getByRole('button', { name: 'Подтвердить проверенные данные' }).click();
   await page.waitForURL(/\/explanation\?id=/);

@@ -31,12 +31,12 @@ const catalog: Catalog = {
 };
 
 const bill: BillData = {
-  schema_version: '1.0', period: '2026-08', currency: 'RUB', issuer_name: 'Учебная управляющая организация',
-  provider_id: 'demo-provider', account_number: '000123', address_text: 'Учебный город, Примерная улица, дом 1, квартира 1',
+  schema_version: '1.0', period: '2026-08', currency: 'RUB', issuer_name: 'Demo Housing Organization',
+  provider_id: null, account_number: '000123', address_text: 'Demo City, Example Street 1, Flat 1',
   template_id: 'demo-bill-v1', template_version: '1.0',
-  services: [{ line_id: '20000000-0000-4000-8000-000000000001', raw_name: 'Холодная вода', service_code: 'cold_water',
+  services: [{ line_id: '20000000-0000-4000-8000-000000000001', raw_name: 'Cold water (m3)', service_code: 'cold_water',
     scope: 'individual', unit: 'm3', unit_label: null, quantity: '5.000000', tariff: '40.000000', charge_amount: '200.00',
-    supplier_key: 'demo-provider', segment_key: null, calculation_kind: 'simple_product' }],
+    supplier_key: null, segment_key: null, calculation_kind: 'simple_product' }],
   adjustments: [], settlement: { formula_kind: 'signed_balance_v1', opening_balance: '0.00', payments_credited: '0.00',
     penalties: '0.00', other_account_changes: '0.00', document_closing_balance: '200.00' },
   document_current_charges: '200.00', document_total_due: '200.00',
@@ -167,7 +167,8 @@ export const handlers = [
     if (!body.bill_data.period || !body.bill_data.issuer_name || body.bill_data.services.length === 0 || body.bill_data.services.some((line) => !line.raw_name || !line.charge_amount))
       return error(422, 'VALIDATION_FAILED', 'Заполните период, организацию и строки начислений.');
     currentReceipt = { ...currentReceipt, status: 'needs_review', revision: currentReceipt.revision + 1,
-      bill_data: body.bill_data, field_evidence: [{ path: '/services/0/charge_amount', source: 'manual', page_number: null, bbox: null,
+      bill_data: { ...body.bill_data, settlement: { ...body.bill_data.settlement, formula_kind: currentReceipt.bill_data.settlement.formula_kind } },
+      field_evidence: [{ path: '/services/0/charge_amount', source: 'manual', page_number: null, bbox: null,
         source_text: null, needs_review: false, reason: null }] };
     return HttpResponse.json(currentReceipt);
   }),
