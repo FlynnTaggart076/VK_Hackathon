@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from fastapi import Depends, FastAPI, Header, Request, UploadFile
+from fastapi import Depends, FastAPI, Form, Header, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from PIL import Image, UnidentifiedImageError
@@ -231,9 +231,10 @@ class MemoryStore:
             self.profiles[user_id] = value
             return deepcopy(value)
 
-    def upload(self, user_id: str, key: str, content: bytes, mime: str, pages: int) -> dict:
+    def upload(self, user_id: str, key: str, content: bytes, mime: str, pages: int,
+               dataset_kind: str = "user_provided") -> dict:
         digest = hashlib.sha256(content).hexdigest()
-        fingerprint = hashlib.sha256(f"{mime}:{digest}".encode()).hexdigest()
+        fingerprint = hashlib.sha256(f"{mime}:{digest}:{dataset_kind}".encode()).hexdigest()
         idem_key = (user_id, "POST /api/v1/receipts", key)
         with self.lock:
             profile = self.profiles[user_id]
@@ -258,7 +259,7 @@ class MemoryStore:
             receipt = {
                 "id": receipt_id, "status": "queued", "revision": 1,
                 "created_at": stamp(created), "updated_at": stamp(created),
-                "dataset_kind": "user_provided", "extraction_outcome": None,
+                "dataset_kind": dataset_kind, "extraction_outcome": None,
                 "bill_data": empty_bill(), "field_evidence": [], "issues": [],
                 "document": {"available": True, "mime_type": mime, "page_count": pages,
                              "expires_at": stamp(created + timedelta(days=7))},
@@ -502,6 +503,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/v1/receipts", status_code=202)
     async def upload_receipt(file: UploadFile, idempotency_key: str = Header(alias="Idempotency-Key"),
+                             demo_sample_id: str | None = Form(default=None),
                              user_id: str = Depends(current_user)):
         try:
             uuid.UUID(idempotency_key)
@@ -510,7 +512,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         content = await file.read(settings.upload_max_bytes + 1)
         await file.close()
         mime, pages = inspect_document(content, file.content_type or "", settings)
-        return await run_in_threadpool(store.upload, user_id, idempotency_key, content, mime, pages)
+        from app.services.demo_samples import dataset_kind
+
+        kind = dataset_kind(content, mime, demo_sample_id)
+        return await run_in_threadpool(store.upload, user_id, idempotency_key, content, mime, pages, kind)
 
     @app.post("/api/v1/receipts/demo", status_code=202)
     async def import_demo(request: Request, idempotency_key: str = Header(alias="Idempotency-Key"),

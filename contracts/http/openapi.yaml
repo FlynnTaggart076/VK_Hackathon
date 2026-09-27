@@ -151,6 +151,7 @@ paths:
               required: [file]
               properties:
                 file: {type: string, format: binary, description: 'PDF, JPEG or PNG; at most 10 MiB'}
+                demo_sample_id: {type: string, enum: [demo-bill-2026-08.pdf, demo-bill-2026-09.pdf], description: 'Optional explicit built-in synthetic sample ID; exact bytes and SHA-256 must match the manifest or 422. OCR still processes uploaded bytes.'}
             encoding:
               file:
                 contentType: application/pdf, image/jpeg, image/png
