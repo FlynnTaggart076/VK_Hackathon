@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import io
+import json
 import os
 import re
 import secrets
@@ -14,6 +15,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, Header, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
@@ -76,6 +78,10 @@ class Settings:
             raise ValueError("Production requires MAX bot token and webhook secret")
         if self.max_webhook_secret and not re.fullmatch(r"[A-Za-z0-9_-]{5,256}", self.max_webhook_secret):
             raise ValueError("MAX_WEBHOOK_SECRET must match MAX subscription format")
+        api_url = urlsplit(self.max_api_base_url)
+        if api_url.scheme != "https" or not api_url.hostname or api_url.username or api_url.password or \
+                api_url.query or api_url.fragment or api_url.path not in {"", "/"}:
+            raise ValueError("MAX_API_BASE_URL must be an HTTPS origin")
         if self.demo_auth_enabled and not self.demo_access_code:
             raise ValueError("DEMO_ACCESS_CODE required when demo auth is enabled")
         if self.mode != "dev" and not self.database_url:
@@ -406,6 +412,31 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         max_user_id = validate_init_data(body["init_data"], settings.max_bot_token)
         return await run_in_threadpool(store.authenticate_max, max_user_id)
+
+    @app.post("/integrations/max/webhook")
+    async def max_webhook(request: Request,
+                          max_secret: str | None = Header(default=None, alias="X-Max-Bot-Api-Secret")):
+        if not settings.max_webhook_secret or not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Webhook MAX не настроен.", retryable=True)
+        if not max_secret or not hmac.compare_digest(max_secret, settings.max_webhook_secret):
+            raise ApiError(403, "FORBIDDEN", "Доступ запрещён.")
+        raw = await request.body()
+        if len(raw) > 65_536:
+            raise ApiError(413, "FILE_TOO_LARGE", "Событие слишком велико.")
+        try:
+            body = json.loads(raw)
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректное событие MAX.") from None
+        from sqlalchemy.exc import SQLAlchemyError
+
+        from app.services.max_queue import enqueue_update, normalize_update
+
+        update = normalize_update(body)
+        try:
+            await run_in_threadpool(enqueue_update, store, update)
+        except SQLAlchemyError:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Очередь webhook недоступна.", retryable=True) from None
+        return {"accepted": True}
 
     @app.post("/api/v1/auth/logout", status_code=204)
     def logout(authorization: str | None = Header(default=None)):

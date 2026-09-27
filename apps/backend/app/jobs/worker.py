@@ -305,6 +305,10 @@ def bounded_extract(store: SqlStore, job_id: uuid.UUID, token: uuid.UUID,
 
     def tick() -> bool:
         heartbeat(store)
+        try:
+            run_short_once(store)
+        except Exception:
+            logger.error("MAX queue processing failed during OCR")
         from app.jobs.retention import run_retention_once
         try:
             run_retention_once(store)
@@ -327,6 +331,17 @@ def bounded_extract(store: SqlStore, job_id: uuid.UUID, token: uuid.UUID,
         return value["result"], value["validation"]
     except (ValueError, KeyError, TypeError):
         raise EngineError("INTERNAL_ENGINE_ERROR", "Некорректный результат обработки.", retryable=True) from None
+
+
+def run_short_once(store: SqlStore) -> bool:
+    """Handle one small inbox/outbox unit while OCR child runs or dispatcher idles."""
+    from app.services.max_queue import process_inbox_once, process_outbox_once
+
+    if process_inbox_once(store):
+        return True
+    if store.settings.max_bot_token and process_outbox_once(store):
+        return True
+    return False
 
 
 def run_once(store: SqlStore) -> bool:
@@ -398,8 +413,13 @@ def main() -> None:
                 run_retention_once(store)
             except Exception:
                 logger.exception("Retention sweep failed")
+        try:
+            short_ran = run_short_once(store)
+        except Exception:
+            logger.error("MAX queue processing failed")
+            short_ran = False
         ran = run_once(store)
-        if not ran:
+        if not ran and not short_ran:
             time.sleep(1)
 
 
