@@ -10,6 +10,7 @@ from sqlalchemy import create_engine
 
 from app.db.models import Base, Receipt, ReceiptRevision
 from app.main import Settings, create_app
+from app.services.assistant_store import knowledge
 from test_contract_responses import validate_response
 
 
@@ -32,6 +33,13 @@ def test_answer_draft_owner_stale_delete(tmp_path):
         auth = {"Authorization": "Bearer " + a["access_token"]}
         other = {"Authorization": "Bearer " + b["access_token"]}
         meta = client.get("/api/v1/meta").json()
+        catalog = client.get("/api/v1/catalog", headers=auth)
+        assert catalog.status_code == 200
+        assert {item["id"] for item in catalog.json()["topics"]} == \
+            {item["id"] for item in knowledge().topics}
+        assert {item["id"] for item in catalog.json()["territories"]} == \
+            {item["id"] for item in knowledge().territories}
+        assert meta["knowledge_version"] == knowledge().version
         profile = {"role": "owner", "territory_id": "demo-territory",
                    "privacy_notice_version": meta["privacy_notice"]["version"],
                    "privacy_acknowledged": True}

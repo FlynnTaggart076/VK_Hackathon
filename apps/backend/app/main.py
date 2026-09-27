@@ -218,7 +218,10 @@ class MemoryStore:
             return deepcopy(self.profiles[user_id])
 
     def update_profile(self, user_id: str, body: dict) -> dict:
-        if body.get("role") not in {"owner", "tenant", "other"} or body.get("territory_id") != "demo-territory":
+        from app.services.assistant_store import knowledge
+
+        territories = {item["id"] for item in knowledge().territories}
+        if body.get("role") not in {"owner", "tenant", "other"} or body.get("territory_id") not in territories:
             raise ApiError(422, "VALIDATION_FAILED", "Выберите доступную роль и территорию.")
         if body.get("privacy_notice_version") != self.settings.privacy_notice_version or body.get("privacy_acknowledged") is not True:
             raise ApiError(422, "PRIVACY_NOTICE_REQUIRED", "Подтвердите актуальное уведомление.")
@@ -329,6 +332,9 @@ class MemoryStore:
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     settings.validate()
+    from app.services.assistant_store import knowledge
+
+    trusted_catalog = knowledge()  # Fail startup if the installed catalog is invalid.
     if settings.database_url:
         from app.db.store import SqlStore
         store = SqlStore(settings)
@@ -375,7 +381,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/v1/meta")
     def meta():
         return {"api_version": "1.0", "engine_version": "0.1.0" if settings.engine_mode == "real" else None,
-                "knowledge_version": "0.0.0-e2-arithmetic-only" if settings.engine_mode == "real" else None,
+                "knowledge_version": trusted_catalog.version if settings.engine_mode == "real" else None,
                 "mode": settings.mode,
                 "limits": {"upload_max_bytes": settings.upload_max_bytes, "pdf_max_pages": settings.pdf_max_pages,
                            "receipt_retention_days": 30, "source_retention_days": 7},
@@ -462,8 +468,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/v1/catalog")
     def catalog(user_id: str = Depends(current_user)):
-        return {"territories": [{"id": "demo-territory", "label": "Учебная территория"}],
-                "organizations": [], "topics": [], "service_codes": [], "units": [], "document_kinds": [],
+        from typing import get_args
+
+        from housing_engine.dto import ServiceCode, Unit
+
+        return {"territories": [{"id": item["id"], "label": item["label"],
+                                  "is_synthetic": item["is_synthetic"]}
+                                 for item in trusted_catalog.territories],
+                "organizations": [{"id": item["id"], "label": item["name"],
+                                   "territory_id": item["territory_id"],
+                                   "is_synthetic": item["is_synthetic"]}
+                                  for item in trusted_catalog.organizations],
+                "topics": [{"id": item["id"], "label": item["title"]}
+                           for item in trusted_catalog.topics],
+                "service_codes": list(get_args(ServiceCode)), "units": list(get_args(Unit)),
+                "document_kinds": [],
                 "demo_receipts": [
                     {"fixture_id": "water-2026-08", "label": "Вода, август", "description": "Синтетическая квитанция"},
                     {"fixture_id": "water-2026-09", "label": "Вода, сентябрь", "description": "Синтетическая квитанция"},

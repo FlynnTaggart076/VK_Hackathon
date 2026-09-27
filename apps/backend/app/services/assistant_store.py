@@ -7,6 +7,7 @@ import json
 import uuid
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from pathlib import Path
 
 from sqlalchemy import delete, select
@@ -21,6 +22,7 @@ KNOWLEDGE_ROOT = next(parent / "knowledge" for parent in Path(__file__).resolve(
                       if (parent / "knowledge" / "manifest.yaml").is_file())
 
 
+@lru_cache(maxsize=1)
 def knowledge():
     from housing_engine import load_knowledge
 
