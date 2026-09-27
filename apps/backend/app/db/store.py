@@ -105,6 +105,41 @@ class SqlStore:
                 raise ApiError(401, "SESSION_EXPIRED", "Срок сессии истёк.")
             return str(row.user_id)
 
+    def authenticate_max(self, max_user_id: int) -> dict:
+        token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        for attempt in range(2):
+            try:
+                with self.Session.begin() as session:
+                    user = session.scalar(select(User).where(User.max_user_id == max_user_id))
+                    if user is None:
+                        user = User(id=uuid.uuid4(), max_user_id=max_user_id, created_at=now())
+                        session.add(user)
+                        session.flush()
+                        profile = Profile(user_id=user.id, role="other", territory_id=None,
+                                          onboarding_completed=False, privacy_notice_version=None,
+                                          privacy_acknowledged_at=None)
+                        session.add(profile)
+                    else:
+                        profile = session.get(Profile, user.id)
+                    session.add(SessionToken(id=uuid.uuid4(), user_id=user.id,
+                                             token_hash=token_hash, expires_at=now() + timedelta(hours=1)))
+                    return {"access_token": token, "token_type": "bearer", "expires_in": 3600,
+                            "user": {"id": str(user.id)}, "profile": self._profile_value(profile)}
+            except IntegrityError:
+                if attempt:
+                    raise
+        raise RuntimeError("unreachable")
+
+    def logout(self, token: str) -> None:
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        with self.Session.begin() as session:
+            row = session.scalar(select(SessionToken).where(
+                SessionToken.token_hash == token_hash).with_for_update())
+            if row is None or row.revoked_at is not None or aware(row.expires_at) <= now():
+                raise ApiError(401, "AUTH_REQUIRED", "Войдите в приложение.")
+            row.revoked_at = now()
+
     def profile(self, user_id: str) -> dict:
         with self.Session() as session:
             profile = session.get(Profile, uuid.UUID(user_id))

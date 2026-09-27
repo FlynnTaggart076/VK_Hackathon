@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import io
 import os
+import re
 import secrets
 import threading
 import uuid
@@ -37,6 +38,9 @@ class Settings:
     mode: str = "dev"
     demo_auth_enabled: bool = False
     demo_access_code: str | None = None
+    max_bot_token: str | None = None
+    max_webhook_secret: str | None = None
+    max_api_base_url: str = "https://platform-api2.max.ru"
     engine_mode: str = "stub"
     database_url: str | None = None
     storage_path: Path = Path(".local-storage")
@@ -51,6 +55,9 @@ class Settings:
             mode=os.getenv("APP_MODE", "dev"),
             demo_auth_enabled=os.getenv("DEMO_AUTH_ENABLED", "false").lower() == "true",
             demo_access_code=os.getenv("DEMO_ACCESS_CODE"),
+            max_bot_token=os.getenv("MAX_BOT_TOKEN"),
+            max_webhook_secret=os.getenv("MAX_WEBHOOK_SECRET"),
+            max_api_base_url=os.getenv("MAX_API_BASE_URL", "https://platform-api2.max.ru"),
             engine_mode=os.getenv("ENGINE_MODE", "stub"),
             database_url=os.getenv("DATABASE_URL"),
             storage_path=Path(os.getenv("STORAGE_PATH", ".local-storage")),
@@ -63,8 +70,12 @@ class Settings:
             raise ValueError("ENGINE_MODE must be real or stub")
         if self.mode == "production" and (self.demo_auth_enabled or self.engine_mode == "stub"):
             raise ValueError("Production forbids demo auth and engine stub")
-        if self.mode != "dev":
-            raise ValueError("E1 backend supports dev mode only; MAX and real engine are not integrated")
+        if self.mode != "dev" and self.engine_mode == "stub":
+            raise ValueError("Engine stub is dev-only")
+        if self.mode == "production" and (not self.max_bot_token or not self.max_webhook_secret):
+            raise ValueError("Production requires MAX bot token and webhook secret")
+        if self.max_webhook_secret and not re.fullmatch(r"[A-Za-z0-9_-]{5,256}", self.max_webhook_secret):
+            raise ValueError("MAX_WEBHOOK_SECRET must match MAX subscription format")
         if self.demo_auth_enabled and not self.demo_access_code:
             raise ValueError("DEMO_ACCESS_CODE required when demo auth is enabled")
         if self.mode != "dev" and not self.database_url:
@@ -188,6 +199,13 @@ class MemoryStore:
                 del self.sessions[digest]
                 raise ApiError(401, "SESSION_EXPIRED", "Срок сессии истёк.")
             return record[0]
+
+    def logout(self, token: str) -> None:
+        digest = hashlib.sha256(token.encode()).hexdigest()
+        with self.lock:
+            if digest not in self.sessions:
+                raise ApiError(401, "AUTH_REQUIRED", "Войдите в приложение.")
+            del self.sessions[digest]
 
     def profile(self, user_id: str) -> dict:
         with self.lock:
@@ -374,8 +392,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return await run_in_threadpool(store.authenticate_demo, body["identity"], body["access_code"])
 
     @app.post("/api/v1/auth/max")
-    def auth_max():
-        raise ApiError(503, "SERVICE_UNAVAILABLE", "Вход MAX ещё не подключён.", retryable=False)
+    async def auth_max(request: Request):
+        if not settings.max_bot_token or not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Вход MAX не настроен.", retryable=False)
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректный JSON.") from None
+        if not isinstance(body, dict) or set(body) != {"init_data"} or not isinstance(body["init_data"], str):
+            raise ApiError(422, "VALIDATION_FAILED", "Укажите стартовые данные MAX.")
+        from app.services.max_auth import validate_init_data
+
+        max_user_id = validate_init_data(body["init_data"], settings.max_bot_token)
+        return await run_in_threadpool(store.authenticate_max, max_user_id)
+
+    @app.post("/api/v1/auth/logout", status_code=204)
+    def logout(authorization: str | None = Header(default=None)):
+        if not authorization or not authorization.startswith("Bearer "):
+            raise ApiError(401, "AUTH_REQUIRED", "Войдите в приложение.")
+        store.logout(authorization[7:])
+        return Response(status_code=204)
 
     @app.get("/api/v1/me")
     def me(user_id: str = Depends(current_user)):
