@@ -1,0 +1,11 @@
+services:
+  web:
+    networks:
+      private: {}
+      edge:
+        aliases: [vk-zhkh-web]
+
+networks:
+  edge:
+    external: true
+    name: vk-zhkh-edge
