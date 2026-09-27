@@ -72,11 +72,15 @@ export const api = {
   draft: (id: string, signal?: AbortSignal) => request<DraftView>(`/drafts/${encodeURIComponent(id)}`, { signal }),
   editDraft: (id: string, body: EditDraftRequest, signal?: AbortSignal) => request<DraftView>(`/drafts/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body), signal }),
   deleteDraft: (id: string, signal?: AbortSignal) => request<void>(`/drafts/${encodeURIComponent(id)}`, { method: 'DELETE', signal }),
-  upload: (file: File, idempotencyKey: string, signal?: AbortSignal) => {
+  upload: (file: File, idempotencyKey: string, signal?: AbortSignal, demoSampleId?: string) => {
     const body = new FormData();
     body.append('file', file);
+    if (demoSampleId) body.append('demo_sample_id', demoSampleId);
     return request<ReceiptQueued>('/receipts', { method: 'POST', body, headers: { 'Idempotency-Key': idempotencyKey }, signal });
   },
+  importDemo: (fixtureId: string, idempotencyKey: string, signal?: AbortSignal) => request<ReceiptQueued>('/receipts/demo', {
+    method: 'POST', body: JSON.stringify({ fixture_id: fixtureId }), headers: { 'Idempotency-Key': idempotencyKey }, signal,
+  }),
   job: (id: string, signal?: AbortSignal) => request<Job>(`/jobs/${encodeURIComponent(id)}`, { signal }),
   page: (id: string, page: number, signal?: AbortSignal) => requestBlob(`/receipts/${encodeURIComponent(id)}/pages/${page}`, signal),
   source: (id: string, signal?: AbortSignal) => requestBlob(`/receipts/${encodeURIComponent(id)}/source`, signal),

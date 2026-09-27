@@ -30,7 +30,7 @@ function authError(request: Request): HttpResponse<ApiErrorBody> | null {
 const newProfile: Profile = { role: 'other', territory_id: null, onboarding_completed: false,
   privacy_notice_version: null, privacy_acknowledged_at: null };
 let profile: Profile = { ...newProfile };
-export function resetMockState(): void { profile = { ...newProfile }; currentReceipt = { ...queuedReceipt }; jobReads = 0; removed = new Set(); mockDraft = null; }
+export function resetMockState(): void { profile = { ...newProfile }; currentReceipt = { ...queuedReceipt }; jobReads = 0; currentDemoId = null; removed = new Set(); mockDraft = null; }
 const topicLabels: [string, string][] = [
   ['first_bill', 'Первая квитанция'], ['bill_terms', 'Термины квитанции'], ['bill_change', 'Изменение суммы'],
   ['meter_readings', 'Передача показаний'], ['meter_deadline', 'Срок передачи показаний'], ['account_number', 'Лицевой счёт'],
@@ -41,7 +41,10 @@ const topicLabels: [string, string][] = [
 ];
 const catalog: Catalog = {
   territories: [{ id: 'demo-territory', label: 'Учебная территория' }], organizations: [], topics: topicLabels.map(([id, label]) => ({ id, label })),
-  service_codes: [], units: [], document_kinds: [], demo_receipts: [],
+  service_codes: [], units: [], document_kinds: [], demo_receipts: [
+    { fixture_id: 'water-2026-08', label: 'Вода, август', description: 'Синтетическая квитанция' },
+    { fixture_id: 'water-2026-09', label: 'Вода, сентябрь', description: 'Синтетическая квитанция' },
+  ],
 };
 
 const bill: BillData = {
@@ -92,6 +95,7 @@ const queuedJob: Job = { id: queuedReceipt.job!.id, kind: 'receipt_ocr', state: 
 const queued: ReceiptQueued = { receipt: queuedReceipt, job_id: queuedJob.id };
 let currentReceipt: ReceiptView = { ...queuedReceipt };
 let jobReads = 0;
+let currentDemoId: string | null = null;
 const sampleSummary = (id: string, period: string, amount: string): ReceiptSummary => ({
   id, status: 'confirmed', revision: 3, period, issuer_name: 'Demo Housing Organization',
   document_total_due: amount, dataset_kind: 'synthetic', created_at: now, source_available: true,
@@ -99,7 +103,7 @@ const sampleSummary = (id: string, period: string, amount: string): ReceiptSumma
 const samples: ReceiptSummary[] = [
   sampleSummary(augustId, '2026-08', '200.00'), sampleSummary(septemberId, '2026-09', '270.00'),
   sampleSummary(identityId, '2026-10', '270.00'), sampleSummary(ambiguousId, '2026-11', '270.00'),
-  sampleSummary(partialCompareId, '2026-12', '270.00'),
+  { ...sampleSummary(partialCompareId, '2026-12', '270.00'), source_available: false },
 ];
 const sampleReceipt = (item: ReceiptSummary): ReceiptView => ({ ...partialReceipt,
   id: item.id, status: 'confirmed', revision: item.revision, confirmed_at: now, extraction_outcome: 'recognized',
@@ -107,7 +111,7 @@ const sampleReceipt = (item: ReceiptSummary): ReceiptView => ({ ...partialReceip
     document_total_due: item.document_total_due, settlement: { ...bill.settlement, document_closing_balance: item.document_total_due },
     services: [{ ...bill.services[0], quantity: item.id === augustId ? '5.000000' : '6.000000',
       tariff: item.id === augustId ? '40.000000' : '45.000000', charge_amount: item.document_total_due }] },
-  issues: [], field_evidence: [], document: { available: true, mime_type: 'application/pdf', page_count: 1, expires_at: '2026-10-04T10:00:00Z' },
+  issues: [], field_evidence: [], document: { available: item.source_available, mime_type: 'application/pdf', page_count: 1, expires_at: '2026-10-04T10:00:00Z' },
 });
 let mockDraft: DraftView | null = null;
 const comparisonBase: ComparisonView = {
@@ -180,6 +184,16 @@ export const handlers = [
       unexplained_delta: null, issues: [{ code: right.id === ambiguousId ? 'AMBIGUOUS_LINE' : 'AMOUNT_INCOMPLETE',
         severity: 'warning', path: null, message: right.id === ambiguousId ? 'Сопоставление строк неоднозначно.' : 'Одной из сумм нет в документе.' }] } satisfies ComparisonView);
     return HttpResponse.json({ ...comparisonBase, ...refs });
+  }),
+  http.post(`*${API_BASE}/receipts/demo`, async ({ request }) => {
+    const denied = authError(request); if (denied) return denied;
+    if (profile.privacy_notice_version !== meta.privacy_notice.version) return error(422, 'PRIVACY_NOTICE_REQUIRED', 'Подтвердите уведомление.');
+    const body = await request.json() as { fixture_id?: string };
+    if (body.fixture_id !== 'water-2026-08' && body.fixture_id !== 'water-2026-09') return error(404, 'NOT_FOUND', 'Образец не найден.');
+    currentDemoId = body.fixture_id;
+    currentReceipt = { ...queuedReceipt, dataset_kind: 'synthetic' };
+    jobReads = 0;
+    return HttpResponse.json({ ...queued, receipt: currentReceipt }, { status: 202 });
   }),
   http.post(`*${API_BASE}/drafts`, async ({ request }) => {
     const denied = authError(request); if (denied) return denied;
@@ -263,12 +277,17 @@ export const handlers = [
     if (profile.privacy_notice_version !== meta.privacy_notice.version) return error(422, 'PRIVACY_NOTICE_REQUIRED', 'Подтвердите актуальное уведомление.');
     const form = await request.formData();
     const file = form.get('file');
+    const demoSampleId = form.get('demo_sample_id');
     if (!(file instanceof File)) return error(422, 'VALIDATION_FAILED', 'Выберите файл.');
+    if (demoSampleId !== null && (!['demo-bill-2026-08.pdf', 'demo-bill-2026-09.pdf'].includes(String(demoSampleId)) || file.name !== demoSampleId || file.type !== 'application/pdf' || file.size !== 2278))
+      return error(422, 'VALIDATION_FAILED', 'Байты не соответствуют демообразцу.');
     if (file.name.includes('offline')) return HttpResponse.error();
     if (file.name.includes('conflict')) return error(409, 'IDEMPOTENCY_CONFLICT', 'Повторный ключ использован с другим файлом.');
     if (file.size > meta.limits.upload_max_bytes) return error(413, 'FILE_TOO_LARGE', 'Файл превышает 10 МБ.');
     if (!['application/pdf', 'image/png', 'image/jpeg'].includes(file.type)) return error(415, 'UNSUPPORTED_MEDIA_TYPE', 'Формат не поддерживается.');
-    currentReceipt = { ...queuedReceipt, document: { ...queuedReceipt.document, mime_type: file.type as ReceiptView['document']['mime_type'] } };
+    currentReceipt = { ...queuedReceipt, dataset_kind: demoSampleId ? 'synthetic' : 'user_provided',
+      document: { ...queuedReceipt.document, mime_type: file.type as ReceiptView['document']['mime_type'] } };
+    currentDemoId = null;
     jobReads = 0;
     return HttpResponse.json({ ...queued, receipt: currentReceipt }, { status: 202 });
   }),
@@ -276,7 +295,10 @@ export const handlers = [
     const denied = authError(request); if (denied) return denied;
     if (params.id !== queuedJob.id) return error(404, 'NOT_FOUND', 'Задание не найдено.');
     jobReads += 1;
-    if (jobReads >= 3 && currentReceipt.status === 'queued') currentReceipt = { ...partialReceipt, id: receiptId, dataset_kind: 'synthetic',
+    if (jobReads >= 3 && currentReceipt.status === 'queued') currentReceipt = currentDemoId ? {
+      ...sampleReceipt(samples[currentDemoId === 'water-2026-08' ? 0 : 1]), id: receiptId, status: 'needs_review', revision: 1,
+      confirmed_at: null, document: currentReceipt.document, job: { id: queuedJob.id, state: 'succeeded', stage: 'completed' },
+    } : { ...partialReceipt, id: receiptId, dataset_kind: currentReceipt.dataset_kind,
       document: currentReceipt.document, job: { id: queuedJob.id, state: 'succeeded', stage: 'completed' } };
     const state: Job['state'] = jobReads === 1 ? 'queued' : jobReads === 2 ? 'running' : 'succeeded';
     return HttpResponse.json({ ...queuedJob, state, stage: state === 'queued' ? null : state === 'running' ? 'ocr' : 'completed' });
@@ -334,6 +356,8 @@ export const handlers = [
   }),
   http.get(`*${API_BASE}/receipts/:id/source`, async ({ request, params }) => {
     const denied = authError(request); if (denied) return denied;
+    if (params.id === partialCompareId) return error(410, 'SOURCE_EXPIRED', 'Срок хранения файла истёк.');
+    if (samples.some((item) => item.id === params.id && !removed.has(item.id))) return new HttpResponse(await syntheticPreview(), { headers: { 'Content-Type': 'image/png' } });
     if (params.id !== receiptId) return error(404, 'NOT_FOUND', 'Файл не найден.');
     return new HttpResponse(await syntheticPreview(), { headers: { 'Content-Type': 'image/png' } });
   }),
