@@ -50,3 +50,10 @@
 ## Следующий шаг после E1
 
 Опубликовать doc-only запись приёмки и задания E2. Начать независимые A/C части, B подключать к принятому контракту C. Не объявлять E2 принятым до bytes→OCR→UI review/edit→confirm→explain и повторного чтения после перезапуска. Подготовка VM/MAX продолжается только при действующем доступе и в границах инструкции владельца.
+
+## Выдача E2
+
+- Принятая база `dae14d9a838154b72e4cf122881b190032ae0a74`, task commit `f613288e5b0a9bc733e6653ba9706bea7e3313d9`. Заполнены `tasks/e2/agent-{a,b,c}.md`; созданы отдельные checkout `agent-{a,b,c}-e2` и `integration-e2` от базы, ветки `agent-{a,b,c}/e2` и `integration/e2`.
+- A запущен на независимый mock review/edit/confirm/explain по принятому HTTP v1.0, живой B API подключается после checkpoint. B запущен на независимые PostgreSQL/CAS/revision/API части; adapter C только после принятого engine SHA. C запущен на OCR bytes и детерминированное объяснение с ранним публичным checkpoint для B.
+- Текущие задачи: E2-A-01, E2-B-01, E2-C-01 `in_progress`; pushed E2 code/report SHA ещё нет, E2 не принят. Блокеры будущей VM/MAX проверки прежние: SSH `Permission denied (publickey)`, отсутствуют MAX credentials. Пользовательские документы/пилотная территория не предоставлены; синтетические fixtures явно помечены.
+- Следующий шаг: получить C checkpoint, проверить его и передать B; затем B persisted adapter и A живой UI проверить общим Compose/restart smoke. Не создавать release SHA и не разворачивать VM до принятой версии и разрешённого доступа.

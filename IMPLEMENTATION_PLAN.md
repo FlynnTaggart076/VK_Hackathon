@@ -4,8 +4,8 @@
 
 ## Состояние
 
-- Текущий этап: **E2 — одна платёжка насквозь**, задания A/B/C готовятся от принятой E1 базы. E1 принят после отдельных checkout/веток A/B/C и интеграции C→B→A.
-- Последний принятый SHA: `7afd978166b514088f1f130a426a2ca655aeba93` (`main`, E1 merge). Проверенный E1 runtime candidate: `c56a793d71b5b10e1ff42ad38d2783635ad007d9` (`integration/e1`); последующие commits только отчёты и документация.
+- Текущий этап: **E2 — одна платёжка насквозь**, задания A/B/C выданы из task commit `f613288e5b0a9bc733e6653ba9706bea7e3313d9`; отдельные checkout/ветки `agent-{a,b,c}/e2` и `integration/e2` созданы от принятой базы `dae14d9a838154b72e4cf122881b190032ae0a74`.
+- Принятый E1 runtime merge SHA: `7afd978166b514088f1f130a426a2ca655aeba93`; E2 BASE_SHA: `dae14d9a838154b72e4cf122881b190032ae0a74` (doc-only запись приёмки). Проверенный E1 runtime candidate: `c56a793d71b5b10e1ff42ad38d2783635ad007d9` (`integration/e1`).
 - Промежуточный E1 checkpoint B: `1d99a19502df2b536248daad224b0f0af5e96d5a`, перенесён как `28192753c516d3b3738ea4ac36e8af84475b309a`; он дал A dev API, но E1 принят по более позднему интеграционному SHA.
 - Release SHA: отсутствует; развёртывания нет.
 - Git remote: `https://github.com/FlynnTaggart076/VK_Hackathon.git`; push `main` и веток A/B/C проверен.
@@ -33,6 +33,9 @@
 | E1-A-01 | A / `agent-a/e1` | accepted | `tasks/e1/agent-a.md` | `1a9e30c`, `503cee0`, `0ca5aa7` code; `3895c6e` report; 5 тестов/build, mock и B dev API в Chrome 360 px |
 | E1-B-01 | B / `agent-b/e1` | accepted | `tasks/e1/agent-b.md` | `aafa334`, `d1798cc`, `599c9f6`, `5f1e0b3` code; `e9de94d` report; PG тесты и Compose CI PG17 зелёные |
 | E1-C-01 | C / `agent-c/e1` | accepted | `tasks/e1/agent-c.md` | code `e58a28a` + `d1d6426`, docs `ed649aa`, report `bcac7f2`; verifier/17 тестов, реальный OCR синтетических PNG и PDF-скана |
+| E2-A-01 | A / `agent-a/e2` | in_progress | `tasks/e2/agent-a.md` | Mock review/edit/confirm/explain по OpenAPI; живой B API после checkpoint |
+| E2-B-01 | B / `agent-b/e2` | in_progress | `tasks/e2/agent-b.md` | Независимые DB/CAS/API и Compose; engine adapter после принятого C SHA |
+| E2-C-01 | C / `agent-c/e2` | in_progress | `tasks/e2/agent-c.md` | Bytes OCR/partial и детерминированное объяснение; ранний публичный checkpoint B |
 
 ## Принятая интеграция E0
 
@@ -53,4 +56,4 @@
 
 ## Следующий шаг
 
-Зафиксировать E1 приёмку в `reports/integration.md`, опубликовать принятый `main` SHA, выдать ограниченные E2 задания A/B/C с отдельными checkout. Сначала принять C извлечение/объяснение, затем B реальный adapter и A сквозной UI. VM/MAX остаются внешними проверками будущих этапов.
+Получить pushed E2 checkpoint C и проверить DTO/арифметику/OCR bytes; передать принятый SHA B. Независимые A mock UI и B DB/CAS продолжать параллельно. Затем проверить B adapter/Compose и A живой UI, включая persistence после restart. E2 не принимать без полного сценария; VM/MAX остаются внешними проверками будущих этапов.
