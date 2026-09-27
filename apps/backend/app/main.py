@@ -541,6 +541,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             body["acknowledged_warning_codes"], idempotency_key,
         )
 
+    @app.post("/api/v1/receipts/{receipt_id}/retry", status_code=202)
+    async def retry_receipt(receipt_id: uuid.UUID, request: Request,
+                            idempotency_key: str = Header(alias="Idempotency-Key"),
+                            user_id: str = Depends(current_user)):
+        if not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Для повтора нужна постоянная БД.")
+        try:
+            uuid.UUID(idempotency_key)
+        except ValueError:
+            raise ApiError(422, "VALIDATION_FAILED", "Idempotency-Key должен быть UUID.") from None
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректный JSON.") from None
+        if not isinstance(body, dict) or set(body) != {"expected_revision"} or \
+                type(body["expected_revision"]) is not int or body["expected_revision"] < 1:
+            raise ApiError(422, "VALIDATION_FAILED", "Укажите текущую версию.")
+        return await run_in_threadpool(store.retry_receipt, user_id, str(receipt_id),
+                                       body["expected_revision"], idempotency_key)
+
     @app.get("/api/v1/receipts/{receipt_id}/explanation")
     def explain_receipt(receipt_id: uuid.UUID, revision: int,
                         user_id: str = Depends(current_user)):

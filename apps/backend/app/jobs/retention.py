@@ -1,0 +1,57 @@
+"""Bounded retention sweep for private source bytes and derived receipts."""
+
+from __future__ import annotations
+
+from datetime import timedelta
+
+from sqlalchemy import delete, select
+
+from app.db.models import Document, IdempotencyKey, Job, Receipt
+from app.db.store import SqlStore, now
+
+
+def run_retention_once(store: SqlStore) -> None:
+    moment = now()
+    with store.Session() as session:
+        old_receipts = session.scalars(select(Receipt).where(
+            Receipt.created_at <= moment - timedelta(days=30)
+        ).order_by(Receipt.created_at, Receipt.id).limit(100)).all()
+        targets = [(str(row.user_id), str(row.id)) for row in old_receipts]
+    for user_id, receipt_id in targets:
+        store.delete_receipt(user_id, receipt_id)
+
+    while True:
+        path = None
+        document_id = None
+        with store.Session.begin() as session:
+            document = session.scalar(select(Document).where(
+                Document.deleted_at.is_(None), Document.expires_at <= moment
+            ).order_by(Document.expires_at, Document.id).with_for_update(skip_locked=True).limit(1))
+            if document is None:
+                break
+            document.deleted_at = moment
+            document_id = document.id
+            path = store.settings.storage_path / document.storage_key
+        # Release the document lock before touching jobs. Worker locks job -> receipt -> document.
+        with store.Session.begin() as session:
+            receipt = session.scalar(select(Receipt).where(Receipt.document_id == document_id))
+            if receipt and receipt.status in {"queued", "processing"}:
+                for job in session.scalars(select(Job).where(
+                    Job.resource_id == receipt.id, Job.state.in_(["queued", "running"])
+                ).order_by(Job.id).with_for_update()):
+                    job.state = "failed"
+                    job.error_code = "SOURCE_EXPIRED"
+                    job.stage = None
+                    job.lease_token = None
+                    job.lease_until = None
+                    job.updated_at = moment
+                locked_receipt = session.scalar(select(Receipt).where(Receipt.id == receipt.id).with_for_update())
+                if locked_receipt and locked_receipt.status in {"queued", "processing"}:
+                    locked_receipt.status = "failed"
+                    locked_receipt.updated_at = moment
+        if path is not None:
+            path.unlink(missing_ok=True)
+            for preview in path.parent.glob(f"{path.name}.page-*.png"):
+                preview.unlink(missing_ok=True)
+    with store.Session.begin() as session:
+        session.execute(delete(IdempotencyKey).where(IdempotencyKey.expires_at <= moment))

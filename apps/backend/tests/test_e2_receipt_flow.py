@@ -3,12 +3,22 @@
 from __future__ import annotations
 
 import json
+import os
 import uuid
+from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from pathlib import Path
+from urllib.parse import urlencode
 
 from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator, FormatChecker
+import pytest
+from sqlalchemy import create_engine, select, text
 
+from app.db.models import Document, Job, Receipt
+from app.db.store import now
+from app.jobs.retention import run_retention_once
+from app.services.revision_logic import rebase_evidence
 from app.main import Settings, create_app
 from app.jobs.worker import run_once
 from test_contract_responses import validate_response
@@ -106,3 +116,150 @@ def test_manual_receipt_is_owned_idempotent_and_server_canonical(tmp_path, monke
         assert client.post("/api/v1/receipts/manual", headers=headers(a, key), json={"bill_data": bill}).json() == created.json()
         assert client.get(f"/api/v1/receipts/{rid}", headers=headers(b)).status_code == 404
         assert client.get(f"/api/v1/receipts/{rid}/source", headers=headers(a)).status_code == 404
+
+
+@pytest.mark.parametrize("name,outcome", [
+    ("demo-bill-2026-09-unknown-service.pdf", "partial"),
+    ("unknown-layout.pdf", "manual_required"),
+])
+def test_real_worker_preserves_uncertain_outcome(tmp_path, monkeypatch, name, outcome):
+    database_url = f"sqlite:///{(tmp_path / 'negative.sqlite').as_posix()}"
+    monkeypatch.setenv("APP_MODE", "dev")
+    migrate(database_url, monkeypatch)
+    settings = Settings(mode="dev", demo_auth_enabled=True, demo_access_code="test-secret",
+                        engine_mode="real", database_url=database_url, storage_path=tmp_path / "private")
+    with TestClient(create_app(settings)) as client:
+        token = login(client, "reviewer_a")["access_token"]
+        accept_privacy(client, token)
+        response = upload(client, token, str(uuid.uuid4()), data=(FIXTURE.parent / name).read_bytes(),
+                          mime="application/pdf")
+        assert response.status_code == 202
+        rid = response.json()["receipt"]["id"]
+        assert run_once(client.app.state.store)
+        receipt = client.get(f"/api/v1/receipts/{rid}", headers=headers(token)).json()
+        assert receipt["status"] == "needs_review"
+        assert receipt["extraction_outcome"] == outcome
+        assert receipt["issues"]
+        assert receipt["confirmed_at"] is None
+        assert client.get(f"/api/v1/receipts/{rid}/explanation?revision=1", headers=headers(token)).status_code == 409
+
+
+def test_e2_postgres_revisions_and_restart(tmp_path, monkeypatch):
+    base_url = os.environ.get("TEST_E2_POSTGRES_URL")
+    if not base_url:
+        pytest.skip("set TEST_E2_POSTGRES_URL for isolated PostgreSQL")
+    assert base_url.startswith("postgresql+psycopg://zhkh@127.0.0.1:")
+    assert base_url.endswith("/zhkh_e2_test")
+    schema = f"e2_test_{uuid.uuid4().hex}"
+    admin = create_engine(base_url)
+    with admin.begin() as connection:
+        connection.exec_driver_sql(f'CREATE SCHEMA "{schema}"')
+    admin.dispose()
+    database_url = f"{base_url}?{urlencode({'options': f'-csearch_path={schema}'})}"
+    monkeypatch.setenv("APP_MODE", "dev")
+    migrate(database_url, monkeypatch)
+    settings = Settings(mode="dev", demo_auth_enabled=True, demo_access_code="test-secret",
+                        engine_mode="real", database_url=database_url, storage_path=tmp_path / "private")
+    with TestClient(create_app(settings)) as client:
+        identity = login(client, "reviewer_a")
+        token, uid = identity["access_token"], identity["user"]["id"]
+        accept_privacy(client, token)
+        queued = upload(client, token, str(uuid.uuid4()), data=FIXTURE.read_bytes(),
+                        mime="application/pdf").json()
+        rid = queued["receipt"]["id"]
+        assert run_once(client.app.state.store)
+        current = client.get(f"/api/v1/receipts/{rid}", headers=headers(token)).json()
+        assert current["status"] == "needs_review" and current["bill_data"]["period"] == "2026-08"
+        bill = dict(current["bill_data"], issuer_name="Two editors")
+
+        def edit():
+            try:
+                return client.app.state.store.edit_revision(
+                    uid, rid, 1, bill, [], [], {"can_confirm": True, "errors": [], "warnings": []}, "test")
+            except Exception as exc:
+                return getattr(exc, "code", type(exc).__name__)
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            outcomes = list(executor.map(lambda _: edit(), range(2)))
+        assert sum(isinstance(item, dict) for item in outcomes) == 1
+        assert "REVISION_CONFLICT" in outcomes
+        with client.app.state.store.engine.connect() as connection:
+            assert connection.execute(text("SELECT pg_typeof(bill_data)::text FROM receipt_revisions WHERE receipt_id=:rid AND revision=2"),
+                                      {"rid": uuid.UUID(rid)}).scalar_one() == "jsonb"
+    with TestClient(create_app(settings)) as restarted:
+        token = login(restarted, "reviewer_a")["access_token"]
+        current = restarted.get(f"/api/v1/receipts/{rid}", headers=headers(token)).json()
+        assert current["revision"] == 2 and current["bill_data"]["issuer_name"] == "Two editors"
+
+
+def test_source_and_receipt_retention_are_separate(tmp_path, monkeypatch):
+    database_url = f"sqlite:///{(tmp_path / 'retention.sqlite').as_posix()}"
+    monkeypatch.setenv("APP_MODE", "dev")
+    migrate(database_url, monkeypatch)
+    settings = Settings(mode="dev", demo_auth_enabled=True, demo_access_code="test-secret",
+                        engine_mode="real", database_url=database_url, storage_path=tmp_path / "private")
+    with TestClient(create_app(settings)) as client:
+        token = login(client, "reviewer_a")["access_token"]
+        accept_privacy(client, token)
+        queued = upload(client, token, str(uuid.uuid4()), data=FIXTURE.read_bytes(),
+                        mime="application/pdf").json()
+        rid = queued["receipt"]["id"]
+        assert run_once(client.app.state.store)
+        with client.app.state.store.Session.begin() as session:
+            receipt = session.get(Receipt, uuid.UUID(rid))
+            session.get(Document, receipt.document_id).expires_at = now() - timedelta(seconds=1)
+        run_retention_once(client.app.state.store)
+        assert client.get(f"/api/v1/receipts/{rid}/source", headers=headers(token)).status_code == 410
+        assert client.get(f"/api/v1/receipts/{rid}/pages/1", headers=headers(token)).status_code == 410
+        retained = client.get(f"/api/v1/receipts/{rid}", headers=headers(token)).json()
+        assert retained["bill_data"]["period"] == "2026-08"
+        assert retained["document"]["available"] is False
+        with client.app.state.store.Session.begin() as session:
+            session.get(Receipt, uuid.UUID(rid)).created_at = now() - timedelta(days=31)
+        run_retention_once(client.app.state.store)
+        assert client.get(f"/api/v1/receipts/{rid}", headers=headers(token)).status_code == 404
+        assert list(settings.storage_path.iterdir()) == []
+
+
+def test_failed_retry_requires_live_source_and_replays_key(tmp_path, monkeypatch):
+    database_url = f"sqlite:///{(tmp_path / 'retry.sqlite').as_posix()}"
+    monkeypatch.setenv("APP_MODE", "dev")
+    migrate(database_url, monkeypatch)
+    settings = Settings(mode="dev", demo_auth_enabled=True, demo_access_code="test-secret",
+                        engine_mode="real", database_url=database_url, storage_path=tmp_path / "private")
+    with TestClient(create_app(settings)) as client:
+        token = login(client, "reviewer_a")["access_token"]
+        accept_privacy(client, token)
+        queued = upload(client, token, str(uuid.uuid4()), data=FIXTURE.read_bytes(),
+                        mime="application/pdf").json()
+        rid = queued["receipt"]["id"]
+        with client.app.state.store.Session.begin() as session:
+            session.get(Receipt, uuid.UUID(rid)).status = "failed"
+            session.get(Job, uuid.UUID(queued["job_id"])).state = "failed"
+        path = f"/api/v1/receipts/{rid}/retry"
+        key = str(uuid.uuid4())
+        result = client.post(path, headers=headers(token, key), json={"expected_revision": 1})
+        assert result.status_code == 202, result.json()
+        assert result.json()["job_id"] != queued["job_id"]
+        assert client.post(path, headers=headers(token, key), json={"expected_revision": 1}).json() == result.json()
+        assert run_once(client.app.state.store)
+        assert client.get(f"/api/v1/jobs/{result.json()['job_id']}", headers=headers(token)).json()["state"] == "succeeded"
+        with client.app.state.store.Session.begin() as session:
+            receipt = session.get(Receipt, uuid.UUID(rid))
+            receipt.status = "failed"
+            session.get(Document, receipt.document_id).expires_at = now() - timedelta(seconds=1)
+        expired = client.post(path, headers=headers(token, str(uuid.uuid4())), json={"expected_revision": 1})
+        assert expired.status_code == 410 and expired.json()["error"]["code"] == "SOURCE_EXPIRED"
+
+
+def test_evidence_follows_stable_line_id_after_reorder():
+    first = {"line_id": str(uuid.uuid4()), "charge_amount": "200.00"}
+    second = {"line_id": str(uuid.uuid4()), "charge_amount": "50.00"}
+    old = {"services": [first, second]}
+    new = {"services": [dict(second, charge_amount="60.00"), first]}
+    extracted = {"path": "/services/0/charge_amount", "source": "pdf_text",
+                 "page_number": 1, "bbox": None, "source_text": "200.00",
+                 "needs_review": False, "reason": None}
+    evidence = rebase_evidence(old, new, [extracted])
+    assert next(item for item in evidence if item["path"] == "/services/1/charge_amount")["source"] == "pdf_text"
+    assert next(item for item in evidence if item["path"] == "/services/0/charge_amount")["source"] == "manual"

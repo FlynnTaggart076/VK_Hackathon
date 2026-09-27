@@ -75,3 +75,19 @@ python -m uvicorn app.main:app --app-dir apps/backend --host 127.0.0.1 --port 80
 ```
 
 В другом терминале: `curl.exe http://127.0.0.1:8000/api/v1/meta`. Авторизация demo принимает `identity=reviewer_a` или `reviewer_b`; перед загрузкой вызовите `PUT /api/v1/me/profile` с `privacy_notice_version` из meta и `privacy_acknowledged=true`. Загружайте PDF/JPEG/PNG через `multipart/form-data` с UUID в `Idempotency-Key`. Этот прямой API доступен A для dev-интеграции; публикация под `/team/zhkh/` появится в Compose позже в E1.
+
+## E2: проверка квитанции в изолированном Compose
+
+E2 запускает `ENGINE_MODE=real`: worker читает закрытые bytes из тома, вызывает публичные `extract_receipt` и `validate_bill`, сохраняет JSONB-снимок ревизии и отдаёт `recognized`, `partial` либо `manual_required` без подстановки ответа по имени файла. `GET /pages/{page}` читает готовый PNG-превью из закрытого хранилища; до окончания обработки возвращает 409. Данные одной квитанции доступны только её владельцу; чужой UUID даёт 404, удаление чужого/несуществующего UUID — 204. Исходник и превью удаляются через 7 дней, производные ревизии — через 30 дней. Повтор failed job разрешён только пока сохранён исходник.
+
+`PUT /draft` создаёт новую ревизию через `expected_revision`; `POST /confirm` создаёт неизменяемую подтверждённую ревизию после повторного `validate_bill` и явного подтверждения warning codes. `GET /explanation` принимает только текущую подтверждённую ревизию и вызывает публичный `explain_receipt`. `template_id`, `template_version`, `settlement.formula_kind` и `calculation_kind` принадлежат серверу: полный BillData в запросе нужен для снимка, но значения этих полей сервер восстанавливает. Для известного `line_id` сохраняется classification движка, новая строка получает безопасный `document_amount`. Ручной ввод получает `manual-v1` и формулу `unsupported`. Текущие объяснения арифметические, `sources=[]` и issue `ARITHMETIC_ONLY`; внешние тарифы и юридические утверждения не подтверждаются.
+
+В отдельном локальном Compose project с личным `.env` (секреты вне Git) HTTP проверка выполняется в два шага:
+
+```sh
+BASE_URL=http://127.0.0.1:8080/team/zhkh DEMO_ACCESS_CODE=<private> python scripts/smoke_e2_http.py start --state /tmp/e2-smoke-state.json
+docker compose --project-name <isolated> --env-file .env -f compose.yaml -f compose.local.yaml restart api worker
+BASE_URL=http://127.0.0.1:8080/team/zhkh DEMO_ACCESS_CODE=<private> python scripts/smoke_e2_http.py verify --state /tmp/e2-smoke-state.json
+```
+
+Скрипт передаёт синтетический PDF как multipart bytes, ждёт persisted job, проверяет OCR → edit CAS → confirm → explain, а после restart читает тот же подтверждённый результат. В state file только UUID квитанции и номер ревизии, без токена или кода. Этот сценарий не проверяет MAX и VM.
