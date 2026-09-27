@@ -37,6 +37,7 @@ function SourcePreview({ receipt }: { receipt: ReceiptView }) {
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const [reloadPage, setReloadPage] = useState(0);
   useEffect(() => {
     setUrl(null); setError(null);
     if (!receipt.document.available) return;
@@ -46,7 +47,7 @@ function SourcePreview({ receipt }: { receipt: ReceiptView }) {
       if (!controller.signal.aborted) { objectUrl = URL.createObjectURL(blob); setUrl(objectUrl); }
     }).catch((cause) => { if (!(cause instanceof DOMException && cause.name === 'AbortError')) setError(cause); });
     return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [receipt.id, receipt.document.available, page]);
+  }, [receipt.id, receipt.document.available, page, reloadPage]);
   async function download() {
     setBusy(true); setError(null);
     try {
@@ -62,6 +63,7 @@ function SourcePreview({ receipt }: { receipt: ReceiptView }) {
     {!receipt.document.available ? <p>Срок хранения исходника истёк или файл недоступен. Сохранённые цифры можно проверить, но страницу показать нельзя.</p> : <>
       {url ? <><img className="receipt-page" src={url} alt={`Страница ${page} исходной платёжки`} /><p><a href={url} target="_blank" rel="noopener noreferrer">Открыть страницу крупно</a></p></> : !error && <p role="status">Загружаем защищённый просмотр страницы…</p>}
       <ErrorMessage error={error} />
+      {error && <button type="button" onClick={() => setReloadPage((value) => value + 1)}>Повторить просмотр страницы</button>}
       {receipt.document.page_count && receipt.document.page_count > 1 && <div className="actions">
         <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)}>Предыдущая</button>
         <span>Страница {page} из {receipt.document.page_count}</span>
