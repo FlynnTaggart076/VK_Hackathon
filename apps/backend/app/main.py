@@ -5,7 +5,9 @@ from __future__ import annotations
 import hashlib
 import hmac
 import io
+import json
 import os
+import re
 import secrets
 import threading
 import uuid
@@ -13,8 +15,9 @@ from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
-from fastapi import Depends, FastAPI, Header, Request, UploadFile
+from fastapi import Depends, FastAPI, Form, Header, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from PIL import Image, UnidentifiedImageError
@@ -37,6 +40,9 @@ class Settings:
     mode: str = "dev"
     demo_auth_enabled: bool = False
     demo_access_code: str | None = None
+    max_bot_token: str | None = None
+    max_webhook_secret: str | None = None
+    max_api_base_url: str = "https://platform-api2.max.ru"
     engine_mode: str = "stub"
     database_url: str | None = None
     storage_path: Path = Path(".local-storage")
@@ -51,6 +57,9 @@ class Settings:
             mode=os.getenv("APP_MODE", "dev"),
             demo_auth_enabled=os.getenv("DEMO_AUTH_ENABLED", "false").lower() == "true",
             demo_access_code=os.getenv("DEMO_ACCESS_CODE"),
+            max_bot_token=os.getenv("MAX_BOT_TOKEN"),
+            max_webhook_secret=os.getenv("MAX_WEBHOOK_SECRET"),
+            max_api_base_url=os.getenv("MAX_API_BASE_URL", "https://platform-api2.max.ru"),
             engine_mode=os.getenv("ENGINE_MODE", "stub"),
             database_url=os.getenv("DATABASE_URL"),
             storage_path=Path(os.getenv("STORAGE_PATH", ".local-storage")),
@@ -63,8 +72,16 @@ class Settings:
             raise ValueError("ENGINE_MODE must be real or stub")
         if self.mode == "production" and (self.demo_auth_enabled or self.engine_mode == "stub"):
             raise ValueError("Production forbids demo auth and engine stub")
-        if self.mode != "dev":
-            raise ValueError("E1 backend supports dev mode only; MAX and real engine are not integrated")
+        if self.mode != "dev" and self.engine_mode == "stub":
+            raise ValueError("Engine stub is dev-only")
+        if self.mode == "production" and (not self.max_bot_token or not self.max_webhook_secret):
+            raise ValueError("Production requires MAX bot token and webhook secret")
+        if self.max_webhook_secret and not re.fullmatch(r"[A-Za-z0-9_-]{5,256}", self.max_webhook_secret):
+            raise ValueError("MAX_WEBHOOK_SECRET must match MAX subscription format")
+        api_url = urlsplit(self.max_api_base_url)
+        if api_url.scheme != "https" or not api_url.hostname or api_url.username or api_url.password or \
+                api_url.query or api_url.fragment or api_url.path not in {"", "/"}:
+            raise ValueError("MAX_API_BASE_URL must be an HTTPS origin")
         if self.demo_auth_enabled and not self.demo_access_code:
             raise ValueError("DEMO_ACCESS_CODE required when demo auth is enabled")
         if self.mode != "dev" and not self.database_url:
@@ -189,6 +206,13 @@ class MemoryStore:
                 raise ApiError(401, "SESSION_EXPIRED", "Срок сессии истёк.")
             return record[0]
 
+    def logout(self, token: str) -> None:
+        digest = hashlib.sha256(token.encode()).hexdigest()
+        with self.lock:
+            if digest not in self.sessions:
+                raise ApiError(401, "AUTH_REQUIRED", "Войдите в приложение.")
+            del self.sessions[digest]
+
     def profile(self, user_id: str) -> dict:
         with self.lock:
             return deepcopy(self.profiles[user_id])
@@ -207,9 +231,10 @@ class MemoryStore:
             self.profiles[user_id] = value
             return deepcopy(value)
 
-    def upload(self, user_id: str, key: str, content: bytes, mime: str, pages: int) -> dict:
+    def upload(self, user_id: str, key: str, content: bytes, mime: str, pages: int,
+               dataset_kind: str = "user_provided") -> dict:
         digest = hashlib.sha256(content).hexdigest()
-        fingerprint = hashlib.sha256(f"{mime}:{digest}".encode()).hexdigest()
+        fingerprint = hashlib.sha256(f"{mime}:{digest}:{dataset_kind}".encode()).hexdigest()
         idem_key = (user_id, "POST /api/v1/receipts", key)
         with self.lock:
             profile = self.profiles[user_id]
@@ -234,7 +259,7 @@ class MemoryStore:
             receipt = {
                 "id": receipt_id, "status": "queued", "revision": 1,
                 "created_at": stamp(created), "updated_at": stamp(created),
-                "dataset_kind": "user_provided", "extraction_outcome": None,
+                "dataset_kind": dataset_kind, "extraction_outcome": None,
                 "bill_data": empty_bill(), "field_evidence": [], "issues": [],
                 "document": {"available": True, "mime_type": mime, "page_count": pages,
                              "expires_at": stamp(created + timedelta(days=7))},
@@ -356,7 +381,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                            "receipt_retention_days": 30, "source_retention_days": 7},
                 "features": {"voice": False, "external_submission": False,
                              "receipt_ocr": settings.engine_mode == "real",
-                             "comparison": False, "engine_stub": settings.engine_mode == "stub",
+                             "comparison": settings.engine_mode == "real" and bool(settings.database_url),
+                             "engine_stub": settings.engine_mode == "stub",
                              "demo_auth": settings.demo_auth_enabled},
                 "privacy_notice": {"version": settings.privacy_notice_version,
                                    "text": "Исходные документы хранятся 7 дней, данные квитанций — 30 дней."}}
@@ -374,8 +400,51 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return await run_in_threadpool(store.authenticate_demo, body["identity"], body["access_code"])
 
     @app.post("/api/v1/auth/max")
-    def auth_max():
-        raise ApiError(503, "SERVICE_UNAVAILABLE", "Вход MAX ещё не подключён.", retryable=False)
+    async def auth_max(request: Request):
+        if not settings.max_bot_token or not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Вход MAX не настроен.", retryable=False)
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректный JSON.") from None
+        if not isinstance(body, dict) or set(body) != {"init_data"} or not isinstance(body["init_data"], str):
+            raise ApiError(422, "VALIDATION_FAILED", "Укажите стартовые данные MAX.")
+        from app.services.max_auth import validate_init_data
+
+        max_user_id = validate_init_data(body["init_data"], settings.max_bot_token)
+        return await run_in_threadpool(store.authenticate_max, max_user_id)
+
+    @app.post("/integrations/max/webhook")
+    async def max_webhook(request: Request,
+                          max_secret: str | None = Header(default=None, alias="X-Max-Bot-Api-Secret")):
+        if not settings.max_webhook_secret or not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Webhook MAX не настроен.", retryable=True)
+        if not max_secret or not hmac.compare_digest(max_secret, settings.max_webhook_secret):
+            raise ApiError(403, "FORBIDDEN", "Доступ запрещён.")
+        raw = await request.body()
+        if len(raw) > 65_536:
+            raise ApiError(413, "FILE_TOO_LARGE", "Событие слишком велико.")
+        try:
+            body = json.loads(raw)
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректное событие MAX.") from None
+        from sqlalchemy.exc import SQLAlchemyError
+
+        from app.services.max_queue import enqueue_update, normalize_update
+
+        update = normalize_update(body)
+        try:
+            await run_in_threadpool(enqueue_update, store, update)
+        except SQLAlchemyError:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Очередь webhook недоступна.", retryable=True) from None
+        return {"accepted": True}
+
+    @app.post("/api/v1/auth/logout", status_code=204)
+    def logout(authorization: str | None = Header(default=None)):
+        if not authorization or not authorization.startswith("Bearer "):
+            raise ApiError(401, "AUTH_REQUIRED", "Войдите в приложение.")
+        store.logout(authorization[7:])
+        return Response(status_code=204)
 
     @app.get("/api/v1/me")
     def me(user_id: str = Depends(current_user)):
@@ -400,8 +469,41 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     {"fixture_id": "water-2026-09", "label": "Вода, сентябрь", "description": "Синтетическая квитанция"},
                 ]}
 
+    @app.post("/api/v1/comparisons")
+    async def compare_receipts_http(request: Request, user_id: str = Depends(current_user)):
+        if not settings.database_url or settings.engine_mode != "real":
+            raise ApiError(503, "ENGINE_UNAVAILABLE", "Сравнение пока недоступно.", retryable=True)
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректный JSON.") from None
+        if not isinstance(body, dict) or set(body) != {"left", "right", "identity_acknowledged"} or \
+                type(body["identity_acknowledged"]) is not bool:
+            raise ApiError(422, "VALIDATION_FAILED", "Проверьте запрос сравнения.")
+        refs = []
+        for field in ("left", "right"):
+            ref = body[field]
+            if not isinstance(ref, dict) or set(ref) != {"id", "revision"} or \
+                    not isinstance(ref["id"], str) or type(ref["revision"]) is not int or ref["revision"] < 1:
+                raise ApiError(422, "VALIDATION_FAILED", "Укажите обе версии квитанций.")
+            try:
+                uuid.UUID(ref["id"])
+            except ValueError:
+                raise ApiError(422, "VALIDATION_FAILED", "Некорректный ID квитанции.") from None
+            refs.append(ref)
+        from app.services.comparison_adapter import compare_json
+        from housing_engine import EngineError
+
+        snapshots, territory = await run_in_threadpool(store.comparison_snapshots, user_id, refs)
+        try:
+            return await run_in_threadpool(compare_json, snapshots, territory, body["identity_acknowledged"])
+        except EngineError as exc:
+            status = 409 if exc.code == "INCOMPARABLE_RECEIPTS" else 503 if exc.retryable else 422
+            raise ApiError(status, exc.code, exc.message, retryable=exc.retryable) from None
+
     @app.post("/api/v1/receipts", status_code=202)
     async def upload_receipt(file: UploadFile, idempotency_key: str = Header(alias="Idempotency-Key"),
+                             demo_sample_id: str | None = Form(default=None),
                              user_id: str = Depends(current_user)):
         try:
             uuid.UUID(idempotency_key)
@@ -410,7 +512,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         content = await file.read(settings.upload_max_bytes + 1)
         await file.close()
         mime, pages = inspect_document(content, file.content_type or "", settings)
-        return await run_in_threadpool(store.upload, user_id, idempotency_key, content, mime, pages)
+        from app.services.demo_samples import dataset_kind
+
+        kind = dataset_kind(content, mime, demo_sample_id)
+        return await run_in_threadpool(store.upload, user_id, idempotency_key, content, mime, pages, kind)
 
     @app.post("/api/v1/receipts/demo", status_code=202)
     async def import_demo(request: Request, idempotency_key: str = Header(alias="Idempotency-Key"),

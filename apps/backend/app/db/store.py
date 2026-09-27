@@ -105,6 +105,69 @@ class SqlStore:
                 raise ApiError(401, "SESSION_EXPIRED", "Срок сессии истёк.")
             return str(row.user_id)
 
+    def authenticate_max(self, max_user_id: int) -> dict:
+        token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        for attempt in range(2):
+            try:
+                with self.Session.begin() as session:
+                    user = session.scalar(select(User).where(User.max_user_id == max_user_id))
+                    if user is None:
+                        user = User(id=uuid.uuid4(), max_user_id=max_user_id, created_at=now())
+                        session.add(user)
+                        session.flush()
+                        profile = Profile(user_id=user.id, role="other", territory_id=None,
+                                          onboarding_completed=False, privacy_notice_version=None,
+                                          privacy_acknowledged_at=None)
+                        session.add(profile)
+                    else:
+                        profile = session.get(Profile, user.id)
+                    session.add(SessionToken(id=uuid.uuid4(), user_id=user.id,
+                                             token_hash=token_hash, expires_at=now() + timedelta(hours=1)))
+                    return {"access_token": token, "token_type": "bearer", "expires_in": 3600,
+                            "user": {"id": str(user.id)}, "profile": self._profile_value(profile)}
+            except IntegrityError:
+                if attempt:
+                    raise
+        raise RuntimeError("unreachable")
+
+    def logout(self, token: str) -> None:
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        with self.Session.begin() as session:
+            row = session.scalar(select(SessionToken).where(
+                SessionToken.token_hash == token_hash).with_for_update())
+            if row is None or row.revoked_at is not None or aware(row.expires_at) <= now():
+                raise ApiError(401, "AUTH_REQUIRED", "Войдите в приложение.")
+            row.revoked_at = now()
+
+    def comparison_snapshots(self, user_id: str, refs: list[dict]) -> tuple[list[dict], str | None]:
+        """Read two current confirmed versions atomically with owner checks."""
+        uid = uuid.UUID(user_id)
+        ids = [uuid.UUID(item["id"]) for item in refs]
+        with self.Session.begin() as session:
+            receipts = {row.id: row for row in session.scalars(select(Receipt).where(
+                Receipt.id.in_(ids), Receipt.user_id == uid
+            ).order_by(Receipt.id).with_for_update()).all()}
+            profile = session.get(Profile, uid)
+            snapshots = []
+            for item, rid in zip(refs, ids):
+                receipt = receipts.get(rid)
+                if receipt is None:
+                    raise ApiError(404, "NOT_FOUND", "Квитанция не найдена.")
+                if receipt.current_revision != item["revision"]:
+                    raise ApiError(409, "REVISION_CONFLICT", "Квитанция изменена; обновите данные.",
+                                   details={"current_revision": receipt.current_revision})
+                if receipt.status != "confirmed":
+                    raise ApiError(409, "RECEIPT_NOT_CONFIRMED", "Сначала подтвердите обе квитанции.")
+                revision = session.get(ReceiptRevision, (rid, receipt.current_revision))
+                if revision is None or revision.confirmed_at is None:
+                    raise ApiError(409, "RECEIPT_NOT_CONFIRMED", "Сначала подтвердите обе квитанции.")
+                snapshots.append({"id": rid, "revision": receipt.current_revision,
+                                  "bill_data": deepcopy(revision.bill_data),
+                                  "confirmed_at": aware(revision.confirmed_at),
+                                  "dataset_kind": receipt.dataset_kind})
+            return snapshots, profile.territory_id if profile else None
+
     def profile(self, user_id: str) -> dict:
         with self.Session() as session:
             profile = session.get(Profile, uuid.UUID(user_id))
@@ -143,10 +206,11 @@ class SqlStore:
                 return deepcopy(record.response_body)
             return None
 
-    def upload(self, user_id: str, key: str, content: bytes, mime: str, pages: int) -> dict:
+    def upload(self, user_id: str, key: str, content: bytes, mime: str, pages: int,
+               dataset_kind: str = "user_provided") -> dict:
         uid, key_id = uuid.UUID(user_id), uuid.UUID(key)
         digest = hashlib.sha256(content).hexdigest()
-        fingerprint = hashlib.sha256(f"{mime}:{digest}".encode()).hexdigest()
+        fingerprint = hashlib.sha256(f"{mime}:{digest}:{dataset_kind}".encode()).hexdigest()
         prior = self._existing_idempotency(uid, key_id, fingerprint)
         if prior is not None:
             return prior
@@ -187,7 +251,7 @@ class SqlStore:
                                      mime_type=mime, size_bytes=len(content), page_count=pages,
                                      expires_at=created + timedelta(days=7), created_at=created))
                 session.add(Receipt(id=receipt_id, user_id=uid, document_id=document_id,
-                                    status="queued", current_revision=1, dataset_kind="user_provided",
+                                    status="queued", current_revision=1, dataset_kind=dataset_kind,
                                     created_at=created, updated_at=created))
                 session.add(Job(id=job_id, user_id=uid, kind="receipt_ocr", resource_id=receipt_id,
                                 operation_key=f"receipt-ocr:{receipt_id}", state="queued", stage=None,
@@ -195,7 +259,7 @@ class SqlStore:
                 result = {"receipt": {
                     "id": str(receipt_id), "status": "queued", "revision": 1,
                     "created_at": stamp(created), "updated_at": stamp(created),
-                    "dataset_kind": "user_provided", "extraction_outcome": None,
+                    "dataset_kind": dataset_kind, "extraction_outcome": None,
                     "bill_data": empty_bill(), "field_evidence": [], "issues": [],
                     "document": {"available": True, "mime_type": mime, "page_count": pages,
                                  "expires_at": stamp(created + timedelta(days=7))},
@@ -618,4 +682,4 @@ class SqlStore:
             session.execute(text("SELECT 1"))
             version = session.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
             worker = session.get(WorkerHeartbeat, "worker")
-            return version == "e1_initial" and bool(worker and aware(worker.updated_at) > now() - timedelta(seconds=90))
+            return version == "e3_max_queue" and bool(worker and aware(worker.updated_at) > now() - timedelta(seconds=90))

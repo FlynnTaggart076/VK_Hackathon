@@ -151,6 +151,7 @@ paths:
               required: [file]
               properties:
                 file: {type: string, format: binary, description: 'PDF, JPEG or PNG; at most 10 MiB'}
+                demo_sample_id: {type: string, enum: [demo-bill-2026-08.pdf, demo-bill-2026-09.pdf], description: 'Optional explicit built-in synthetic sample ID; exact bytes and SHA-256 must match the manifest or 422. OCR still processes uploaded bytes.'}
             encoding:
               file:
                 contentType: application/pdf, image/jpeg, image/png
@@ -775,7 +776,7 @@ components:
     ReceiptList: {description: User-owned receipts, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ReceiptList'}, examples: {synthetic: {externalValue: './examples/receipt-list.json'}}}}}
     Explanation: {description: Confirmed current revision explanation, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '../engine/v1/ReceiptExplanation.schema.json'}, examples: {incomplete: {externalValue: './examples/explanation-incomplete.json'}}}}}
     Job: {description: User-owned job, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/Job'}, examples: {queued: {externalValue: './examples/job-queued.json'}}}}}
-    Comparison: {description: 'Complete, partial or identity confirmation result', headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ComparisonView'}, examples: {needs_identity_confirmation: {externalValue: './examples/comparison-identity.json'}, partial: {externalValue: './examples/comparison-partial.json'}}}}}
+    Comparison: {description: 'Complete, partial or identity confirmation result', headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ComparisonView'}, examples: {complete: {externalValue: './examples/comparison-complete.json'}, needs_identity_confirmation: {externalValue: './examples/comparison-identity.json'}, partial: {externalValue: './examples/comparison-partial.json'}}}}}
     Draft: {description: Editable draft; no send operation, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/DraftView'}, examples: {synthetic: {externalValue: './examples/draft.json'}}}}}
     BadRequest: {$ref: '#/components/responses/ErrorResponse'}
     Unauthorized: {description: Missing or invalid session, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorEnvelope'}, examples: {auth_required: {externalValue: './examples/error-401.json'}}}}}

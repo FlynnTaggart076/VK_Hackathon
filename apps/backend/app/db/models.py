@@ -121,3 +121,30 @@ class WorkerHeartbeat(Base):
     __tablename__ = "worker_heartbeats"
     name: Mapped[str] = mapped_column(String(40), primary_key=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class WebhookInbox(Base):
+    __tablename__ = "webhook_inbox"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    dedup_key: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    max_user_id: Mapped[int | None] = mapped_column(BigInteger)
+    chat_id: Mapped[int | None] = mapped_column(BigInteger)
+    text: Mapped[str | None] = mapped_column(String(2000))
+    attachment_kind: Mapped[str | None] = mapped_column(String(24))
+    state: Mapped[str] = mapped_column(String(24), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+
+
+class Outbox(Base):
+    __tablename__ = "outbox"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    business_key: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    max_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    text: Mapped[str] = mapped_column(String(4000), nullable=False)
+    state: Mapped[str] = mapped_column(String(24), nullable=False)
+    attempt: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    run_after: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)

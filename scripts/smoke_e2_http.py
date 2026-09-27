@@ -27,6 +27,7 @@ class SmokeError(Exception):
 def request(base: str, method: str, path: str, *, token: str | None = None,
             body: dict | None = None, upload: bytes | None = None,
             upload_mime: str = "application/pdf",
+            demo_sample_id: str | None = None,
             idempotency: bool = False) -> dict:
     headers = {"Accept": "application/json"}
     if token:
@@ -42,7 +43,11 @@ def request(base: str, method: str, path: str, *, token: str | None = None,
         suffix = "png" if upload_mime == "image/png" else "pdf"
         data = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; "
                 f"filename=\"synthetic.{suffix}\"\r\nContent-Type: {upload_mime}\r\n\r\n").encode() + \
-               upload + f"\r\n--{boundary}--\r\n".encode()
+               upload
+        if demo_sample_id is not None:
+            data += (f'\r\n--{boundary}\r\nContent-Disposition: form-data; name="demo_sample_id"'
+                     f'\r\n\r\n{demo_sample_id}').encode()
+        data += f"\r\n--{boundary}--\r\n".encode()
         headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
     try:
         with urlopen(Request(base + path, data=data, method=method, headers=headers), timeout=15) as response:

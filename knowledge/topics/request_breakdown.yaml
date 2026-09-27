@@ -1,0 +1,16 @@
+id: request_breakdown
+title: "Запрос расшифровки"
+utterances: ["как запросить расшифровку начисления", "попросить детализацию"]
+keywords: ["расшифровка", "детализация", "начисление"]
+required_context: []
+applicability:
+  territory_ids: []
+  roles: []
+  service_codes: []
+  document_kinds: []
+answer_template: "Можно подготовить редактируемый вопрос по подтверждённой строке. Проверенного канала отправки сейчас нет."
+steps: ["Проверьте факты в черновике перед копированием."]
+source_ids: []
+action_templates: [{id: "draft-breakdown", type: prepare_draft, label: "Подготовить черновик", source_id: null, target: null, requires: []}]
+review_after: "2026-12-31T00:00:00Z"
+content_version: "1.0"
