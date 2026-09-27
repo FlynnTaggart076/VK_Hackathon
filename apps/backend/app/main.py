@@ -16,7 +16,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from PIL import Image, UnidentifiedImageError
 from pypdf import PdfReader
 from starlette.concurrency import run_in_threadpool
@@ -428,6 +428,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/v1/receipts/{receipt_id}")
     def get_receipt(receipt_id: uuid.UUID, user_id: str = Depends(current_user)):
         return store.receipt(user_id, str(receipt_id))
+
+    @app.get("/api/v1/receipts")
+    def list_receipts(cursor: str | None = None, limit: int = 20,
+                      user_id: str = Depends(current_user)):
+        if not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Для списка квитанций нужна постоянная БД.")
+        return store.list_receipts(user_id, cursor, limit)
+
+    @app.get("/api/v1/receipts/{receipt_id}/source")
+    def get_receipt_source(receipt_id: uuid.UUID, user_id: str = Depends(current_user)):
+        if not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Для хранения документа нужна постоянная БД.")
+        content, mime = store.source(user_id, str(receipt_id))
+        suffix = {"application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png"}[mime]
+        return Response(content=content, media_type=mime,
+                        headers={"Content-Disposition": f'attachment; filename="receipt.{suffix}"',
+                                 "Cache-Control": "no-store"})
+
+    @app.delete("/api/v1/receipts/{receipt_id}", status_code=204)
+    def delete_receipt(receipt_id: uuid.UUID, user_id: str = Depends(current_user)):
+        if not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Для удаления нужна постоянная БД.")
+        store.delete_receipt(user_id, str(receipt_id))
+        return Response(status_code=204)
 
     @app.get("/api/v1/jobs/{job_id}")
     def get_job(job_id: uuid.UUID, user_id: str = Depends(current_user)):
