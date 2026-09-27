@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=75,<81"]
+requires = ["setuptools==80.9.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,10 +7,10 @@ name = "housing-engine"
 version = "0.1.0"
 description = "DTO contract for the MAX housing assistant"
 requires-python = ">=3.12"
-dependencies = ["pydantic>=2.11,<3"]
+dependencies = ["pydantic==2.13.5", "PyYAML==6.0.3"]
 
 [project.optional-dependencies]
-contract = ["jsonschema>=4.23,<5"]
+contract = ["jsonschema==4.26.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "title", "utterances", "keywords", "required_context", "applicability", "answer_template", "steps", "source_ids", "action_templates", "review_after", "content_version"],
+  "properties": {
+    "id": {"enum": ["first_bill", "bill_terms", "bill_change", "meter_readings", "meter_deadline", "account_number", "management_contacts", "supplier_contacts", "payment_history", "arrears_or_credit", "adjustment", "request_breakdown", "service_issue", "housing_document", "new_resident"]},
+    "title": {"type": "string", "minLength": 1},
+    "utterances": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "keywords": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "required_context": {"type": "array", "uniqueItems": true, "items": {"enum": ["territory_id", "role", "organization_id", "service_code", "document_kind"]}},
+    "applicability": {"type": "object", "additionalProperties": false, "required": ["territory_ids", "roles", "service_codes", "document_kinds"],
+      "properties": {
+        "territory_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "roles": {"type": "array", "uniqueItems": true, "items": {"enum": ["owner", "tenant", "other"]}},
+        "service_codes": {"type": "array", "uniqueItems": true, "items": {"enum": ["cold_water", "hot_water", "drainage", "electricity", "heating", "maintenance", "capital_repair", "waste", "other"]}},
+        "document_kinds": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}
+      }
+    },
+    "answer_template": {"type": "string", "minLength": 1},
+    "steps": {"type": "array", "maxItems": 5, "items": {"type": "string", "minLength": 1}},
+    "source_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "action_templates": {"type": "array", "items": {"type": "object", "additionalProperties": false,
+      "required": ["id", "type", "label", "source_id", "target", "requires"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "type": {"enum": ["open_link", "prepare_draft", "select_topic", "navigate"]},
+        "label": {"type": "string", "minLength": 1},
+        "source_id": {"type": ["string", "null"]},
+        "target": {"enum": ["receipt_upload", "receipt_history", "receipt_detail", "comparison", null]},
+        "requires": {"type": "array", "items": {"type": "string"}}
+      }
+    }},
+    "review_after": {"type": "string", "format": "date-time"},
+    "content_version": {"type": "string", "minLength": 1}
+  }
+}

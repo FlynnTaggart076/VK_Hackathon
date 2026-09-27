@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sources"],
+  "properties": {
+    "sources": {"type": "array", "items": {"type": "object", "additionalProperties": false,
+      "required": ["id", "title", "url", "territory_id", "verified_at", "review_after", "content_version", "is_synthetic"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "title": {"type": "string", "minLength": 1},
+        "url": {"oneOf": [{"type": "string", "pattern": "^https://[^\\s]+$"}, {"type": "null"}]},
+        "territory_id": {"type": ["string", "null"]},
+        "verified_at": {"type": "string", "format": "date-time"},
+        "review_after": {"type": "string", "format": "date-time"},
+        "content_version": {"type": "string", "minLength": 1},
+        "is_synthetic": {"type": "boolean"}
+      }
+    }}
+  }
+}

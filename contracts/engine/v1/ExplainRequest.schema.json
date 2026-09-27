@@ -498,6 +498,7 @@
     },
     "confirmed_at": {
       "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|\\+00:00)$",
       "title": "Confirmed At",
       "type": "string"
     },
@@ -514,6 +515,7 @@
     },
     "now": {
       "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|\\+00:00)$",
       "title": "Now",
       "type": "string"
     }
