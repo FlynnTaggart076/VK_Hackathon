@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { api, hasSessionToken, setSessionToken } from '../api/client';
+import { api, ApiRequestError, hasSessionToken, setSessionToken } from '../api/client';
+import { maxAuth, maxInitData } from '../api/maxAuth';
 import type { AnswerContext, AnswerView, Catalog, MetaResponse, Profile, ReceiptView } from '../api/types';
 import { Onboarding, canUpload } from './Onboarding';
 import { Processing, Upload } from './Upload';
@@ -17,11 +18,23 @@ const screens = [
   { path: '/', title: 'Главная', text: 'Вопросы, платёжки, история и учебные примеры.', states: 'пустая история, demo-пометка' },
 ] as const;
 
-function Entry({ meta, onAuth }: { meta: MetaResponse | null; onAuth: (profile: Profile) => void }) {
+function Entry({ meta, sessionExpired, onAuth }: { meta: MetaResponse | null; sessionExpired: boolean; onAuth: (profile: Profile) => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [accessCode, setAccessCode] = useState('');
   const [identity, setIdentity] = useState<'reviewer_a' | 'reviewer_b' | ''>('');
+  const initData = !import.meta.env.DEV && !sessionExpired ? maxInitData() : null;
+  async function enterMax() {
+    if (!initData) return;
+    setBusy(true); setError(null);
+    try {
+      const result = await maxAuth(initData);
+      setSessionToken(result.access_token);
+      onAuth(result.profile);
+    } catch (cause) { setError(cause); }
+    finally { setBusy(false); }
+  }
+  useEffect(() => { if (initData) void enterMax(); }, []);
   async function enterDemo(event?: React.FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     setBusy(true); setError(null);
@@ -49,7 +62,11 @@ function Entry({ meta, onAuth }: { meta: MetaResponse | null; onAuth: (profile: 
         <label htmlFor="demo-code">Локальный код</label>
         <input id="demo-code" type="password" autoComplete="off" value={accessCode} onChange={(event) => setAccessCode(event.target.value)} />
         <button type="submit" disabled={busy || !accessCode || !identity}>{busy ? 'Входим…' : 'Войти в dev'}</button>
-      </form> : <p>Откройте приложение внутри MAX. Подключение MAX Bridge ещё не проверено.</p>}
+      </form> : sessionExpired ? <p role="status">Сессия истекла. Закройте и переоткройте мини-приложение в MAX для свежих стартовых данных.</p> :
+        initData ? <><p role="status">{busy ? 'Проверяем вход MAX на сервере…' : 'Вход MAX не завершён.'}</p>
+          {error && !(error instanceof ApiRequestError && error.status === 401) &&
+            <button type="button" disabled={busy} onClick={() => void enterMax()}>Повторить вход MAX</button>}</> :
+        <p>Откройте приложение внутри MAX. Стартовые данные MAX здесь недоступны.</p>}
     <ErrorMessage error={error} />
   </section>;
 }
@@ -137,6 +154,7 @@ export function App() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [sessionError, setSessionError] = useState<unknown>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [loadingSession, setLoadingSession] = useState(false);
   const [reloadMeta, setReloadMeta] = useState(0);
   const [reloadSession, setReloadSession] = useState(0);
@@ -151,7 +169,8 @@ export function App() {
     return () => controller.abort();
   }, [reloadMeta]);
   useEffect(() => {
-    const expired = () => { setAuthenticated(false); setProfile(null); setCatalog(null); setSessionError(new Error('Сессия истекла. Войдите снова.')); };
+    const expired = () => { setAuthenticated(false); setProfile(null); setCatalog(null); setSessionExpired(true);
+      setSessionError(new Error(import.meta.env.DEV ? 'Сессия истекла. Войдите снова.' : 'Сессия истекла. Переоткройте мини-приложение в MAX.')); };
     window.addEventListener('zhkh:session-expired', expired);
     return () => window.removeEventListener('zhkh:session-expired', expired);
   }, []);
@@ -165,7 +184,7 @@ export function App() {
       .finally(() => setLoadingSession(false));
     return () => controller.abort();
   }, [authenticated, reloadSession]);
-  const needsLogin = <section className="panel"><h2>Нужен вход</h2><p>После входа можно продолжить на этом экране.</p></section>;
+  const needsLogin = <section className="panel"><h2>Нужен вход</h2><p>{sessionExpired && !import.meta.env.DEV ? 'Переоткройте мини-приложение в MAX. После входа можно продолжить на этом экране.' : 'После входа можно продолжить на этом экране.'}</p></section>;
   const waiting = <section className="panel"><h2>Профиль</h2>{sessionError ? <>
     <p>Не удалось получить профиль и каталог.</p><button type="button" onClick={() => setReloadSession((value) => value + 1)}>Повторить</button>
   </> : <p role="status">Получаем данные первого запуска…</p>}</section>;
@@ -176,7 +195,7 @@ export function App() {
     <main id="content" tabIndex={-1}>
       {metaError !== null && <><ErrorMessage error={metaError} /><button type="button" onClick={() => setReloadMeta((value) => value + 1)}>Повторить загрузку API</button></>}
       {sessionError !== null && <ErrorMessage error={sessionError} />}
-      {!authenticated && <Entry meta={meta} onAuth={(value) => { setProfile(value); setAuthenticated(true); }} />}
+      {!authenticated && <Entry meta={meta} sessionExpired={sessionExpired} onAuth={(value) => { setProfile(value); setSessionExpired(false); setAuthenticated(true); }} />}
       {location.pathname === '/' && authenticated && meta && !canUpload(profile, meta) && <p className="notice">Перед загрузкой платёжки завершите <Link to="/onboarding">первый запуск</Link>.</p>}
       {loadingSession && waiting}
       <Routes>

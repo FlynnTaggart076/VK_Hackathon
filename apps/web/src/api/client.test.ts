@@ -1,10 +1,12 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import { setupServer } from 'msw/node';
+import { http, HttpResponse } from 'msw';
 import { api, ApiRequestError, hasSessionToken, request, setSessionToken } from './client';
 import { demoAuth } from './devAuth';
+import { maxAuth, maxInitData } from './maxAuth';
 import { handlers, resetMockState } from '../mock/handlers';
 import type { AnswerContext, BillData } from './types';
 import { canUpload } from '../ui/Onboarding';
@@ -12,13 +14,34 @@ import { billErrors, normalizeBill } from '../ui/billForm';
 
 const server = setupServer(...handlers);
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
-afterEach(() => { server.resetHandlers(); resetMockState(); setSessionToken(null); });
+afterEach(() => { server.resetHandlers(); resetMockState(); setSessionToken(null); vi.unstubAllGlobals(); });
 afterAll(() => server.close());
 
 const context: AnswerContext = {
   territory_id: 'demo-territory', role: 'tenant', topic_id: null, organization_id: null,
   service_code: null, document_kind: null, receipt_id: null, receipt_revision: null,
 };
+
+describe('E4 MAX entry contract', () => {
+  it('exchanges only raw Bridge initData through the prefixed endpoint', async () => {
+    const raw = 'auth_date=123&user=%7B%22user_id%22%3A%221%22%7D&hash=opaque';
+    vi.stubGlobal('window', { WebApp: { initData: raw, initDataUnsafe: { user: { user_id: 'forged' } } } });
+    let received: { url: string; body: unknown; authorization: string | null } | null = null;
+    server.use(http.post('*/team/zhkh/api/v1/auth/max', async ({ request }) => {
+      received = { url: request.url, body: await request.json(), authorization: request.headers.get('Authorization') };
+      return HttpResponse.json({ access_token: 'signed-session', token_type: 'bearer', expires_in: 3600,
+        user: { id: 'test-user' }, profile: { role: null, territory_id: null, privacy_notice_version: null,
+          privacy_acknowledged: false } });
+    }));
+    expect(maxInitData()).toBe(raw);
+    expect((await maxAuth(maxInitData()!)).access_token).toBe('signed-session');
+    expect(received).toMatchObject({ body: { init_data: raw }, authorization: null });
+    expect(received!.url).toMatch(/\/team\/zhkh\/api\/v1\/auth\/max$/);
+    expect(received!.url).not.toContain('hash=');
+    vi.stubGlobal('window', { WebApp: { initDataUnsafe: { user: { user_id: 'forged' } } } });
+    expect(maxInitData()).toBeNull();
+  });
+});
 
 describe('E0 API examples', () => {
   it('requires an in-memory session and returns the specified error envelope', async () => {
