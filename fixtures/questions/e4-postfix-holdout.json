@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "provenance": "Coordinator-authored sixth synthetic FAQ set, frozen after C E4 code push and before first evaluation; all wording and labels set without engine predictions.",
+  "created_at": "2026-09-27",
+  "default_context": {
+    "territory_id": "moscow",
+    "role": "owner",
+    "topic_id": null,
+    "organization_id": null,
+    "service_code": "cold_water",
+    "document_kind": null
+  },
+  "cases": [
+    {"id": "S01", "question": "Впервые получил платежку за коммунальные услуги. Что проверить перед оплатой?", "expected": {"topic_id": "first_bill", "status": "answered"}},
+    {"id": "S02", "question": "Что означает непонятная подпись к строке услуги в квитанции ЖКУ?", "expected": {"topic_id": "bill_terms", "status": "answered"}},
+    {"id": "S03", "question": "Плата за отопление в этом счете выше прошлой. Как понять изменение суммы?", "expected": {"topic_id": "bill_change", "status": "answered"}},
+    {"id": "S04", "question": "Какие цифры с водомера нужно передать для квартиры?", "expected": {"topic_id": "meter_readings", "status": "unsupported"}},
+    {"id": "S05", "question": "До какого числа в Москве принимают показания счетчика воды?", "expected": {"topic_id": "meter_deadline", "status": "unsupported"}},
+    {"id": "S06", "question": "Где на коммунальной платежке найти мой лицевой счет?", "expected": {"topic_id": "account_number", "status": "answered"}},
+    {"id": "S07", "question": "Подскажите телефон управляющей компании моего дома.", "expected": {"topic_id": "management_contacts", "status": "unsupported"}},
+    {"id": "S08", "question": "К кому из поставщиков горячей воды обратиться по нашему дому?", "expected": {"topic_id": "supplier_contacts", "status": "unsupported"}},
+    {"id": "S09", "question": "Где посмотреть историю уже оплаченных коммунальных счетов?", "expected": {"topic_id": "payment_history", "status": "answered"}},
+    {"id": "S10", "question": "В квитанции написано переплата. Что означает остаток на счете?", "expected": {"topic_id": "arrears_or_credit", "status": "answered"}},
+    {"id": "S11", "question": "Почему в счете за ЖКУ добавили перерасчет?", "expected": {"topic_id": "adjustment", "status": "answered"}},
+    {"id": "S12", "question": "Хочу попросить подробную расшифровку начисления за воду в платежке.", "expected": {"topic_id": "request_breakdown", "status": "answered"}},
+    {"id": "S13", "question": "В квартире пропала горячая вода. Куда сообщить о проблеме?", "expected": {"topic_id": "service_issue", "status": "unsupported"}},
+    {"id": "S14", "question": "Как получить справку по квартире?", "expected": {"topic_id": "housing_document", "status": "needs_clarification", "clarification_field": "document_kind"}},
+    {"id": "S15", "question": "Недавно въехал в квартиру. С каких действий начать как новому жильцу?", "expected": {"topic_id": "new_resident", "status": "answered"}},
+    {"id": "A01", "question": "Нужны и контакты управляющей компании, и телефон поставщика воды.", "expected": {"topic_id": null, "status": "needs_clarification", "clarification_field": "topic_id"}},
+    {"id": "A02", "question": "Хочу разобраться с долгом в квитанции и одновременно передать показания счетчика.", "expected": {"topic_id": null, "status": "needs_clarification", "clarification_field": "topic_id"}},
+    {"id": "A03", "question": "Где взять справку о квартире и посмотреть историю коммунальных платежей?", "expected": {"topic_id": null, "status": "needs_clarification", "clarification_field": "topic_id"}},
+    {"id": "U01", "question": "Какая погода будет завтра в Сочи?", "expected": {"topic_id": null, "status": "unsupported"}},
+    {"id": "U02", "question": "Составь программу тренировок для марафона.", "expected": {"topic_id": null, "status": "unsupported"}},
+    {"id": "U03", "question": "Как приготовить томатный суп?", "expected": {"topic_id": null, "status": "unsupported"}},
+    {"id": "U04", "question": "Подбери ноутбук для видеомонтажа.", "expected": {"topic_id": null, "status": "unsupported"}},
+    {"id": "U05", "question": "Напиши функцию сортировки списка на Python.", "expected": {"topic_id": null, "status": "unsupported"}},
+    {"id": "U06", "question": "Кто выиграл вчерашний футбольный матч?", "expected": {"topic_id": null, "status": "unsupported"}},
+    {"id": "U07", "question": "Закажи такси до аэропорта.", "expected": {"topic_id": null, "status": "unsupported"}}
+  ]
+}
