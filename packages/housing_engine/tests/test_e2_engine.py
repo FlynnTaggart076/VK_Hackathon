@@ -10,8 +10,8 @@ from unittest.mock import patch
 from uuid import UUID
 
 from housing_engine import (
-    DocumentInput, EngineError, ExplainRequest, ExtractionConfig, KnowledgeBundle,
-    explain_receipt, extract_receipt,
+    BillData, DocumentInput, EngineError, ExplainRequest, ExtractionConfig,
+    KnowledgeBundle, explain_receipt, extract_receipt, validate_bill,
 )
 from housing_engine.dto import ReceiptRef
 
@@ -62,6 +62,44 @@ class E2CheckpointTests(unittest.TestCase):
         with self.assertRaises(EngineError) as raised:
             explain(BillData.model_validate_json(json.dumps(data)))
         self.assertEqual(raised.exception.code, "INVALID_BILL")
+
+    def test_manual_required_bytes_and_explicit_unsupported_manual_bill(self):
+        config = ExtractionConfig(workspace=tempfile.gettempdir(), enabled_templates=["demo-bill-v1"])
+        extracted = extract_receipt(document("unknown-layout.pdf"), config)
+        self.assertEqual(extracted.outcome, "manual_required")
+        self.assertEqual(extracted.field_evidence, [])
+        self.assertIsNone(extracted.bill_data.period)
+        self.assertIsNone(extracted.bill_data.document_current_charges)
+        self.assertIsNone(extracted.bill_data.document_total_due)
+        self.assertEqual(extracted.bill_data.services, [])
+        self.assertFalse(validate_bill(extracted.bill_data).can_confirm)
+        with self.assertRaises(EngineError) as raised:
+            explain(extracted.bill_data)
+        self.assertEqual(raised.exception.code, "INVALID_BILL")
+
+        # These are explicit synthetic manual entries, never an OCR result for unknown-layout.pdf.
+        entered = json.loads((FIXTURES / "water-2026-09.json").read_text(encoding="utf-8"))
+        entered["template_id"] = "manual-v1"
+        entered["template_version"] = "1.0"
+        entered["settlement"]["formula_kind"] = "unsupported"
+        entered["services"][0]["calculation_kind"] = "document_amount"
+        manual_bill = BillData.model_validate_json(json.dumps(entered))
+        self.assertTrue(validate_bill(manual_bill).can_confirm)
+        explained = explain(manual_bill)
+        self.assertEqual(explained.reconciliation_status, "unsupported")
+        self.assertEqual(explained.current_charges, "270.00")
+        self.assertEqual(explained.document_total_due, "270.00")
+        self.assertIsNone(explained.calculated_closing_balance)
+        self.assertIsNone(explained.calculated_total_due)
+        self.assertIsNone(explained.unexplained_difference)
+        self.assertIsNone(explained.lines[0].calculated_amount)
+        self.assertIsNone(explained.lines[0].formula_text)
+        self.assertEqual(
+            [check.status for check in explained.reconciliation_checks],
+            ["matched", "unsupported", "unsupported"],
+        )
+        self.assertEqual(explained.sources, [])
+        self.assertIn("ARITHMETIC_ONLY", [item.code for item in explained.issues])
 
     def test_adjustment_debt_payment_and_credit_are_separate(self):
         config = ExtractionConfig(workspace=tempfile.gettempdir(), enabled_templates=["demo-bill-v1"])
