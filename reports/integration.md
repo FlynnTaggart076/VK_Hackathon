@@ -1,6 +1,6 @@
 # Отчёт координатора об интеграции
 
-Обновлено: 2026-09-27. Текущий этап: E1 после принятого E0. Статус E0: accepted.
+Обновлено: 2026-09-27. Текущий этап: E2 после принятого E1. Статус E0/E1: accepted. Ранние промежуточные проверки ниже сохранены как история; итоговое решение E1 находится в конце отчёта.
 
 ## Принятые SHA
 
@@ -34,4 +34,19 @@
 
 ## Следующий шаг
 
-Получить E1 pushed SHA и отчёты, проверить C→B→A, выполнить локальный Compose/PostgreSQL при наличии среды; реальный OCR/VM/MAX подтверждать отдельно от mock/stub.
+Итоговое решение E1 и следующие действия записаны ниже.
+
+## Итоговая приёмка E1
+
+- Принятый merge в `main`: `7afd978166b514088f1f130a426a2ca655aeba93`; проверенный runtime candidate `c56a793d71b5b10e1ff42ad38d2783635ad007d9` (`integration/e1`). После candidate добавлены только отчёты/документация. Release SHA для VM пока отсутствует.
+- C: code `e58a28aedddad3a8433368f19f3db45c299cd0da`, Decimal fix `d1d6426502a5ddbc0591302903b0e311036fc3d3`, report `bcac7f2430e04201475a94a4c4730380c126b10e`.
+- B: dev checkpoint `1d99a19502df2b536248daad224b0f0af5e96d5a`, PG/worker code `aafa3348450af3a005e9a30b92411779cac8e9dc` + `d1798ccd1f064fcd40581679a9b283e85ba0c339`, runtime fixes `599c9f68f20767d5b3edff24549f0f4b4ecef0ac` + `5f1e0b3aeb507775c39fee26992a995507255d62`, report `e9de94df0f9882f3a8f74b93bc886bbb0e15ddf0`.
+- A: API/onboarding `1a9e30c5d2c320f36d40a38619db26f2dd289259`, coordinator wiring `503cee0340d0985f20c21555981bfc046d7f3592` (ограниченная помощь A), UX fix `0ca5aa7b26c2f8c3c7a07b8e4b555ab08e4f2e15`, report `3895c6e8aae097b52120dd51ad897a1ff81928cf`.
+- Координатор на интеграционном checkout: frontend Vitest `5 passed`, TypeScript/Vite build success, production bundle без dev/mock маркеров; backend `8 passed, 1 skipped` без локально запущенного PostgreSQL; engine verifier OK и `17 unittest` OK; HTTP contract `28 operations / 24 examples` OK; `git diff --check` OK. B на изолированном PG16.2 после исправления schema isolation получил `9 passed`.
+- [GitHub Actions E1 CI #7](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36319065489) на candidate `c56a793` завершился success: Compose build/up, PostgreSQL 17, API readiness/meta HTTP 200, worker running, `nginx -t`, web HTTP 200, JS asset HTTP 200, deep SPA link HTTP 200. `meta` сообщил `engine_stub=true`, `receipt_ocr=false`.
+- A проверил Chrome 360×800: учебный mock onboarding→queued upload→401 relogin с сохранением job URL; в real dev Chrome через B MemoryStore — meta/auth/profile/upload/job queued, MSW отсутствует, горизонтального переполнения нет. Это реальный HTTP dev API, но без PostgreSQL/worker в браузерном прогоне. Отдельный CI и B-тесты покрыли контейнер/БД.
+- E1 **accepted** по §14.3: три компонента независимо запущены, A вызвал реальные dev endpoints B; mock/stub явно помечены. Реальные пользовательские квитанции, сквозной OCR→правка→подтверждение→объяснение, VM и MAX не проверены. VM SSH по-прежнему `Permission denied (publickey)`; MAX credentials не получены. Старые локальные незакоммиченные файлы и CRLF-only артефакты сохранены, не включены в merge.
+
+## Следующий шаг после E1
+
+Опубликовать doc-only запись приёмки и задания E2. Начать независимые A/C части, B подключать к принятому контракту C. Не объявлять E2 принятым до bytes→OCR→UI review/edit→confirm→explain и повторного чтения после перезапуска. Подготовка VM/MAX продолжается только при действующем доступе и в границах инструкции владельца.
