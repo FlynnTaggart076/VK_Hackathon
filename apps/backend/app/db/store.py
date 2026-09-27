@@ -6,12 +6,14 @@ import hashlib
 import hmac
 import secrets
 import uuid
+import base64
+import json
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import create_engine, func, select, text
+from sqlalchemy import create_engine, delete, func, select, text, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -288,6 +290,107 @@ class SqlStore:
                 Receipt.id == uuid.UUID(receipt_id), Receipt.user_id == uuid.UUID(user_id)))
             if not receipt:
                 raise ApiError(404, "NOT_FOUND", "Квитанция не найдена.")
+            return self._receipt_view(session, receipt)
+
+    def list_receipts(self, user_id: str, cursor: str | None, limit: int) -> dict:
+        if limit < 1 or limit > 50:
+            raise ApiError(400, "INVALID_REQUEST", "Некорректный размер страницы.")
+        boundary = None
+        if cursor is not None:
+            try:
+                raw = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4))
+                value = json.loads(raw)
+                if not isinstance(value, list) or len(value) != 2:
+                    raise ValueError
+                boundary = (datetime.fromisoformat(value[0]), uuid.UUID(value[1]))
+            except (ValueError, UnicodeDecodeError, TypeError, OverflowError):
+                raise ApiError(400, "INVALID_REQUEST", "Некорректный курсор.") from None
+        with self.Session() as session:
+            query = select(Receipt).where(Receipt.user_id == uuid.UUID(user_id))
+            if boundary:
+                query = query.where(tuple_(Receipt.created_at, Receipt.id) < boundary)
+            rows = session.scalars(query.order_by(Receipt.created_at.desc(), Receipt.id.desc()).limit(limit + 1)).all()
+            items = []
+            for row in rows[:limit]:
+                view = self._receipt_view(session, row)
+                bill = view["bill_data"]
+                items.append({"id": view["id"], "status": view["status"], "revision": view["revision"],
+                              "period": bill.get("period"), "issuer_name": bill.get("issuer_name"),
+                              "document_total_due": bill.get("document_total_due"),
+                              "dataset_kind": view["dataset_kind"], "created_at": view["created_at"],
+                              "source_available": view["document"]["available"]})
+            next_cursor = None
+            if len(rows) > limit:
+                last = rows[limit - 1]
+                payload = json.dumps([aware(last.created_at).isoformat(), str(last.id)]).encode()
+                next_cursor = base64.urlsafe_b64encode(payload).decode().rstrip("=")
+            return {"items": items, "next_cursor": next_cursor}
+
+    def source(self, user_id: str, receipt_id: str) -> tuple[bytes, str]:
+        with self.Session() as session:
+            receipt = session.scalar(select(Receipt).where(
+                Receipt.id == uuid.UUID(receipt_id), Receipt.user_id == uuid.UUID(user_id)))
+            if receipt is None:
+                raise ApiError(404, "NOT_FOUND", "Квитанция не найдена.")
+            if receipt.document_id is None:
+                raise ApiError(404, "NOT_FOUND", "Исходный документ отсутствует.")
+            document = session.get(Document, receipt.document_id)
+            if document is None or document.deleted_at is not None or aware(document.expires_at) <= now():
+                raise ApiError(410, "SOURCE_EXPIRED", "Срок хранения исходного документа истёк.")
+            try:
+                return (self.settings.storage_path / document.storage_key).read_bytes(), document.mime_type
+            except FileNotFoundError:
+                raise ApiError(410, "SOURCE_EXPIRED", "Исходный документ удалён.") from None
+
+    def delete_receipt(self, user_id: str, receipt_id: str) -> None:
+        path = None
+        with self.Session.begin() as session:
+            receipt = session.scalar(select(Receipt).where(
+                Receipt.id == uuid.UUID(receipt_id), Receipt.user_id == uuid.UUID(user_id)).with_for_update())
+            if receipt is None:
+                return
+            if receipt.document_id:
+                document = session.get(Document, receipt.document_id, with_for_update=True)
+                if document:
+                    path = self.settings.storage_path / document.storage_key
+                    session.delete(document)
+            session.execute(delete(Job).where(Job.resource_id == receipt.id, Job.user_id == receipt.user_id))
+            session.execute(delete(ReceiptRevision).where(ReceiptRevision.receipt_id == receipt.id))
+            for record in session.scalars(select(IdempotencyKey).where(IdempotencyKey.user_id == receipt.user_id)):
+                body = record.response_body
+                if isinstance(body, dict) and isinstance(body.get("receipt"), dict) and body["receipt"].get("id") == receipt_id:
+                    session.delete(record)
+            session.delete(receipt)
+        if path is not None:
+            path.unlink(missing_ok=True)
+
+    def edit_revision(self, user_id: str, receipt_id: str, expected_revision: int,
+                      bill_data: dict, evidence: list[dict], issues: list[dict],
+                      validation: dict, engine_version: str) -> dict:
+        with self.Session.begin() as session:
+            receipt = session.scalar(select(Receipt).where(
+                Receipt.id == uuid.UUID(receipt_id), Receipt.user_id == uuid.UUID(user_id)).with_for_update())
+            if receipt is None:
+                raise ApiError(404, "NOT_FOUND", "Квитанция не найдена.")
+            if receipt.current_revision != expected_revision:
+                raise ApiError(409, "REVISION_CONFLICT", "Квитанция изменена; обновите данные.",
+                               details={"current_revision": receipt.current_revision})
+            if receipt.status != "needs_review":
+                raise ApiError(409, "INVALID_STATE", "Редактирование сейчас недоступно.")
+            previous = session.get(ReceiptRevision, (receipt.id, expected_revision))
+            if previous is None:
+                raise ApiError(409, "INVALID_STATE", "Извлечение ещё не завершено.")
+            new_revision = expected_revision + 1
+            session.add(ReceiptRevision(receipt_id=receipt.id, revision=new_revision,
+                                        bill_data=deepcopy(bill_data),
+                                        extraction_meta={"field_evidence": deepcopy(evidence),
+                                                         "issues": deepcopy(issues),
+                                                         "outcome": receipt.extraction_outcome},
+                                        validation=deepcopy(validation), confirmed_at=None,
+                                        engine_version=engine_version))
+            receipt.current_revision = new_revision
+            receipt.updated_at = now()
+            session.flush()
             return self._receipt_view(session, receipt)
 
     def job(self, user_id: str, job_id: str) -> dict:

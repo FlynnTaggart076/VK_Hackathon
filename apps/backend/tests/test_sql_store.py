@@ -139,3 +139,50 @@ def test_worker_finds_fixture_directory_in_container_layout(tmp_path):
     module_file = root / "app" / "jobs" / "worker.py"
     assert fixture_root(module_file, str(fixture_dir)) == fixture_dir
     assert fixture_root(module_file, None) == fixture_dir
+
+
+def test_e2_owner_source_list_delete_and_revision_cas(tmp_path, monkeypatch):
+    database_url = f"sqlite:///{(tmp_path / 'e2.sqlite').as_posix()}"
+    monkeypatch.setenv("APP_MODE", "dev")
+    migrate(database_url, monkeypatch)
+    settings = Settings(mode="dev", demo_auth_enabled=True, demo_access_code="test-secret",
+                        engine_mode="stub", database_url=database_url, storage_path=tmp_path / "private")
+    with TestClient(create_app(settings)) as client:
+        owner_auth = login(client, "reviewer_a")
+        owner, owner_id = owner_auth["access_token"], owner_auth["user"]["id"]
+        stranger = login(client, "reviewer_b")["access_token"]
+        accept_privacy(client, owner)
+        original = image_bytes()
+        upload_key = str(uuid.uuid4())
+        queued = upload(client, owner, upload_key, data=original).json()
+        receipt_id = queued["receipt"]["id"]
+        source_url = f"/api/v1/receipts/{receipt_id}/source"
+        assert client.get(source_url, headers=headers(stranger)).status_code == 404
+        response = client.get(source_url, headers=headers(owner))
+        assert response.status_code == 200 and response.content == original
+        assert response.headers["cache-control"] == "no-store"
+        listing = client.get("/api/v1/receipts", headers=headers(owner)).json()
+        validate_response("ReceiptList", listing)
+        assert [entry["id"] for entry in listing["items"]] == [receipt_id]
+        assert client.get("/api/v1/receipts", headers=headers(stranger)).json()["items"] == []
+        assert run_once(client.app.state.store)
+        store = client.app.state.store
+        before = store.receipt(owner_id, receipt_id)
+        edited_bill = dict(before["bill_data"], period="2026-08")
+        changed = store.edit_revision(owner_id, receipt_id, 1, edited_bill, [], [],
+                                      {"can_confirm": False}, "test")
+        assert changed["revision"] == 2 and changed["bill_data"]["period"] == "2026-08"
+        assert before["bill_data"]["period"] is None
+        with pytest.raises(Exception) as stale:
+            store.edit_revision(owner_id, receipt_id, 1, edited_bill, [], [], {}, "test")
+        assert getattr(stale.value, "code", None) == "REVISION_CONFLICT"
+        assert client.delete(f"/api/v1/receipts/{receipt_id}", headers=headers(stranger)).status_code == 204
+        assert client.get(source_url, headers=headers(owner)).status_code == 200
+        assert client.delete(f"/api/v1/receipts/{receipt_id}", headers=headers(owner)).status_code == 204
+        assert client.delete(f"/api/v1/receipts/{receipt_id}", headers=headers(owner)).status_code == 204
+        assert client.get(source_url, headers=headers(owner)).status_code == 404
+        assert client.get("/api/v1/receipts", headers=headers(owner)).json()["items"] == []
+        assert list(settings.storage_path.iterdir()) == []
+        repeated = upload(client, owner, upload_key, data=original)
+        assert repeated.status_code == 202
+        assert repeated.json()["receipt"]["id"] != receipt_id
