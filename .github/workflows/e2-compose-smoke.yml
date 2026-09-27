@@ -95,8 +95,7 @@ jobs:
             exit 1
           fi
           if ! "${compose[@]}" run --rm --no-deps -v "$GITHUB_WORKSPACE:/repo:ro" \
-              -e PYTHONPATH=/tmp/e2-test-deps:/workspace worker sh -c \
-              'python -m pip install --quiet --target /tmp/e2-test-deps pytest==8.4.2 && python -m pytest /repo/apps/backend/tests/test_e2_receipt_flow.py -q -k test_outer_budget_kills_grandchild_tesseract_process' \
+              -e PYTHONPATH=/workspace worker python /repo/scripts/verify_e2_process_tree.py \
               > /tmp/zhkh-e2-tree-test.log 2>&1; then
             echo "::error title=E2 OCR process tree::$(tail -n 20 /tmp/zhkh-e2-tree-test.log | tr '\r\n' '  ' | tail -c 1800)"
             exit 1
