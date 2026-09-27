@@ -35,22 +35,30 @@ class JobCancelled(Exception):
 
 
 def kill_child(process: subprocess.Popen) -> None:
+    # The leader may have exited while Tesseract still holds the pipe open.
+    # Its POSIX process group then still exists and must be killed as a whole.
+    if os.name == "posix":
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    elif os.name == "nt":
+        subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                       stdin=subprocess.DEVNULL, capture_output=True, timeout=5,
+                       shell=False, check=False)
     if process.poll() is None:
-        if os.name == "posix":
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-        elif os.name == "nt":
-            subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                           stdin=subprocess.DEVNULL, capture_output=True, timeout=5,
-                           shell=False, check=False)
-        if process.poll() is None:
-            try:
-                process.kill()
-            except OSError:
-                pass  # child may have exited between poll and kill
-    process.communicate()
+        try:
+            process.kill()
+        except OSError:
+            pass  # child may have exited between poll and kill
+    try:
+        process.communicate(timeout=5)
+    except subprocess.TimeoutExpired:
+        # Do not let pipe cleanup defeat the outer OCR deadline.
+        for pipe in (process.stdin, process.stdout, process.stderr):
+            if pipe is not None:
+                pipe.close()
+        process.wait(timeout=1)
 
 
 def spawn_child(argv: list[str]) -> subprocess.Popen:
