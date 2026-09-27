@@ -18,6 +18,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Build and start isolated dev stack
         shell: bash
         run: |
@@ -29,6 +32,7 @@ jobs:
           compose=(docker compose -p "$project" -f compose.yaml -f compose.local.yaml)
           on_exit() {
             status=$?
+            if [[ -n "${vite_pid:-}" ]]; then kill "$vite_pid" 2>/dev/null || true; fi
             if (( status != 0 )); then "${compose[@]}" logs --no-color --tail=120 || true; fi
           }
           trap on_exit EXIT
@@ -100,4 +104,30 @@ jobs:
             echo "::error title=E2 OCR process tree::$(tail -n 20 /tmp/zhkh-e2-tree-test.log | tr '\r\n' '  ' | tail -c 1800)"
             exit 1
           fi
-          echo 'E2 Compose PG17, real OCR, edit/confirm/explain, restart persistence and Linux OCR process-tree kill: OK'
+          if ! (cd apps/web && npm ci --no-audit --no-fund) > /tmp/zhkh-e2-npm.log 2>&1; then
+            echo "::error title=E2 frontend dependencies::$(tail -n 20 /tmp/zhkh-e2-npm.log | tr '\r\n' '  ' | tail -c 1800)"
+            exit 1
+          fi
+          chrome_path="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [[ -z "$chrome_path" ]]; then
+            echo '::error title=E2 browser::Chrome/Chromium binary unavailable on CI runner'
+            exit 1
+          fi
+          (cd apps/web && E2_API_PROXY_TARGET=http://127.0.0.1:18081 npm run dev:real -- --port 5173 --strictPort) > /tmp/zhkh-e2-vite.log 2>&1 &
+          vite_pid=$!
+          vite_code=000
+          for attempt in $(seq 1 30); do
+            vite_code="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:5173/team/zhkh/ || true)"
+            if [[ "$vite_code" == 200 ]]; then break; fi
+            sleep 2
+          done
+          if [[ "$vite_code" != 200 ]]; then
+            echo "::error title=E2 Vite dev real::HTTP $vite_code; $(tail -n 15 /tmp/zhkh-e2-vite.log | tr '\r\n' '  ' | tail -c 1200)"
+            exit 1
+          fi
+          if ! BASE_URL=http://127.0.0.1:5173/team/zhkh/ CHROME_PATH="$chrome_path" \
+              node apps/web/scripts/e2-real-flow.mjs > /tmp/zhkh-e2-browser.log 2>&1; then
+            echo "::error title=E2 real browser::$(tail -n 20 /tmp/zhkh-e2-browser.log | tr '\r\n' '  ' | tail -c 1800)"
+            exit 1
+          fi
+          echo 'E2 Compose PG17, real PDF/PNG OCR, edit/confirm/explain, restart persistence, Linux OCR tree kill and 360px real browser: OK'
