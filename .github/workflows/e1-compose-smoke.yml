@@ -47,8 +47,13 @@ jobs:
             echo "::error title=E1 worker diagnostic::$worker_log"
             exit 1
           fi
-          curl --fail --silent http://127.0.0.1:18080/team/zhkh/ >/dev/null
-          curl --fail --silent http://127.0.0.1:18080/team/zhkh/api/v1/meta | python3 -c 'import json,sys; data=json.load(sys.stdin); assert data["features"]["engine_stub"] is True and data["features"]["receipt_ocr"] is False'
+          web_code="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/team/zhkh/ || true)"
+          meta_code="$(curl --silent --output /tmp/zhkh-e1-meta.json --write-out '%{http_code}' http://127.0.0.1:18080/team/zhkh/api/v1/meta || true)"
+          if [[ "$web_code" != 200 || "$meta_code" != 200 ]]; then
+            echo "::error title=E1 route smoke::web HTTP $web_code; meta HTTP $meta_code"
+            exit 1
+          fi
+          python3 -c 'import json; data=json.load(open("/tmp/zhkh-e1-meta.json")); assert data["features"]["engine_stub"] is True and data["features"]["receipt_ocr"] is False'
           version="$("${compose[@]}" exec -T db psql -U zhkh -d zhkh -Atqc 'SHOW server_version_num')"
           test "$version" -ge 170000
           echo 'Compose build/up, PostgreSQL 17, API ready and web prefix: OK'
