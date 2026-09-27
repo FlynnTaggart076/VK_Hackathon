@@ -1,0 +1,68 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "title": "Version",
+      "type": "string"
+    },
+    "manifest": {
+      "additionalProperties": true,
+      "title": "Manifest",
+      "type": "object"
+    },
+    "sources": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Sources",
+      "type": "array"
+    },
+    "territories": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Territories",
+      "type": "array"
+    },
+    "organizations": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Organizations",
+      "type": "array"
+    },
+    "topics": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Topics",
+      "type": "array"
+    },
+    "glossary": {
+      "additionalProperties": true,
+      "title": "Glossary",
+      "type": "object"
+    },
+    "aliases": {
+      "additionalProperties": true,
+      "title": "Aliases",
+      "type": "object"
+    }
+  },
+  "required": [
+    "version",
+    "manifest",
+    "sources",
+    "territories",
+    "organizations",
+    "topics",
+    "glossary",
+    "aliases"
+  ],
+  "title": "KnowledgeBundle",
+  "type": "object"
+}

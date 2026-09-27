@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "older_fixture": "water-2026-08.json",
+  "newer_fixture": "water-2026-09.json",
+  "expected": {
+    "older_current_charges": "200.00",
+    "newer_current_charges": "270.00",
+    "delta_current_charges": "70.00",
+    "delta_total_due": "70.00",
+    "quantity_effect": "40.00",
+    "tariff_effect": "30.00",
+    "rounding_effect": "0.00"
+  }
+}

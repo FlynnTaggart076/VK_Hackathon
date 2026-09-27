@@ -1,0 +1,668 @@
+{
+  "$defs": {
+    "Adjustment": {
+      "additionalProperties": false,
+      "properties": {
+        "adjustment_id": {
+          "format": "uuid",
+          "title": "Adjustment Id",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "pattern": "^-?(?:0|[1-9][0-9]{0,8})\\.[0-9]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Amount"
+        },
+        "service_line_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Service Line Id"
+        },
+        "related_period": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Related Period"
+        }
+      },
+      "required": [
+        "adjustment_id",
+        "label",
+        "amount",
+        "service_line_id",
+        "related_period"
+      ],
+      "title": "Adjustment",
+      "type": "object"
+    },
+    "BillData": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "period": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Period"
+        },
+        "currency": {
+          "const": "RUB",
+          "title": "Currency",
+          "type": "string"
+        },
+        "issuer_name": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Issuer Name"
+        },
+        "provider_id": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Provider Id"
+        },
+        "account_number": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Account Number"
+        },
+        "address_text": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Address Text"
+        },
+        "template_id": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Template Id"
+        },
+        "template_version": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Template Version"
+        },
+        "services": {
+          "items": {
+            "$ref": "#/$defs/ServiceLine"
+          },
+          "maxItems": 100,
+          "title": "Services",
+          "type": "array"
+        },
+        "adjustments": {
+          "items": {
+            "$ref": "#/$defs/Adjustment"
+          },
+          "maxItems": 100,
+          "title": "Adjustments",
+          "type": "array"
+        },
+        "settlement": {
+          "$ref": "#/$defs/Settlement"
+        },
+        "document_current_charges": {
+          "anyOf": [
+            {
+              "pattern": "^-?(?:0|[1-9][0-9]{0,8})\\.[0-9]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Document Current Charges"
+        },
+        "document_total_due": {
+          "anyOf": [
+            {
+              "pattern": "^-?(?:0|[1-9][0-9]{0,8})\\.[0-9]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Document Total Due"
+        }
+      },
+      "required": [
+        "schema_version",
+        "period",
+        "currency",
+        "issuer_name",
+        "provider_id",
+        "account_number",
+        "address_text",
+        "template_id",
+        "template_version",
+        "services",
+        "adjustments",
+        "settlement",
+        "document_current_charges",
+        "document_total_due"
+      ],
+      "title": "BillData",
+      "type": "object"
+    },
+    "FieldEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "pattern": "^/(?:[^~/]|~[01])+(?:/(?:[^~/]|~[01])+)*$",
+          "title": "Path",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "pdf_text",
+            "ocr",
+            "manual",
+            "template_default"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "page_number": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Page Number"
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "maxItems": 4,
+              "minItems": 4,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Bbox"
+        },
+        "source_text": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Text"
+        },
+        "needs_review": {
+          "title": "Needs Review",
+          "type": "boolean"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "path",
+        "source",
+        "page_number",
+        "bbox",
+        "source_text",
+        "needs_review",
+        "reason"
+      ],
+      "title": "FieldEvidence",
+      "type": "object"
+    },
+    "Issue": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "^[A-Z][A-Z0-9_]*$",
+          "title": "Code",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warning",
+            "error"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Path"
+        },
+        "message": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "path",
+        "message"
+      ],
+      "title": "Issue",
+      "type": "object"
+    },
+    "ServiceLine": {
+      "additionalProperties": false,
+      "properties": {
+        "line_id": {
+          "format": "uuid",
+          "title": "Line Id",
+          "type": "string"
+        },
+        "raw_name": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Raw Name",
+          "type": "string"
+        },
+        "service_code": {
+          "enum": [
+            "cold_water",
+            "hot_water",
+            "drainage",
+            "electricity",
+            "heating",
+            "maintenance",
+            "capital_repair",
+            "waste",
+            "other"
+          ],
+          "title": "Service Code",
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "individual",
+            "common_property",
+            "unspecified"
+          ],
+          "title": "Scope",
+          "type": "string"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "enum": [
+                "m3",
+                "kwh",
+                "gcal",
+                "m2",
+                "month",
+                "person",
+                "other"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Unit"
+        },
+        "unit_label": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Unit Label"
+        },
+        "quantity": {
+          "anyOf": [
+            {
+              "pattern": "^-?(?:0|[1-9][0-9]{0,8})(?:\\.[0-9]{1,6})?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Quantity"
+        },
+        "tariff": {
+          "anyOf": [
+            {
+              "pattern": "^-?(?:0|[1-9][0-9]{0,8})(?:\\.[0-9]{1,6})?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Tariff"
+        },
+        "charge_amount": {
+          "anyOf": [
+            {
+              "pattern": "^-?(?:0|[1-9][0-9]{0,8})\\.[0-9]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Charge Amount"
+        },
+        "supplier_key": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Supplier Key"
+        },
+        "segment_key": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Segment Key"
+        },
+        "calculation_kind": {
+          "enum": [
+            "simple_product",
+            "document_amount"
+          ],
+          "title": "Calculation Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "line_id",
+        "raw_name",
+        "service_code",
+        "scope",
+        "unit",
+        "unit_label",
+        "quantity",
+        "tariff",
+        "charge_amount",
+        "supplier_key",
+        "segment_key",
+        "calculation_kind"
+      ],
+      "title": "ServiceLine",
+      "type": "object"
+    },
+    "Settlement": {
+      "additionalProperties": false,
+      "properties": {
+        "formula_kind": {
+          "enum": [
+            "signed_balance_v1",
+            "unsupported"
+          ],
+          "title": "Formula Kind",
+          "type": "string"
+        },
+        "opening_balance": {
+          "anyOf": [
+            {
+              "pattern": "^-?(?:0|[1-9][0-9]{0,8})\\.[0-9]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Opening Balance"
+        },
+        "payments_credited": {
+          "anyOf": [
+            {
+              "pattern": "^(?:0|[1-9][0-9]{0,8})\\.[0-9]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Payments Credited"
+        },
+        "penalties": {
+          "anyOf": [
+            {
+              "pattern": "^-?(?:0|[1-9][0-9]{0,8})\\.[0-9]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Penalties"
+        },
+        "other_account_changes": {
+          "anyOf": [
+            {
+              "pattern": "^-?(?:0|[1-9][0-9]{0,8})\\.[0-9]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Other Account Changes"
+        },
+        "document_closing_balance": {
+          "anyOf": [
+            {
+              "pattern": "^-?(?:0|[1-9][0-9]{0,8})\\.[0-9]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Document Closing Balance"
+        }
+      },
+      "required": [
+        "formula_kind",
+        "opening_balance",
+        "payments_credited",
+        "penalties",
+        "other_account_changes",
+        "document_closing_balance"
+      ],
+      "title": "Settlement",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "outcome": {
+      "enum": [
+        "recognized",
+        "partial",
+        "manual_required"
+      ],
+      "title": "Outcome",
+      "type": "string"
+    },
+    "bill_data": {
+      "$ref": "#/$defs/BillData"
+    },
+    "field_evidence": {
+      "items": {
+        "$ref": "#/$defs/FieldEvidence"
+      },
+      "title": "Field Evidence",
+      "type": "array"
+    },
+    "issues": {
+      "items": {
+        "$ref": "#/$defs/Issue"
+      },
+      "title": "Issues",
+      "type": "array"
+    },
+    "template_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Template Id"
+    },
+    "engine_version": {
+      "title": "Engine Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "outcome",
+    "bill_data",
+    "field_evidence",
+    "issues",
+    "template_id",
+    "engine_version"
+  ],
+  "title": "ExtractionResult",
+  "type": "object"
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Synthetic water comparison expectation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "older_fixture", "newer_fixture", "expected"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "older_fixture": {"const": "water-2026-08.json"},
+    "newer_fixture": {"const": "water-2026-09.json"},
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["older_current_charges", "newer_current_charges", "delta_current_charges", "delta_total_due", "quantity_effect", "tariff_effect", "rounding_effect"],
+      "properties": {
+        "older_current_charges": {"type": "string", "pattern": "^-?[0-9]{1,9}\\.[0-9]{2}$"},
+        "newer_current_charges": {"type": "string", "pattern": "^-?[0-9]{1,9}\\.[0-9]{2}$"},
+        "delta_current_charges": {"type": "string", "pattern": "^-?[0-9]{1,9}\\.[0-9]{2}$"},
+        "delta_total_due": {"type": "string", "pattern": "^-?[0-9]{1,9}\\.[0-9]{2}$"},
+        "quantity_effect": {"type": "string", "pattern": "^-?[0-9]{1,9}\\.[0-9]{2}$"},
+        "tariff_effect": {"type": "string", "pattern": "^-?[0-9]{1,9}\\.[0-9]{2}$"},
+        "rounding_effect": {"type": "string", "pattern": "^-?[0-9]{1,9}\\.[0-9]{2}$"}
+      }
+    }
+  }
+}
