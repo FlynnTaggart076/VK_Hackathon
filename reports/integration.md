@@ -89,3 +89,9 @@
 - Pushed TASK_COMMIT `c11b5235319c12ecb18a6c4ca05c35a54f5c0560` от принятой базы `b33ed1e0493d76dfd7051a141e2075c698f8e967`. Созданы и отправлены в origin изолированные ветки `agent-a/e3`, `agent-b/e3`, `agent-c/e3`, `integration/e3` с отдельными checkout. Три агента фактически запущены по §18 на ограниченные задания E3; код/отчёты E3 ещё не оценивались.
 - Зависимости: C сначала публикует public compare fixture/DTO; B подключает его в persisted HTTP, затем A подключает реальный экран. Независимые MAX HMAC/webhook и mock UI идут параллельно. Ни один mock/stub не будет принят как полный E3. Следующий coordinator checkpoint — pushed C compare SHA, тесты/schema и передача B, затем B HTTP SHA и A real flow.
 - Release SHA/VM/MAX по-прежнему отсутствуют; данные и ключи не добавлены в Git. Локальные старые checkout с чужими/CRLF-only изменениями сохранены.
+
+## VM read-only access check (2026-09-27)
+
+- После ответа владельца `ssh hackathon` с настроенным локальным ключом и `StrictHostKeyChecking=yes` прошёл; `hostname=hackathon`. Passphrase использована только интерактивно, не внесена в Git/логи/отчёт.
+- Прочитаны `/srv/team/README.md` и `/srv/team/web/README.md`; read-only проверка: `/srv/team` содержит `README.md`, `web/`, существующий `VK-bot/`; `docker ps -a` — только healthy `team-web-nginx-1`, `docker compose ls` — `team-web`; root filesystem 74G available, memory 14Gi available, internal `/team/` HTTP 200. Команд записи/перезапуска/развёртывания не было.
+- SSH блокер снят, но release SHA ещё не принят для VM, MAX credentials и пилотные квитанции/территория отсутствуют. B уведомлён о доступе и границах; deploy остаётся E4 зависимостью.
