@@ -17,7 +17,7 @@ from sqlalchemy import create_engine, delete, func, select, text, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.db.models import Document, IdempotencyKey, Job, Profile, Receipt, ReceiptRevision, SessionToken, User, WorkerHeartbeat
+from app.db.models import AssistantAnswer, Document, Draft, IdempotencyKey, Job, Profile, Receipt, ReceiptRevision, SessionToken, User, WorkerHeartbeat
 from app.errors import ApiError
 
 
@@ -542,10 +542,19 @@ class SqlStore:
                     path = self.settings.storage_path / document.storage_key
                     session.delete(document)
             session.execute(delete(Job).where(Job.resource_id == receipt.id, Job.user_id == receipt.user_id))
+            session.execute(delete(AssistantAnswer).where(
+                AssistantAnswer.user_id == receipt.user_id, AssistantAnswer.receipt_id == receipt.id))
+            deleted_drafts = set()
+            for draft in session.scalars(select(Draft).where(Draft.user_id == receipt.user_id)):
+                if any(ref.get("id") == receipt_id for ref in draft.receipt_refs):
+                    deleted_drafts.add(str(draft.id))
+                    session.delete(draft)
             session.execute(delete(ReceiptRevision).where(ReceiptRevision.receipt_id == receipt.id))
             for record in session.scalars(select(IdempotencyKey).where(IdempotencyKey.user_id == receipt.user_id)):
                 body = record.response_body
                 if isinstance(body, dict) and isinstance(body.get("receipt"), dict) and body["receipt"].get("id") == receipt_id:
+                    session.delete(record)
+                elif isinstance(body, dict) and record.route == "POST /api/v1/drafts" and body.get("id") in deleted_drafts:
                     session.delete(record)
             session.delete(receipt)
         if path is not None:
@@ -682,4 +691,4 @@ class SqlStore:
             session.execute(text("SELECT 1"))
             version = session.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
             worker = session.get(WorkerHeartbeat, "worker")
-            return version == "e3_max_queue" and bool(worker and aware(worker.updated_at) > now() - timedelta(seconds=90))
+            return version == "e3_assistant" and bool(worker and aware(worker.updated_at) > now() - timedelta(seconds=90))

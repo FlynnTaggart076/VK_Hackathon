@@ -115,3 +115,21 @@ with `Authorization` header and `user_id` query parameter; redirects are
 rejected to avoid forwarding credentials. The [Update object](https://dev.max.ru/docs-api/objects/Update)
 describes the accepted envelope. These are synthetic contract checks only;
 live MAX delivery requires credentials and E4 acceptance.
+
+## E3 persisted answers and drafts
+
+`POST /api/v1/assistant/answers` derives role and territory from the stored
+profile and loads the fixed local knowledge catalog. An optional receipt must
+be owned by the requester and at its current confirmed revision. The engine
+produces the answer, including clarification or unsupported status; the API
+stores its version and provenance for 30 days. Reads recalculate stale reasons
+from the receipt revision, source review dates and catalog version. Stale
+cards do not expose their old actions.
+
+`POST /api/v1/drafts` uses at most two owned current confirmed receipts and
+the public C draft function. Creation has a 24-hour idempotency record. The
+text is editable by revision CAS and can be copied by the user; there is no
+send route. Reads mark a draft stale when a receipt, source or knowledge
+version changes. Deleting a receipt removes associated answers, drafts and
+their draft idempotency records. The demo catalog has no verified local
+recipient, so the draft recipient remains null.

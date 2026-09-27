@@ -469,6 +469,149 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     {"fixture_id": "water-2026-09", "label": "Вода, сентябрь", "description": "Синтетическая квитанция"},
                 ]}
 
+    @app.post("/api/v1/assistant/answers")
+    async def create_answer(request: Request, user_id: str = Depends(current_user)):
+        if not settings.database_url or settings.engine_mode != "real":
+            raise ApiError(503, "ENGINE_UNAVAILABLE", "Ответы пока недоступны.", retryable=True)
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректный JSON.") from None
+        context_fields = {"territory_id", "role", "topic_id", "organization_id",
+                          "service_code", "document_kind", "receipt_id", "receipt_revision"}
+        if not isinstance(body, dict) or set(body) != {"question", "context"} or \
+                not isinstance(body["question"], str) or not 1 <= len(body["question"].strip()) <= 2000 or \
+                not isinstance(body["context"], dict) or set(body["context"]) != context_fields:
+            raise ApiError(422, "VALIDATION_FAILED", "Проверьте вопрос и контекст.")
+        context = body["context"]
+        if (context["receipt_id"] is None) != (context["receipt_revision"] is None):
+            raise ApiError(422, "VALIDATION_FAILED", "Укажите квитанцию и её ревизию вместе.")
+        refs = []
+        if context["receipt_id"] is not None:
+            try:
+                uuid.UUID(context["receipt_id"])
+            except (TypeError, ValueError):
+                raise ApiError(422, "VALIDATION_FAILED", "Некорректный ID квитанции.") from None
+            if type(context["receipt_revision"]) is not int or context["receipt_revision"] < 1:
+                raise ApiError(422, "VALIDATION_FAILED", "Некорректная ревизия квитанции.")
+            refs = [{"id": context["receipt_id"], "revision": context["receipt_revision"]}]
+        from pydantic import ValidationError
+        from housing_engine import EngineError
+
+        from app.services.assistant_adapter import answer_json
+        from app.services.assistant_store import knowledge, receipt_snapshots, save_answer
+
+        snapshots, profile = await run_in_threadpool(receipt_snapshots, store, user_id, refs)
+        if context["role"] != profile["role"] or context["territory_id"] != profile["territory_id"]:
+            raise ApiError(409, "PROFILE_CHANGED", "Профиль изменился; обновите страницу.")
+        try:
+            bundle = await run_in_threadpool(knowledge)
+            result = await run_in_threadpool(answer_json, body["question"], context, snapshots, profile, bundle)
+        except (EngineError, ValidationError) as exc:
+            if isinstance(exc, EngineError) and exc.retryable:
+                raise ApiError(503, exc.code, exc.message, retryable=True) from None
+            raise ApiError(422, "VALIDATION_FAILED", "Некорректный контекст вопроса.") from None
+        kind = snapshots[0]["dataset_kind"] if snapshots else \
+            "synthetic" if profile["territory_id"] == "demo-territory" else "public_reference"
+        return await run_in_threadpool(save_answer, store, user_id, body["question"],
+                                       result, refs[0] if refs else None, kind)
+
+    @app.get("/api/v1/assistant/answers/{answer_id}")
+    def read_answer(answer_id: uuid.UUID, user_id: str = Depends(current_user)):
+        if not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "История ответов недоступна.")
+        from app.services.assistant_store import get_answer, knowledge
+
+        return get_answer(store, user_id, str(answer_id), knowledge().version)
+
+    @app.post("/api/v1/drafts", status_code=201)
+    async def create_draft(request: Request, idempotency_key: str = Header(alias="Idempotency-Key"),
+                           user_id: str = Depends(current_user)):
+        if not settings.database_url or settings.engine_mode != "real":
+            raise ApiError(503, "ENGINE_UNAVAILABLE", "Черновики пока недоступны.", retryable=True)
+        try:
+            uuid.UUID(idempotency_key)
+        except ValueError:
+            raise ApiError(422, "VALIDATION_FAILED", "Idempotency-Key должен быть UUID.") from None
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректный JSON.") from None
+        if not isinstance(body, dict) or set(body) != {"topic_id", "organization_id", "receipt_refs",
+                                                       "line_id", "user_question"} or \
+                not isinstance(body["topic_id"], str) or not body["topic_id"] or \
+                not isinstance(body["receipt_refs"], list) or len(body["receipt_refs"]) > 2 or \
+                not isinstance(body["user_question"], str) or len(body["user_question"]) > 2000 or \
+                (body["organization_id"] is not None and not isinstance(body["organization_id"], str)):
+            raise ApiError(422, "VALIDATION_FAILED", "Проверьте данные черновика.")
+        for ref in body["receipt_refs"]:
+            if not isinstance(ref, dict) or set(ref) != {"id", "revision"} or \
+                    type(ref["revision"]) is not int or ref["revision"] < 1:
+                raise ApiError(422, "VALIDATION_FAILED", "Некорректная ссылка на квитанцию.")
+            try:
+                uuid.UUID(ref["id"])
+            except (TypeError, ValueError):
+                raise ApiError(422, "VALIDATION_FAILED", "Некорректный ID квитанции.") from None
+        if body["line_id"] is not None:
+            try:
+                uuid.UUID(body["line_id"])
+            except (TypeError, ValueError):
+                raise ApiError(422, "VALIDATION_FAILED", "Некорректный ID строки.") from None
+        from pydantic import ValidationError
+        from housing_engine import EngineError
+
+        from app.services.assistant_adapter import draft_json
+        from app.services.assistant_store import draft_replay, knowledge, receipt_snapshots, save_draft
+
+        replay = await run_in_threadpool(draft_replay, store, user_id, idempotency_key, body)
+        if replay is not None:
+            return replay
+
+        snapshots, profile = await run_in_threadpool(receipt_snapshots, store, user_id, body["receipt_refs"])
+        try:
+            bundle = await run_in_threadpool(knowledge)
+            result = await run_in_threadpool(draft_json, body, snapshots, profile, bundle)
+        except (EngineError, ValidationError) as exc:
+            if isinstance(exc, EngineError) and exc.retryable:
+                raise ApiError(503, exc.code, exc.message, retryable=True) from None
+            raise ApiError(422, "VALIDATION_FAILED", "Некорректные данные черновика.") from None
+        return await run_in_threadpool(save_draft, store, user_id, idempotency_key, body, result)
+
+    @app.get("/api/v1/drafts/{draft_id}")
+    def read_draft(draft_id: uuid.UUID, user_id: str = Depends(current_user)):
+        if not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "История черновиков недоступна.")
+        from app.services.assistant_store import get_draft
+
+        return get_draft(store, user_id, str(draft_id))
+
+    @app.put("/api/v1/drafts/{draft_id}")
+    async def update_draft(draft_id: uuid.UUID, request: Request,
+                           user_id: str = Depends(current_user)):
+        if not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Черновики недоступны.")
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректный JSON.") from None
+        if not isinstance(body, dict) or set(body) != {"expected_revision", "text"} or \
+                type(body["expected_revision"]) is not int or body["expected_revision"] < 1 or \
+                not isinstance(body["text"], str) or len(body["text"]) > 5000:
+            raise ApiError(422, "VALIDATION_FAILED", "Проверьте ревизию и текст черновика.")
+        from app.services.assistant_store import edit_draft
+
+        return await run_in_threadpool(edit_draft, store, user_id, str(draft_id),
+                                       body["expected_revision"], body["text"])
+
+    @app.delete("/api/v1/drafts/{draft_id}", status_code=204)
+    def remove_draft(draft_id: uuid.UUID, user_id: str = Depends(current_user)):
+        if not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Черновики недоступны.")
+        from app.services.assistant_store import delete_draft
+
+        delete_draft(store, user_id, str(draft_id))
+        return Response(status_code=204)
+
     @app.post("/api/v1/comparisons")
     async def compare_receipts_http(request: Request, user_id: str = Depends(current_user)):
         if not settings.database_url or settings.engine_mode != "real":

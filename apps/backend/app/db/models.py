@@ -148,3 +148,31 @@ class Outbox(Base):
     run_after: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+
+
+class AssistantAnswer(Base):
+    __tablename__ = "assistant_answers"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    question: Mapped[str] = mapped_column(String(2000), nullable=False)
+    result: Mapped[dict] = mapped_column(JSONValue, nullable=False)
+    receipt_id: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True))
+    receipt_revision: Mapped[int | None] = mapped_column(Integer)
+    dataset_kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+
+
+class Draft(Base):
+    __tablename__ = "drafts"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    text: Mapped[str] = mapped_column(String(5000), nullable=False)
+    recipient: Mapped[dict | None] = mapped_column(JSONValue)
+    actions: Mapped[list] = mapped_column(JSONValue, nullable=False)
+    receipt_refs: Mapped[list] = mapped_column(JSONValue, nullable=False)
+    knowledge_version: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)

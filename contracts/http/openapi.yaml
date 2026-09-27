@@ -395,6 +395,7 @@ paths:
       responses:
         '204': {$ref: '#/components/responses/NoContent'}
         '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
   /integrations/max/webhook:
     post:
       tags: [max]
