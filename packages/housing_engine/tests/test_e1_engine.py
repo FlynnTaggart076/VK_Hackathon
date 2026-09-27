@@ -137,6 +137,14 @@ class ArithmeticTests(unittest.TestCase):
         self.assertFalse(result.can_confirm)
         self.assertIn("ADJUSTMENT_LINE_UNKNOWN", [error.code for error in result.errors])
 
+    def test_maximum_format_values_do_not_lose_decimal_precision(self):
+        def change(data):
+            data["services"][0]["quantity"] = "999999999.999999"
+            data["services"][0]["tariff"] = "999999999.999999"
+            data["services"][0]["charge_amount"] = "999999999.99"
+        result = validate_bill(bill(change=change))
+        self.assertIn("LINE_AMOUNT_MISMATCH", [warning.code for warning in result.warnings])
+
 
 class ExtractionTests(unittest.TestCase):
     def setUp(self):
