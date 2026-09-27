@@ -153,7 +153,9 @@ docker compose --env-file ../runtime/app.env -p vk-zhkh \
 сети без вывода окружения. DNS/HTTPS worker к `platform-api2.max.ru`
 проверить без отправки боту; если TLS не доверяет endpoint, остановить MAX
 регистрацию и исправить trust store только приложения по официальному
-сертификату, не отключать TLS verification.
+сертификату, не отключать TLS verification. [Официальный MAX API](https://dev.max.ru/docs-api)
+указывает `platform-api2.max.ru` и необходимость доверенного сертификата
+Минцифры (проверено 2026-09-27).
 
 После готового web добавить сеть и route в **текущие** файлы общего проекта.
 Из `/srv/team/web` по порядку: `docker compose config --quiet`, затем
@@ -192,6 +194,33 @@ internal VM, external HTTPS, live MAX и CI/synthetic.
 documents volume: Git не содержит ни БД, ни загруженные документы. Дамп
 внутри той же VM не защищает от потери VM; нужна отдельная защищённая копия
 по правилам владельца. Дамп и исходники не публиковать в Git/CI logs.
+
+Пример DB-only проверки из `deploy` с приватным `runtime/backup`:
+
+```sh
+umask 077
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+backup="../runtime/backup/zhkh-${stamp}.dump"
+restore_db="zhkh_restore_${stamp}"
+docker compose --env-file ../runtime/app.env -p vk-zhkh \
+  -f compose.yaml -f compose.vm.yaml exec -T db \
+  pg_dump -U zhkh -d zhkh -Fc > "$backup"
+test -s "$backup"
+docker compose --env-file ../runtime/app.env -p vk-zhkh \
+  -f compose.yaml -f compose.vm.yaml exec -T db \
+  pg_restore --list < "$backup" >/dev/null
+docker compose --env-file ../runtime/app.env -p vk-zhkh \
+  -f compose.yaml -f compose.vm.yaml exec -T db \
+  createdb -U zhkh "$restore_db"
+docker compose --env-file ../runtime/app.env -p vk-zhkh \
+  -f compose.yaml -f compose.vm.yaml exec -T db \
+  pg_restore -U zhkh -d "$restore_db" --no-owner --no-acl < "$backup"
+docker compose --env-file ../runtime/app.env -p vk-zhkh \
+  -f compose.yaml -f compose.vm.yaml exec -T db \
+  psql -U zhkh -d "$restore_db" -Atqc 'SELECT version_num FROM alembic_version'
+```
+
+Не использовать проверочную БД в приложении; не выводить таблицы с данными.
 
 Restore проверить в **новой отдельной тестовой БД**, не поверх `zhkh`:
 создать уникальное имя `zhkh_restore_<timestamp>`, восстановить dump,
