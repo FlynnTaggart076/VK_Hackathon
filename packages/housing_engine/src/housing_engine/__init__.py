@@ -8,6 +8,7 @@ from .dto import (
     KnowledgeBundle, QuestionRequest, ReceiptExplanation, ValidationResult,
 )
 from .errors import EngineError
+from .comparison import compare_receipts
 from .extraction import extract_receipt
 from .explanation import explain_receipt
 from .receipts import validate_bill
@@ -17,10 +18,6 @@ __version__ = "0.1.0"
 
 def _not_implemented() -> None:
     raise NotImplementedError("housing_engine function is not implemented in this stage")
-
-
-def compare_receipts(request: CompareRequest, knowledge: KnowledgeBundle) -> ComparisonResult:
-    _not_implemented()
 
 
 def answer_question(request: QuestionRequest, knowledge: KnowledgeBundle) -> AnswerResult:
