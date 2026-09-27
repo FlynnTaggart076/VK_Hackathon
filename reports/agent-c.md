@@ -1,4 +1,25 @@
-# Отчёт агента C — E3-C-01 и E4-C-01
+# Отчёт агента C — E3-C-01, E4-C-01 и E4 source audit
+
+## E4-C follow-up — первоисточники Москвы и Московской области
+
+- Задание `tasks/e4/agent-c-moscow-sources-followup.md` из main `b09d930eb767c5cf64348b5d193c9880c0e24c72`; технический кандидат базы `01a271a506db1e65aedd68efc7101c761827d89a`; ветка `agent-c/e4b` в отдельном checkout.
+- Pushed docs/source SHA `29e6efb7a246645d3079326c2825def7e6145978`: [матрица 15 тем × 2 региона](../docs/territory-source-matrix.md). Восемь официальных страниц справки ГИС ЖКХ открыты и прочитаны 2026-09-27; каждая имеет прямой URL, узкую применимость и дату фактической проверки. Дата публикации/редакции на страницах не обозначена; повторный просмотр до 2026-10-27. Общие сведения о ЛС, платёжных документах, истории платежей, доме/УК, реестре организаций, показаниях и механике обращения применимы условно к обоим регионам. Ни одна страница не устанавливает конкретную УК, поставщика, тариф, срок или получателя для неизвестного дома.
+- Проверка региональных кандидатов: прямые страницы `mos.ru/news/item/…` возвращали HTTP 403; `mstg.mosreg.ru` выдавал JavaScript-проверку вместо текста. По поисковым выдержкам не принимались местные маршруты, даты и каналы. `knowledge/**`, SourceRef, host allowlist и `pilot_territory_id=null` не менялись. Локальные темы остаются `unsupported` без проверенного дома/организации; черновик не отправляется.
+
+Проверки проведены на коде checkout `agent-c/e4b`, а не на editable path другого checkout: для запуска временной Python 3.13 venv установлен `PYTHONPATH` на локальный `packages/housing_engine/src` (путь `housing_engine.__file__` выведен из `agent-c-e4b`). Tesseract — локальный `v5.5.3.20260724` с `eng`, `rus`. Команды из корня checkout:
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path 'packages/housing_engine/src').Path
+$env:PATH = "$env:TEMP\zhkh-ocr-tesseract;$env:PATH"
+& "$env:TEMP\zhkh-c-e4-venv\Scripts\python.exe" packages/housing_engine/verify_contract.py
+& "$env:TEMP\zhkh-c-e4-venv\Scripts\python.exe" -m unittest discover -s packages/housing_engine/tests -q
+& "$env:TEMP\zhkh-c-e4-venv\Scripts\python.exe" packages/housing_engine/eval_questions_e4.py
+& "$env:TEMP\zhkh-c-e4-venv\Scripts\python.exe" packages/housing_engine/eval_ocr_e4.py
+```
+
+Результат: verifier OK, 46 unittest OK, замороженный E4 FAQ S15/15 A3/3 U7/7 = 25/25, OCR 99/99, PDF text 33/33, чистые поля 132/132 и edge controls 8/8; `git diff --cached --check` OK. Тесты повторены для уверенности, хотя знания/код не изменились. `EOF marker not found` — ожидаемый повреждённый PDF-контроль. Ограничения: региональные страницы не прочитаны полностью; реальный дом, УК/ТСЖ, поставщик, два вида справок, местный срок/канал и реальные квитанции/фото отсутствуют. Следующий шаг — review матрицы координатором и сбор этих данных до любого локального ответа. E5 не начинался.
+
+---
 
 ## E4-C-01 — OCR holdout, крайние случаи, FAQ
 
