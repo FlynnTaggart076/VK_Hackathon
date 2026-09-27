@@ -114,19 +114,78 @@ def _norm(text: str) -> str:
     return " ".join(re.findall(r"[\w]+", text.casefold().replace("ё", "е"), flags=re.UNICODE))
 
 
+def _cue_scores(normalized: str) -> dict[str, int]:
+    """Small audited stem families for household wording, without open-ended NLP."""
+    tokens = normalized.split()
+
+    def has(*roots: str) -> bool:
+        return any(token.startswith(root) for token in tokens for root in roots)
+
+    def exact(*words: str) -> bool:
+        return any(token in words for token in tokens)
+
+    bill = has("квитанц", "платежк", "платежек", "коммуналк") or exact("счет", "счета", "счете", "счету", "жку")
+    first = has("перв")
+    move = has("переех", "переезд", "въех", "засел", "жильц", "жилец", "жилц", "новосел")
+    meaning = has("знач", "означ", "термин", "обознач", "граф", "поним", "объясн", "разбор")
+    line = has("строк", "граф", "обознач", "назван", "термин")
+    change = has("дороже", "прибав", "разниц", "измен", "вырос", "больш", "сравн")
+    amount = has("сумм", "начисл", "рубл")
+    meter = has("показан", "счетчик", "водомер", "электросчетчик")
+    transfer = has("переда", "передат", "сдава", "сдать", "отправ", "сообщ", "ввод", "цифр", "данн")
+    time = has("срок", "дат", "числ", "последн", "когда", "день")
+    resource = has("вод", "электр", "газ", "тепл", "отоплен", "мусор")
+    personal_account = has("лицев") or exact("лс")
+    account_reference = has("номер", "реквизит") and bill
+    management = has("управля", "управляйк") or exact("ук") or (has("обслужива") and has("дом"))
+    supplier = has("поставщик", "ресурсоснабж", "выставля")
+    contact = has("контакт", "телефон", "обращ") or exact("кому", "куда")
+    payment = (has("оплат", "платил", "платеж", "внесен", "внесенн", "зачисл")
+               and not has("платежк", "платежек"))
+    payment_record = has("истор", "запис", "увид", "провер", "учл", "учет", "зачисл")
+    debt = has("долг", "задолж", "переплат", "остаток", "отрицател") or exact("минус")
+    adjustment = has("перерасчет", "корректиров", "корректир")
+    removed = has("снял", "сняли", "удерж")
+    breakdown = has("расшифров", "детализ", "подробн")
+    request = has("запрос", "попрос", "состав")
+    calculation = has("расчет", "расчит", "начисл", "строк")
+    issue = has("проблем", "жалоб", "плох")
+    cold_battery = has("батар") and has("холодн")
+    no_service = exact("нет") and resource
+    document = has("справк", "выписк", "проживан") or (has("документ") and (has("жилищн", "получ", "оформ")))
+    return {
+        "first_bill": 10 if first and bill and move else (8 if first and bill else 0),
+        "bill_terms": 7 if meaning and (line or bill) else (4 if meaning and has("квитанц") else 0),
+        "bill_change": 7 if change and (bill or amount) else (5 if change else 0),
+        "meter_readings": 7 if meter and transfer else (5 if transfer and resource else (3 if meter else 0)),
+        "meter_deadline": 9 if time and meter else (8 if time and transfer and resource else 0),
+        "account_number": 8 if personal_account else (5 if account_reference else 0),
+        "management_contacts": 8 if management else 0,
+        "supplier_contacts": 8 if supplier else (6 if contact and resource and not meter else 0),
+        "payment_history": 7 if payment and payment_record else (4 if payment else 0),
+        "arrears_or_credit": 8 if debt else 0,
+        "adjustment": 8 if adjustment else (6 if removed and line and amount else 0),
+        "request_breakdown": 8 if breakdown else (7 if request and calculation else 0),
+        "service_issue": 8 if issue or cold_battery or no_service else 0,
+        "housing_document": 8 if document else 0,
+        "new_resident": 8 if move else 0,
+    }
+
+
 def _rank(question: str, knowledge: KnowledgeBundle) -> list[tuple[int, dict]]:
     normalized = _norm(question)
     words = set(normalized.split())
     padded = f" {normalized} "
+    cues = _cue_scores(normalized)
     ranked = []
     aliases = knowledge.aliases.get("aliases", [])
     for card in knowledge.topics:
-        score = 0
+        score = cues[card["id"]]
         for phrase in card["utterances"]:
             value = _norm(phrase)
             if value and f" {value} " in padded:
                 score = max(score, 6)
-        score += sum(2 for keyword in card["keywords"] if _norm(keyword) in words)
+        score += sum(1 for keyword in card["keywords"] if _norm(keyword) in words)
         score += sum(5 for item in aliases if item["topic_id"] == card["id"] and f" {_norm(item['phrase'])} " in padded)
         ranked.append((score, card))
     return sorted(ranked, key=lambda item: (-item[0], item[1]["id"]))
@@ -186,7 +245,9 @@ def answer_question(request: QuestionRequest, knowledge: KnowledgeBundle) -> Ans
         raise EngineError("KNOWLEDGE_INVALID", "Выбрана неизвестная тема каталога.")
     ranking = _rank(request.question, knowledge)
     topic = cards.get(explicit) if explicit else None
-    if topic is None and ranking and ranking[0][0] >= MIN_SCORE and (len(ranking) == 1 or ranking[0][0] - ranking[1][0] >= MIN_MARGIN):
+    two_intents = (" и " in f" {_norm(request.question)} " and len(ranking) > 1
+                   and ranking[0][0] >= 4 and ranking[1][0] >= 4)
+    if topic is None and not two_intents and ranking and ranking[0][0] >= MIN_SCORE and (len(ranking) == 1 or ranking[0][0] - ranking[1][0] >= MIN_MARGIN):
         topic = ranking[0][1]
     if topic is None:
         suggestions = [ClarificationOption(value=item["id"], label=item["title"]) for score, item in ranking if score >= MIN_SCORE][:3]
