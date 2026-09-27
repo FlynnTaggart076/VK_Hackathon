@@ -1,0 +1,12 @@
+{
+  "error": {
+    "code": "REVISION_CONFLICT",
+    "message": "Документ изменён. Загрузите актуальную версию.",
+    "retryable": false,
+    "fields": [],
+    "details": {
+      "current_revision": 4
+    }
+  },
+  "request_id": "b1399c8c-d010-4e0c-b75f-bd312a647fea"
+}

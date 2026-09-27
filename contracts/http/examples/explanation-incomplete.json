@@ -1,0 +1,21 @@
+{
+  "receipt_ref": {
+    "id": "10000000-0000-4000-8000-000000000001",
+    "revision": 3
+  },
+  "engine_version": "1.0.0-e0",
+  "knowledge_version": "demo-v1",
+  "summary": "Проверьте строки квитанции.",
+  "current_charges": "200.00",
+  "document_total_due": "200.00",
+  "calculated_closing_balance": null,
+  "calculated_total_due": null,
+  "unexplained_difference": null,
+  "reconciliation_checks": [],
+  "reconciliation_status": "incomplete",
+  "lines": [],
+  "balance_components": [],
+  "issues": [],
+  "sources": [],
+  "actions": []
+}

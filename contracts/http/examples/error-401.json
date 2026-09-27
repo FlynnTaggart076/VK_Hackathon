@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": "AUTH_REQUIRED",
+    "message": "Войдите в приложение.",
+    "retryable": false,
+    "fields": [],
+    "details": {}
+  },
+  "request_id": "b1399c8c-d010-4e0c-b75f-bd312a647fea"
+}

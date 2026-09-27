@@ -1,0 +1,19 @@
+{
+  "id": "40000000-0000-4000-8000-000000000001",
+  "created_at": "2026-09-27T10:00:00Z",
+  "stale": false,
+  "stale_reasons": [],
+  "dataset_kind": "public_reference",
+  "status": "unsupported",
+  "text": "По этой теме пока нет проверенного ответа.",
+  "topic_id": null,
+  "steps": [],
+  "sources": [],
+  "actions": [],
+  "clarification": null,
+  "limitations": [
+    "Проверьте вопрос в официальном канале вашей организации."
+  ],
+  "knowledge_version": "demo-v1",
+  "receipt_ref": null
+}

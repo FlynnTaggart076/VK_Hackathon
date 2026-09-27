@@ -1,0 +1,31 @@
+{
+  "status": "partial",
+  "dataset_kind": "synthetic",
+  "older": {
+    "id": "10000000-0000-4000-8000-000000000001",
+    "revision": 3,
+    "period": "2026-08"
+  },
+  "newer": {
+    "id": "10000000-0000-4000-8000-000000000002",
+    "revision": 3,
+    "period": "2026-09"
+  },
+  "engine_version": "1.0.0-e0",
+  "knowledge_version": "demo-v1",
+  "delta_current_charges": null,
+  "delta_adjustments": null,
+  "delta_total_due": null,
+  "lines": [],
+  "settlement_deltas": [],
+  "unexplained_delta": null,
+  "issues": [
+    {
+      "code": "AMOUNT_INCOMPLETE",
+      "severity": "warning",
+      "path": null,
+      "message": "Одна из сумм не указана; изменение не рассчитано."
+    }
+  ],
+  "actions": []
+}
