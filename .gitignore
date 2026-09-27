@@ -3,6 +3,7 @@
 Prompt.txt
 Умный город.pdf
 .checkouts/
+colleague_anton/
 .env
 .env.*
 !.env.example
