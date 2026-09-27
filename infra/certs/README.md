@@ -9,7 +9,9 @@ image CA store; normal TLS certificate and hostname validation remain enabled.
   point](http://nuc-cdp.digital.gov.ru/cdp/rootca_ssl_rsa2022.crt).
 - Official service requirement: [MAX API changelog](https://dev.max.ru/docs-api/changelog-api)
   says to call `platform-api2.max.ru` and trust the Ministry certificate.
-- PEM file SHA-256:
+- Repository PEM file SHA-256 (canonical LF line endings, pinned in Dockerfile):
+  `0819977502D9AED2234830F6FFB91F82F401D3674C6E51DD19E16D8B3DBF0EB4`.
+  The Ministry download with CRLF line endings had SHA-256
   `936A43FEA6E8E525BCC0F81ACD9C3D21B4FC4B9B68ACEA7906D698005AFC6504`.
 - Parsed certificate DER SHA-256:
   `D26D2D0231B7C39F92CC738512BA54103519E4405D68B5BD703E9788CA8ECF31`.
