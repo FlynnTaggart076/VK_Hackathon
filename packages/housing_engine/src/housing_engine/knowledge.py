@@ -133,13 +133,15 @@ def _cue_scores(normalized: str) -> dict[str, int]:
     first = has("перв", "впервые")
     new_owner = (has("собственник") and housing
                  and (exact("новый", "новая", "новым", "нового") or has("стал", "станов", "купил", "приобрел")))
-    move = has("переех", "переезд", "въех", "въезд", "засел", "жильц", "жилец", "жилц", "новосел") or new_owner
+    move = (has("переех", "переезд", "въех", "въезд", "засел", "жильц", "жилец", "жилц", "новосел")
+            or new_owner or (has("покуп", "приобрет") and housing))
     broad_move = move and (has("организац", "обслуживан", "шаг", "действ") or (exact("кто") and has("выставля")))
-    meaning = has("знач", "означ", "термин", "обознач", "граф", "поним", "объясн", "разбор", "подразумев", "смысл", "непонят")
-    line = has("строк", "граф", "обознач", "назван", "термин", "сокращен")
-    change = has("дороже", "прибав", "разниц", "отлич", "измен", "вырос", "больш", "сравн", "рост")
+    meaning = has("знач", "означ", "термин", "обознач", "граф", "поним", "объясн", "разбор", "подразумев", "смысл", "непонят", "расшифров")
+    line = has("строк", "граф", "обознач", "назван", "термин", "сокращен", "подпис")
+    change = has("дороже", "подорож", "прибав", "разниц", "отлич", "измен", "вырос", "больш", "сравн", "сопостав", "рост")
     amount = has("сумм", "начисл", "рубл")
-    fee = amount or has("плат")
+    payable = has("итог") and has("оплат")
+    fee = amount or has("плат") or payable
     meter = has("показан", "счетчик", "водомер", "электросчетчик") or (has("прибор") and has("учет"))
     transfer = has("переда", "передат", "сдава", "сдать", "отправ", "сообщ", "ввод", "цифр", "данн")
     measurement_data = has("цифр", "данн", "показан", "переда", "сдава", "сдать", "ввод")
@@ -177,7 +179,11 @@ def _cue_scores(normalized: str) -> dict[str, int]:
     # A first bill is a document question; moving in without a named bill is a broader onboarding question.
     first_bill_score = 10 if first and bill_document and move and not broad_move else (8 if first and bill and not move else 0)
     # A label's meaning needs receipt context; a generic "расшифровка суммы" asks for a breakdown.
-    bill_terms_score = 10 if meaning and line and bill else (7 if meaning and ((line and amount) or (bill and not first)) else (6 if meaning and line and has("термин", "обознач", "сокращен", "граф") else 0))
+    weak_term_cue = (meaning and line and (has("термин", "обознач", "сокращен", "граф")
+                                       or (has("расшифров") and has("строк", "подпис"))))
+    bill_terms_score = (10 if meaning and line and bill else
+                        (7 if meaning and ((line and amount) or (bill and not first)) else
+                         (6 if weak_term_cue and (not request or exact("и")) else 0)))
     return {
         "first_bill": first_bill_score,
         "bill_terms": bill_terms_score,
