@@ -1,0 +1,69 @@
+{
+  "status": "complete",
+  "older": {
+    "id": "10000000-0000-4000-8000-000000000001",
+    "revision": 3,
+    "period": "2026-08"
+  },
+  "newer": {
+    "id": "10000000-0000-4000-8000-000000000002",
+    "revision": 3,
+    "period": "2026-09"
+  },
+  "engine_version": "0.1.0",
+  "knowledge_version": "1.0.2-e3-regions+dae01cb7efe7",
+  "delta_current_charges": "70.00",
+  "delta_adjustments": "0.00",
+  "delta_total_due": "70.00",
+  "lines": [
+    {
+      "older_line_id": "20000000-0000-4000-8000-000000000001",
+      "newer_line_id": "20000000-0000-4000-8000-000000000002",
+      "label": "Холодная вода",
+      "match_status": "matched",
+      "older_amount": "200.00",
+      "newer_amount": "270.00",
+      "delta": "70.00",
+      "quantity_effect": "40.00",
+      "tariff_effect": "30.00",
+      "rounding_effect": "0.00",
+      "explanation": "Вклад объёма рассчитан по прежнему тарифу; это арифметика квитанций, не доказательство расхода."
+    }
+  ],
+  "settlement_deltas": [
+    {
+      "code": "opening_balance",
+      "label": "Остаток на начало",
+      "raw_delta": "0.00",
+      "contribution": "0.00"
+    },
+    {
+      "code": "payments_credited",
+      "label": "Учтённые оплаты",
+      "raw_delta": "0.00",
+      "contribution": "0.00"
+    },
+    {
+      "code": "penalties",
+      "label": "Пени",
+      "raw_delta": "0.00",
+      "contribution": "0.00"
+    },
+    {
+      "code": "other_account_changes",
+      "label": "Прочие изменения счёта",
+      "raw_delta": "0.00",
+      "contribution": "0.00"
+    },
+    {
+      "code": "credit_clamp",
+      "label": "Использование переплаты",
+      "raw_delta": "0.00",
+      "contribution": "0.00"
+    }
+  ],
+  "unexplained_delta": "0.00",
+  "issues": [],
+  "actions": [],
+  "dataset_kind": "synthetic"
+}

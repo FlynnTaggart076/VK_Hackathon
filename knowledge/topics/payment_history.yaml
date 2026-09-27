@@ -1,0 +1,16 @@
+id: payment_history
+title: "Учтённые оплаты"
+utterances: ["где история оплат", "учтена ли оплата"]
+keywords: ["оплата", "платеж", "история"]
+required_context: []
+applicability:
+  territory_ids: []
+  roles: []
+  service_codes: []
+  document_kinds: []
+answer_template: "По одной квитанции нельзя подтвердить прохождение платежа. В личном кабинете гражданина ГИС ЖКХ откройте «Оплата ЖКУ» → «История платежей» и проверьте сведения о внесении платы и её сопоставлении с начислениями. Доступность записи зависит от размещения данных в системе."
+steps: ["Откройте в ГИС ЖКХ «Оплата ЖКУ» → «История платежей».", "Сверьте запись и её сопоставление с начислением по нужному документу."]
+source_ids: [gis-zhkh-payment-history]
+action_templates: [{id: "open-gis-payment-history-guide", type: open_link, label: "Открыть инструкцию ГИС ЖКХ", source_id: gis-zhkh-payment-history, target: null, requires: []}, {id: "navigate-receipt_history", type: navigate, label: "Открыть историю в приложении", source_id: null, target: receipt_history, requires: []}]
+review_after: "2026-12-31T00:00:00Z"
+content_version: "1.1"

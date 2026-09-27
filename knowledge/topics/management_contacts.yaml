@@ -1,0 +1,16 @@
+id: management_contacts
+title: "Контакт управляющей организации"
+utterances: ["как найти управляющую компанию", "контакт ук"]
+keywords: ["управляющая", "ук", "контакт"]
+required_context: [territory_id]
+applicability:
+  territory_ids: []
+  roles: []
+  service_codes: []
+  document_kinds: []
+answer_template: "Контакт своей управляющей организации нужно проверить по документу или официальному ресурсу. Проверенного канала для вашей территории пока нет."
+steps: ["Уточните территорию и организацию."]
+source_ids: []
+action_templates: []
+review_after: "2026-12-31T00:00:00Z"
+content_version: "1.0"

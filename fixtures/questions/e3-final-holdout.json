@@ -1,0 +1,624 @@
+{
+  "schema_version": "1.0",
+  "provenance": "Coordinator-authored sealed third E3 question holdout after C second-corpus defects were sent, before C revised code was published. Gold comes from topic definitions and ordinary household phrasing, not engine predictions.",
+  "created_at": "2026-09-27",
+  "default_context": {
+    "territory_id": "moscow",
+    "role": "owner",
+    "topic_id": null,
+    "organization_id": null,
+    "service_code": "cold_water",
+    "document_kind": null
+  },
+  "cases": [
+    {
+      "id": "S121",
+      "question": "На меня впервые пришёл счёт ЖКУ: какие реквизиты сначала сверить?",
+      "expected": {
+        "topic_id": "first_bill",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S122",
+      "question": "Как проверить первую коммунальную платёжку после получения квартиры?",
+      "expected": {
+        "topic_id": "first_bill",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S123",
+      "question": "Это мой первый документ на оплату жилья, помогите начать проверку.",
+      "expected": {
+        "topic_id": "first_bill",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S124",
+      "question": "Никогда не разбирал плату за квартиру: что смотреть в первой квитанции?",
+      "expected": {
+        "topic_id": "first_bill",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S125",
+      "question": "Расшифруйте термин из графы коммунального документа.",
+      "expected": {
+        "topic_id": "bill_terms",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S126",
+      "question": "Как понять значение подписи к строке начислений?",
+      "expected": {
+        "topic_id": "bill_terms",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S127",
+      "question": "В платёжке встретилось незнакомое сокращение: что оно обозначает?",
+      "expected": {
+        "topic_id": "bill_terms",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S128",
+      "question": "Нужна помощь с обозначением услуги в квитанции.",
+      "expected": {
+        "topic_id": "bill_terms",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S129",
+      "question": "Плата в новом месяце не совпадает с прошлой, как сравнить?",
+      "expected": {
+        "topic_id": "bill_change",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S130",
+      "question": "Общая сумма ЖКУ стала выше: какие строки дали разницу?",
+      "expected": {
+        "topic_id": "bill_change",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S131",
+      "question": "Почему счёт за октябрь больше сентябрьского?",
+      "expected": {
+        "topic_id": "bill_change",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S132",
+      "question": "Хочу увидеть, как изменилась стоимость по двум платежным документам.",
+      "expected": {
+        "topic_id": "bill_change",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S133",
+      "question": "Где сообщить новые показания водяного прибора учёта?",
+      "expected": {
+        "topic_id": "meter_readings",
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "S134",
+      "question": "Через какой сервис передают цифры квартирного счётчика воды?",
+      "expected": {
+        "topic_id": "meter_readings",
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "S135",
+      "question": "Как отправить данные водомера поставщику услуги?",
+      "expected": {
+        "topic_id": "meter_readings",
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "S136",
+      "question": "Нужно передать текущие показания воды, подскажите способ.",
+      "expected": {
+        "topic_id": "meter_readings",
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "S137",
+      "question": "Назовите дату, до которой в Москве принимают показания воды.",
+      "expected": {
+        "topic_id": "meter_deadline",
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "S138",
+      "question": "Когда последний день подачи цифр со счётчика?",
+      "expected": {
+        "topic_id": "meter_deadline",
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "S139",
+      "question": "Есть срок для сообщения данных водомера за месяц?",
+      "expected": {
+        "topic_id": "meter_deadline",
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "S140",
+      "question": "До какого дня поставщик ждёт новые значения прибора учёта?",
+      "expected": {
+        "topic_id": "meter_deadline",
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "S141",
+      "question": "Где посмотреть ЛС, по которому начисляют ЖКУ?",
+      "expected": {
+        "topic_id": "account_number",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S142",
+      "question": "Не нахожу номер лицевого счёта для своей квартиры.",
+      "expected": {
+        "topic_id": "account_number",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S143",
+      "question": "В каком месте платежного документа указан мой лицевой счёт?",
+      "expected": {
+        "topic_id": "account_number",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S144",
+      "question": "Как найти в ГИС ЖКХ список моих подключённых счетов?",
+      "expected": {
+        "topic_id": "account_number",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S145",
+      "question": "Какой номер телефона у управляющей компании моего МКД?",
+      "expected": {
+        "topic_id": "management_contacts",
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "S146",
+      "question": "Где узнать адрес электронной почты своей УК?",
+      "expected": {
+        "topic_id": "management_contacts",
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "S147",
+      "question": "Хочу связаться с организацией, управляющей этим домом.",
+      "expected": {
+        "topic_id": "management_contacts",
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "S148",
+      "question": "Подскажите, как найти контакты управляющей компании по дому.",
+      "expected": {
+        "topic_id": "management_contacts",
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "S149",
+      "question": "Где найти контакты организации, поставляющей холодную воду?",
+      "expected": {
+        "topic_id": "supplier_contacts",
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "S150",
+      "question": "Как позвонить ресурсоснабжающей организации по водоснабжению?",
+      "expected": {
+        "topic_id": "supplier_contacts",
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "S151",
+      "question": "Нужен адрес связи с моим поставщиком воды.",
+      "expected": {
+        "topic_id": "supplier_contacts",
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "S152",
+      "question": "К кому из поставщиков обратиться по услуге холодной воды?",
+      "expected": {
+        "topic_id": "supplier_contacts",
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "S153",
+      "question": "Где в кабинете увидеть прежние платежи за ЖКУ?",
+      "expected": {
+        "topic_id": "payment_history",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S154",
+      "question": "Я уже оплатил квитанцию; как проверить запись об оплате?",
+      "expected": {
+        "topic_id": "payment_history",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S155",
+      "question": "Покажите, где хранится история коммунальных оплат.",
+      "expected": {
+        "topic_id": "payment_history",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S156",
+      "question": "Как убедиться, что перечисление по платёжке отражено в истории?",
+      "expected": {
+        "topic_id": "payment_history",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S157",
+      "question": "В документе стоит задолженность, чем она отличается от текущей платы?",
+      "expected": {
+        "topic_id": "arrears_or_credit",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S158",
+      "question": "Почему платёжка показывает положительный остаток переплаты?",
+      "expected": {
+        "topic_id": "arrears_or_credit",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S159",
+      "question": "В счёте есть старый долг: как отделить его от новых начислений?",
+      "expected": {
+        "topic_id": "arrears_or_credit",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S160",
+      "question": "Объясните кредитовый остаток на начало месяца.",
+      "expected": {
+        "topic_id": "arrears_or_credit",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S161",
+      "question": "Почему к начислениям добавлена сумма перерасчёта?",
+      "expected": {
+        "topic_id": "adjustment",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S162",
+      "question": "Что означает корректировка за предыдущий расчётный период?",
+      "expected": {
+        "topic_id": "adjustment",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S163",
+      "question": "В отдельной строке сделали перерасчёт по воде, как это читать?",
+      "expected": {
+        "topic_id": "adjustment",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S164",
+      "question": "Как понять доначисление после исправления расчёта?",
+      "expected": {
+        "topic_id": "adjustment",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S165",
+      "question": "Помогите составить просьбу дать расчёт по конкретной строке.",
+      "expected": {
+        "topic_id": "request_breakdown",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S166",
+      "question": "Мне нужна детализация начисленной платы, как спросить об этом?",
+      "expected": {
+        "topic_id": "request_breakdown",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S167",
+      "question": "Хочу запросить расшифровку суммы за отопление.",
+      "expected": {
+        "topic_id": "request_breakdown",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S168",
+      "question": "Как написать вопрос организации о составе начисления?",
+      "expected": {
+        "topic_id": "request_breakdown",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S169",
+      "question": "В квартире пропало отопление, куда сообщить о качестве услуги?",
+      "expected": {
+        "topic_id": "service_issue",
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "S170",
+      "question": "Подача холодной воды прерывается, куда обращаться?",
+      "expected": {
+        "topic_id": "service_issue",
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "S171",
+      "question": "Дома вода идёт очень слабо, кому передать сообщение о проблеме?",
+      "expected": {
+        "topic_id": "service_issue",
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "S172",
+      "question": "Как заявить о неисправности коммунальной услуги в моём доме?",
+      "expected": {
+        "topic_id": "service_issue",
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "S173",
+      "question": "Нужно получить документ для жилья, какой порядок?",
+      "expected": {
+        "topic_id": "housing_document",
+        "status": "needs_clarification",
+        "clarification_field": "document_kind"
+      }
+    },
+    {
+      "id": "S174",
+      "question": "Где оформить справку, связанную с квартирой?",
+      "expected": {
+        "topic_id": "housing_document",
+        "status": "needs_clarification",
+        "clarification_field": "document_kind"
+      }
+    },
+    {
+      "id": "S175",
+      "question": "Хочу заказать жилищную выписку, что делать?",
+      "expected": {
+        "topic_id": "housing_document",
+        "status": "needs_clarification",
+        "clarification_field": "document_kind"
+      }
+    },
+    {
+      "id": "S176",
+      "question": "Как получить нужный документ по жилому помещению?",
+      "expected": {
+        "topic_id": "housing_document",
+        "status": "needs_clarification",
+        "clarification_field": "document_kind"
+      }
+    },
+    {
+      "id": "S177",
+      "question": "Недавно заселился и впервые занимаюсь ЖКУ: с чего начать?",
+      "expected": {
+        "topic_id": "new_resident",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S178",
+      "question": "Что проверить по коммунальным услугам после переезда?",
+      "expected": {
+        "topic_id": "new_resident",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S179",
+      "question": "Я новый собственник квартиры, как разобраться с организациями ЖКХ?",
+      "expected": {
+        "topic_id": "new_resident",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "S180",
+      "question": "После въезда хочу понять, кто выставляет счета за жильё.",
+      "expected": {
+        "topic_id": "new_resident",
+        "status": "answered"
+      }
+    },
+    {
+      "id": "A16",
+      "question": "Как передать показания и узнать крайний срок?",
+      "expected": {
+        "topic_id": null,
+        "status": "needs_clarification",
+        "clarification_field": "topic_id"
+      }
+    },
+    {
+      "id": "A17",
+      "question": "Почему сумма выросла и где посмотреть предыдущие платежи?",
+      "expected": {
+        "topic_id": null,
+        "status": "needs_clarification",
+        "clarification_field": "topic_id"
+      }
+    },
+    {
+      "id": "A18",
+      "question": "Кому писать о холодной батарее и кто моя управляющая организация?",
+      "expected": {
+        "topic_id": null,
+        "status": "needs_clarification",
+        "clarification_field": "topic_id"
+      }
+    },
+    {
+      "id": "A19",
+      "question": "Что означает перерасчёт и как запросить подробный расчёт?",
+      "expected": {
+        "topic_id": null,
+        "status": "needs_clarification",
+        "clarification_field": "topic_id"
+      }
+    },
+    {
+      "id": "A20",
+      "question": "Где взять лицевой счёт и телефон поставщика воды?",
+      "expected": {
+        "topic_id": null,
+        "status": "needs_clarification",
+        "clarification_field": "topic_id"
+      }
+    },
+    {
+      "id": "U31",
+      "question": "Посоветуй рецепт грибного супа.",
+      "expected": {
+        "topic_id": null,
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "U32",
+      "question": "Когда отправляется поезд в Санкт-Петербург?",
+      "expected": {
+        "topic_id": null,
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "U33",
+      "question": "Как ухаживать за комнатной орхидеей?",
+      "expected": {
+        "topic_id": null,
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "U34",
+      "question": "Кто написал роман «Отцы и дети»?",
+      "expected": {
+        "topic_id": null,
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "U35",
+      "question": "Подбери упражнения для тренировки.",
+      "expected": {
+        "topic_id": null,
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "U36",
+      "question": "Расскажи прогноз валютного курса.",
+      "expected": {
+        "topic_id": null,
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "U37",
+      "question": "Какая модель смартфона лучше для фото?",
+      "expected": {
+        "topic_id": null,
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "U38",
+      "question": "Как поменять шины на велосипеде?",
+      "expected": {
+        "topic_id": null,
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "U39",
+      "question": "Сочини сказку про дракона.",
+      "expected": {
+        "topic_id": null,
+        "status": "unsupported"
+      }
+    },
+    {
+      "id": "U40",
+      "question": "Напомни расписание футбольного чемпионата.",
+      "expected": {
+        "topic_id": null,
+        "status": "unsupported"
+      }
+    }
+  ]
+}

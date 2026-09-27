@@ -20,6 +20,8 @@ COPY packages/housing_engine/src/housing_engine /workspace/housing_engine
 COPY apps/backend/migrations /workspace/migrations
 COPY apps/backend/alembic.ini /workspace/alembic.ini
 COPY fixtures/receipts/water-2026-08.json fixtures/receipts/water-2026-09.json /workspace/fixtures/receipts/
+COPY fixtures/receipts/manifest.json /workspace/fixtures/receipts/manifest.json
+COPY knowledge /workspace/knowledge
 
 RUN groupadd --system app && useradd --system --gid app --home /workspace app \
     && mkdir /storage && chown app:app /storage

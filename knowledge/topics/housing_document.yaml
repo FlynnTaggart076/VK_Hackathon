@@ -1,0 +1,16 @@
+id: housing_document
+title: "Жилищный документ"
+utterances: ["где получить справку", "как получить жилищный документ"]
+keywords: ["справка", "документ", "получить"]
+required_context: [document_kind, territory_id, role]
+applicability:
+  territory_ids: []
+  roles: []
+  service_codes: []
+  document_kinds: []
+answer_template: "Порядок получения зависит от вида документа, территории и вашей роли. Проверенной местной инструкции пока нет."
+steps: ["Назовите точный вид документа и уточните территорию."]
+source_ids: []
+action_templates: []
+review_after: "2026-12-31T00:00:00Z"
+content_version: "1.0"

@@ -124,12 +124,23 @@ def test_postgresql_migration_persistence_and_worker(tmp_path, monkeypatch):
         assert repeated_after_expiry["receipt"]["id"] != queued["receipt"]["id"]
 
 
-def test_non_dev_modes_rejected_before_start(tmp_path):
-    for mode in ("demo", "production"):
-        settings = Settings(mode=mode, database_url=f"sqlite:///{(tmp_path / 'db.sqlite').as_posix()}",
-                            engine_mode="real", storage_path=tmp_path / "private")
-        with pytest.raises(ValueError, match="dev mode only"):
-            create_app(settings)
+def test_non_dev_modes_require_postgres_and_production_requires_max(tmp_path):
+    sqlite_url = f"sqlite:///{(tmp_path / 'db.sqlite').as_posix()}"
+    with pytest.raises(ValueError, match="PostgreSQL psycopg URL"):
+        create_app(Settings(mode="demo", database_url=sqlite_url, engine_mode="real",
+                            storage_path=tmp_path / "private"))
+    with pytest.raises(ValueError, match="MAX bot token"):
+        create_app(Settings(mode="production", database_url=sqlite_url, engine_mode="real",
+                            storage_path=tmp_path / "private"))
+    with pytest.raises(ValueError, match="PostgreSQL psycopg URL"):
+        create_app(Settings(mode="production", database_url=sqlite_url, engine_mode="real",
+                            max_bot_token="synthetic-token", max_webhook_secret="synthetic_secret",
+                            max_web_app="fixture_bot",
+                            storage_path=tmp_path / "private"))
+    with pytest.raises(ValueError, match="MAX_WEB_APP"):
+        create_app(Settings(mode="production", database_url=sqlite_url, engine_mode="real",
+                            max_bot_token="synthetic-token", max_webhook_secret="synthetic_secret",
+                            storage_path=tmp_path / "private"))
 
 
 def test_worker_finds_fixture_directory_in_container_layout(tmp_path):

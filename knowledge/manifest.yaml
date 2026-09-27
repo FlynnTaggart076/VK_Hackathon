@@ -1,5 +1,7 @@
-version: "0.0.0-e0-contract-only"
-built_at: "2026-09-27T10:17:03Z"
+version: "1.0.2-e3-regions"
+built_at: "2026-09-27T14:53:26Z"
 territory_ids:
   - demo-territory
+  - moscow
+  - moscow-oblast
 pilot_territory_id: null

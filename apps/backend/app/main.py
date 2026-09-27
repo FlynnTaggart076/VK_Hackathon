@@ -5,7 +5,9 @@ from __future__ import annotations
 import hashlib
 import hmac
 import io
+import json
 import os
+import re
 import secrets
 import threading
 import uuid
@@ -13,8 +15,9 @@ from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
-from fastapi import Depends, FastAPI, Header, Request, UploadFile
+from fastapi import Depends, FastAPI, Form, Header, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from PIL import Image, UnidentifiedImageError
@@ -37,6 +40,10 @@ class Settings:
     mode: str = "dev"
     demo_auth_enabled: bool = False
     demo_access_code: str | None = None
+    max_bot_token: str | None = None
+    max_webhook_secret: str | None = None
+    max_web_app: str | None = None
+    max_api_base_url: str = "https://platform-api2.max.ru"
     engine_mode: str = "stub"
     database_url: str | None = None
     storage_path: Path = Path(".local-storage")
@@ -51,6 +58,10 @@ class Settings:
             mode=os.getenv("APP_MODE", "dev"),
             demo_auth_enabled=os.getenv("DEMO_AUTH_ENABLED", "false").lower() == "true",
             demo_access_code=os.getenv("DEMO_ACCESS_CODE"),
+            max_bot_token=os.getenv("MAX_BOT_TOKEN"),
+            max_webhook_secret=os.getenv("MAX_WEBHOOK_SECRET"),
+            max_web_app=os.getenv("MAX_WEB_APP"),
+            max_api_base_url=os.getenv("MAX_API_BASE_URL", "https://platform-api2.max.ru"),
             engine_mode=os.getenv("ENGINE_MODE", "stub"),
             database_url=os.getenv("DATABASE_URL"),
             storage_path=Path(os.getenv("STORAGE_PATH", ".local-storage")),
@@ -63,8 +74,22 @@ class Settings:
             raise ValueError("ENGINE_MODE must be real or stub")
         if self.mode == "production" and (self.demo_auth_enabled or self.engine_mode == "stub"):
             raise ValueError("Production forbids demo auth and engine stub")
-        if self.mode != "dev":
-            raise ValueError("E1 backend supports dev mode only; MAX and real engine are not integrated")
+        if self.mode != "dev" and self.engine_mode == "stub":
+            raise ValueError("Engine stub is dev-only")
+        if self.mode == "production" and (not self.max_bot_token or not self.max_webhook_secret):
+            raise ValueError("Production requires MAX bot token and webhook secret")
+        if self.mode == "production" and not self.max_web_app:
+            raise ValueError("Production requires MAX_WEB_APP for the mini-app button")
+        if self.max_webhook_secret and not re.fullmatch(r"[A-Za-z0-9_-]{5,256}", self.max_webhook_secret):
+            raise ValueError("MAX_WEBHOOK_SECRET must match MAX subscription format")
+        if self.max_web_app and not re.fullmatch(
+                r"(?:[A-Za-z][A-Za-z0-9_]{2,63}|https://max\.ru/[A-Za-z][A-Za-z0-9_]{2,63})",
+                self.max_web_app):
+            raise ValueError("MAX_WEB_APP must be a MAX bot username or max.ru bot link")
+        api_url = urlsplit(self.max_api_base_url)
+        if api_url.scheme != "https" or not api_url.hostname or api_url.username or api_url.password or \
+                api_url.query or api_url.fragment or api_url.path not in {"", "/"}:
+            raise ValueError("MAX_API_BASE_URL must be an HTTPS origin")
         if self.demo_auth_enabled and not self.demo_access_code:
             raise ValueError("DEMO_ACCESS_CODE required when demo auth is enabled")
         if self.mode != "dev" and not self.database_url:
@@ -189,12 +214,22 @@ class MemoryStore:
                 raise ApiError(401, "SESSION_EXPIRED", "Срок сессии истёк.")
             return record[0]
 
+    def logout(self, token: str) -> None:
+        digest = hashlib.sha256(token.encode()).hexdigest()
+        with self.lock:
+            if digest not in self.sessions:
+                raise ApiError(401, "AUTH_REQUIRED", "Войдите в приложение.")
+            del self.sessions[digest]
+
     def profile(self, user_id: str) -> dict:
         with self.lock:
             return deepcopy(self.profiles[user_id])
 
     def update_profile(self, user_id: str, body: dict) -> dict:
-        if body.get("role") not in {"owner", "tenant", "other"} or body.get("territory_id") != "demo-territory":
+        from app.services.assistant_store import knowledge
+
+        territories = {item["id"] for item in knowledge().territories}
+        if body.get("role") not in {"owner", "tenant", "other"} or body.get("territory_id") not in territories:
             raise ApiError(422, "VALIDATION_FAILED", "Выберите доступную роль и территорию.")
         if body.get("privacy_notice_version") != self.settings.privacy_notice_version or body.get("privacy_acknowledged") is not True:
             raise ApiError(422, "PRIVACY_NOTICE_REQUIRED", "Подтвердите актуальное уведомление.")
@@ -207,9 +242,10 @@ class MemoryStore:
             self.profiles[user_id] = value
             return deepcopy(value)
 
-    def upload(self, user_id: str, key: str, content: bytes, mime: str, pages: int) -> dict:
+    def upload(self, user_id: str, key: str, content: bytes, mime: str, pages: int,
+               dataset_kind: str = "user_provided") -> dict:
         digest = hashlib.sha256(content).hexdigest()
-        fingerprint = hashlib.sha256(f"{mime}:{digest}".encode()).hexdigest()
+        fingerprint = hashlib.sha256(f"{mime}:{digest}:{dataset_kind}".encode()).hexdigest()
         idem_key = (user_id, "POST /api/v1/receipts", key)
         with self.lock:
             profile = self.profiles[user_id]
@@ -234,7 +270,7 @@ class MemoryStore:
             receipt = {
                 "id": receipt_id, "status": "queued", "revision": 1,
                 "created_at": stamp(created), "updated_at": stamp(created),
-                "dataset_kind": "user_provided", "extraction_outcome": None,
+                "dataset_kind": dataset_kind, "extraction_outcome": None,
                 "bill_data": empty_bill(), "field_evidence": [], "issues": [],
                 "document": {"available": True, "mime_type": mime, "page_count": pages,
                              "expires_at": stamp(created + timedelta(days=7))},
@@ -304,6 +340,9 @@ class MemoryStore:
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     settings.validate()
+    from app.services.assistant_store import knowledge
+
+    trusted_catalog = knowledge()  # Fail startup if the installed catalog is invalid.
     if settings.database_url:
         from app.db.store import SqlStore
         store = SqlStore(settings)
@@ -350,13 +389,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/v1/meta")
     def meta():
         return {"api_version": "1.0", "engine_version": "0.1.0" if settings.engine_mode == "real" else None,
-                "knowledge_version": "0.0.0-e2-arithmetic-only" if settings.engine_mode == "real" else None,
+                "knowledge_version": trusted_catalog.version if settings.engine_mode == "real" else None,
                 "mode": settings.mode,
                 "limits": {"upload_max_bytes": settings.upload_max_bytes, "pdf_max_pages": settings.pdf_max_pages,
                            "receipt_retention_days": 30, "source_retention_days": 7},
                 "features": {"voice": False, "external_submission": False,
                              "receipt_ocr": settings.engine_mode == "real",
-                             "comparison": False, "engine_stub": settings.engine_mode == "stub",
+                             "comparison": settings.engine_mode == "real" and bool(settings.database_url),
+                             "engine_stub": settings.engine_mode == "stub",
                              "demo_auth": settings.demo_auth_enabled},
                 "privacy_notice": {"version": settings.privacy_notice_version,
                                    "text": "Исходные документы хранятся 7 дней, данные квитанций — 30 дней."}}
@@ -374,8 +414,51 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return await run_in_threadpool(store.authenticate_demo, body["identity"], body["access_code"])
 
     @app.post("/api/v1/auth/max")
-    def auth_max():
-        raise ApiError(503, "SERVICE_UNAVAILABLE", "Вход MAX ещё не подключён.", retryable=False)
+    async def auth_max(request: Request):
+        if not settings.max_bot_token or not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Вход MAX не настроен.", retryable=False)
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректный JSON.") from None
+        if not isinstance(body, dict) or set(body) != {"init_data"} or not isinstance(body["init_data"], str):
+            raise ApiError(422, "VALIDATION_FAILED", "Укажите стартовые данные MAX.")
+        from app.services.max_auth import validate_init_data
+
+        max_user_id = validate_init_data(body["init_data"], settings.max_bot_token)
+        return await run_in_threadpool(store.authenticate_max, max_user_id)
+
+    @app.post("/integrations/max/webhook")
+    async def max_webhook(request: Request,
+                          max_secret: str | None = Header(default=None, alias="X-Max-Bot-Api-Secret")):
+        if not settings.max_webhook_secret or not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Webhook MAX не настроен.", retryable=True)
+        if not max_secret or not hmac.compare_digest(max_secret, settings.max_webhook_secret):
+            raise ApiError(403, "FORBIDDEN", "Доступ запрещён.")
+        raw = await request.body()
+        if len(raw) > 65_536:
+            raise ApiError(413, "FILE_TOO_LARGE", "Событие слишком велико.")
+        try:
+            body = json.loads(raw)
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректное событие MAX.") from None
+        from sqlalchemy.exc import SQLAlchemyError
+
+        from app.services.max_queue import enqueue_update, normalize_update
+
+        update = normalize_update(body)
+        try:
+            await run_in_threadpool(enqueue_update, store, update)
+        except SQLAlchemyError:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Очередь webhook недоступна.", retryable=True) from None
+        return {"accepted": True}
+
+    @app.post("/api/v1/auth/logout", status_code=204)
+    def logout(authorization: str | None = Header(default=None)):
+        if not authorization or not authorization.startswith("Bearer "):
+            raise ApiError(401, "AUTH_REQUIRED", "Войдите в приложение.")
+        store.logout(authorization[7:])
+        return Response(status_code=204)
 
     @app.get("/api/v1/me")
     def me(user_id: str = Depends(current_user)):
@@ -393,15 +476,204 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/v1/catalog")
     def catalog(user_id: str = Depends(current_user)):
-        return {"territories": [{"id": "demo-territory", "label": "Учебная территория"}],
-                "organizations": [], "topics": [], "service_codes": [], "units": [], "document_kinds": [],
+        from typing import get_args
+
+        from housing_engine.dto import ServiceCode, Unit
+
+        return {"territories": [{"id": item["id"], "label": item["label"],
+                                  "is_synthetic": item["is_synthetic"]}
+                                 for item in trusted_catalog.territories],
+                "organizations": [{"id": item["id"], "label": item["name"],
+                                   "territory_id": item["territory_id"],
+                                   "is_synthetic": item["is_synthetic"]}
+                                  for item in trusted_catalog.organizations],
+                "topics": [{"id": item["id"], "label": item["title"]}
+                           for item in trusted_catalog.topics],
+                "service_codes": list(get_args(ServiceCode)), "units": list(get_args(Unit)),
+                "document_kinds": [],
                 "demo_receipts": [
                     {"fixture_id": "water-2026-08", "label": "Вода, август", "description": "Синтетическая квитанция"},
                     {"fixture_id": "water-2026-09", "label": "Вода, сентябрь", "description": "Синтетическая квитанция"},
                 ]}
 
+    @app.post("/api/v1/assistant/answers")
+    async def create_answer(request: Request, user_id: str = Depends(current_user)):
+        if not settings.database_url or settings.engine_mode != "real":
+            raise ApiError(503, "ENGINE_UNAVAILABLE", "Ответы пока недоступны.", retryable=True)
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректный JSON.") from None
+        context_fields = {"territory_id", "role", "topic_id", "organization_id",
+                          "service_code", "document_kind", "receipt_id", "receipt_revision"}
+        if not isinstance(body, dict) or set(body) != {"question", "context"} or \
+                not isinstance(body["question"], str) or not 1 <= len(body["question"].strip()) <= 2000 or \
+                not isinstance(body["context"], dict) or set(body["context"]) != context_fields:
+            raise ApiError(422, "VALIDATION_FAILED", "Проверьте вопрос и контекст.")
+        context = body["context"]
+        if (context["receipt_id"] is None) != (context["receipt_revision"] is None):
+            raise ApiError(422, "VALIDATION_FAILED", "Укажите квитанцию и её ревизию вместе.")
+        refs = []
+        if context["receipt_id"] is not None:
+            try:
+                uuid.UUID(context["receipt_id"])
+            except (TypeError, ValueError):
+                raise ApiError(422, "VALIDATION_FAILED", "Некорректный ID квитанции.") from None
+            if type(context["receipt_revision"]) is not int or context["receipt_revision"] < 1:
+                raise ApiError(422, "VALIDATION_FAILED", "Некорректная ревизия квитанции.")
+            refs = [{"id": context["receipt_id"], "revision": context["receipt_revision"]}]
+        from pydantic import ValidationError
+        from housing_engine import EngineError
+
+        from app.services.assistant_adapter import answer_json
+        from app.services.assistant_store import knowledge, receipt_snapshots, save_answer
+
+        snapshots, profile = await run_in_threadpool(receipt_snapshots, store, user_id, refs)
+        if context["role"] != profile["role"] or context["territory_id"] != profile["territory_id"]:
+            raise ApiError(409, "PROFILE_CHANGED", "Профиль изменился; обновите страницу.")
+        try:
+            bundle = await run_in_threadpool(knowledge)
+            result = await run_in_threadpool(answer_json, body["question"], context, snapshots, profile, bundle)
+        except (EngineError, ValidationError) as exc:
+            if isinstance(exc, EngineError) and exc.retryable:
+                raise ApiError(503, exc.code, exc.message, retryable=True) from None
+            raise ApiError(422, "VALIDATION_FAILED", "Некорректный контекст вопроса.") from None
+        kind = snapshots[0]["dataset_kind"] if snapshots else \
+            "synthetic" if profile["territory_id"] == "demo-territory" else "public_reference"
+        return await run_in_threadpool(save_answer, store, user_id, body["question"],
+                                       result, refs[0] if refs else None, kind)
+
+    @app.get("/api/v1/assistant/answers/{answer_id}")
+    def read_answer(answer_id: uuid.UUID, user_id: str = Depends(current_user)):
+        if not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "История ответов недоступна.")
+        from app.services.assistant_store import get_answer, knowledge
+
+        return get_answer(store, user_id, str(answer_id), knowledge().version)
+
+    @app.post("/api/v1/drafts", status_code=201)
+    async def create_draft(request: Request, idempotency_key: str = Header(alias="Idempotency-Key"),
+                           user_id: str = Depends(current_user)):
+        if not settings.database_url or settings.engine_mode != "real":
+            raise ApiError(503, "ENGINE_UNAVAILABLE", "Черновики пока недоступны.", retryable=True)
+        try:
+            uuid.UUID(idempotency_key)
+        except ValueError:
+            raise ApiError(422, "VALIDATION_FAILED", "Idempotency-Key должен быть UUID.") from None
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректный JSON.") from None
+        if not isinstance(body, dict) or set(body) != {"topic_id", "organization_id", "receipt_refs",
+                                                       "line_id", "user_question"} or \
+                not isinstance(body["topic_id"], str) or not body["topic_id"] or \
+                not isinstance(body["receipt_refs"], list) or len(body["receipt_refs"]) > 2 or \
+                not isinstance(body["user_question"], str) or len(body["user_question"]) > 2000 or \
+                (body["organization_id"] is not None and not isinstance(body["organization_id"], str)):
+            raise ApiError(422, "VALIDATION_FAILED", "Проверьте данные черновика.")
+        for ref in body["receipt_refs"]:
+            if not isinstance(ref, dict) or set(ref) != {"id", "revision"} or \
+                    type(ref["revision"]) is not int or ref["revision"] < 1:
+                raise ApiError(422, "VALIDATION_FAILED", "Некорректная ссылка на квитанцию.")
+            try:
+                uuid.UUID(ref["id"])
+            except (TypeError, ValueError):
+                raise ApiError(422, "VALIDATION_FAILED", "Некорректный ID квитанции.") from None
+        if body["line_id"] is not None:
+            try:
+                uuid.UUID(body["line_id"])
+            except (TypeError, ValueError):
+                raise ApiError(422, "VALIDATION_FAILED", "Некорректный ID строки.") from None
+        from pydantic import ValidationError
+        from housing_engine import EngineError
+
+        from app.services.assistant_adapter import draft_json
+        from app.services.assistant_store import draft_replay, knowledge, receipt_snapshots, save_draft
+
+        replay = await run_in_threadpool(draft_replay, store, user_id, idempotency_key, body)
+        if replay is not None:
+            return replay
+
+        snapshots, profile = await run_in_threadpool(receipt_snapshots, store, user_id, body["receipt_refs"])
+        try:
+            bundle = await run_in_threadpool(knowledge)
+            result = await run_in_threadpool(draft_json, body, snapshots, profile, bundle)
+        except (EngineError, ValidationError) as exc:
+            if isinstance(exc, EngineError) and exc.retryable:
+                raise ApiError(503, exc.code, exc.message, retryable=True) from None
+            raise ApiError(422, "VALIDATION_FAILED", "Некорректные данные черновика.") from None
+        return await run_in_threadpool(save_draft, store, user_id, idempotency_key, body, result)
+
+    @app.get("/api/v1/drafts/{draft_id}")
+    def read_draft(draft_id: uuid.UUID, user_id: str = Depends(current_user)):
+        if not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "История черновиков недоступна.")
+        from app.services.assistant_store import get_draft
+
+        return get_draft(store, user_id, str(draft_id))
+
+    @app.put("/api/v1/drafts/{draft_id}")
+    async def update_draft(draft_id: uuid.UUID, request: Request,
+                           user_id: str = Depends(current_user)):
+        if not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Черновики недоступны.")
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректный JSON.") from None
+        if not isinstance(body, dict) or set(body) != {"expected_revision", "text"} or \
+                type(body["expected_revision"]) is not int or body["expected_revision"] < 1 or \
+                not isinstance(body["text"], str) or len(body["text"]) > 5000:
+            raise ApiError(422, "VALIDATION_FAILED", "Проверьте ревизию и текст черновика.")
+        from app.services.assistant_store import edit_draft
+
+        return await run_in_threadpool(edit_draft, store, user_id, str(draft_id),
+                                       body["expected_revision"], body["text"])
+
+    @app.delete("/api/v1/drafts/{draft_id}", status_code=204)
+    def remove_draft(draft_id: uuid.UUID, user_id: str = Depends(current_user)):
+        if not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Черновики недоступны.")
+        from app.services.assistant_store import delete_draft
+
+        delete_draft(store, user_id, str(draft_id))
+        return Response(status_code=204)
+
+    @app.post("/api/v1/comparisons")
+    async def compare_receipts_http(request: Request, user_id: str = Depends(current_user)):
+        if not settings.database_url or settings.engine_mode != "real":
+            raise ApiError(503, "ENGINE_UNAVAILABLE", "Сравнение пока недоступно.", retryable=True)
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректный JSON.") from None
+        if not isinstance(body, dict) or set(body) != {"left", "right", "identity_acknowledged"} or \
+                type(body["identity_acknowledged"]) is not bool:
+            raise ApiError(422, "VALIDATION_FAILED", "Проверьте запрос сравнения.")
+        refs = []
+        for field in ("left", "right"):
+            ref = body[field]
+            if not isinstance(ref, dict) or set(ref) != {"id", "revision"} or \
+                    not isinstance(ref["id"], str) or type(ref["revision"]) is not int or ref["revision"] < 1:
+                raise ApiError(422, "VALIDATION_FAILED", "Укажите обе версии квитанций.")
+            try:
+                uuid.UUID(ref["id"])
+            except ValueError:
+                raise ApiError(422, "VALIDATION_FAILED", "Некорректный ID квитанции.") from None
+            refs.append(ref)
+        from app.services.comparison_adapter import compare_json
+        from housing_engine import EngineError
+
+        snapshots, territory = await run_in_threadpool(store.comparison_snapshots, user_id, refs)
+        try:
+            return await run_in_threadpool(compare_json, snapshots, territory, body["identity_acknowledged"])
+        except EngineError as exc:
+            status = 409 if exc.code == "INCOMPARABLE_RECEIPTS" else 503 if exc.retryable else 422
+            raise ApiError(status, exc.code, exc.message, retryable=exc.retryable) from None
+
     @app.post("/api/v1/receipts", status_code=202)
     async def upload_receipt(file: UploadFile, idempotency_key: str = Header(alias="Idempotency-Key"),
+                             demo_sample_id: str | None = Form(default=None),
                              user_id: str = Depends(current_user)):
         try:
             uuid.UUID(idempotency_key)
@@ -410,7 +682,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         content = await file.read(settings.upload_max_bytes + 1)
         await file.close()
         mime, pages = inspect_document(content, file.content_type or "", settings)
-        return await run_in_threadpool(store.upload, user_id, idempotency_key, content, mime, pages)
+        from app.services.demo_samples import dataset_kind
+
+        kind = dataset_kind(content, mime, demo_sample_id)
+        return await run_in_threadpool(store.upload, user_id, idempotency_key, content, mime, pages, kind)
 
     @app.post("/api/v1/receipts/demo", status_code=202)
     async def import_demo(request: Request, idempotency_key: str = Header(alias="Idempotency-Key"),

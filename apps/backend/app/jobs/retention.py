@@ -6,7 +6,7 @@ from datetime import timedelta
 
 from sqlalchemy import delete, select
 
-from app.db.models import Document, IdempotencyKey, Job, Receipt
+from app.db.models import AssistantAnswer, Document, Draft, IdempotencyKey, Job, Outbox, Receipt, WebhookInbox
 from app.db.store import SqlStore, now
 
 
@@ -55,3 +55,11 @@ def run_retention_once(store: SqlStore) -> None:
                 preview.unlink(missing_ok=True)
     with store.Session.begin() as session:
         session.execute(delete(IdempotencyKey).where(IdempotencyKey.expires_at <= moment))
+        session.execute(delete(WebhookInbox).where(WebhookInbox.expires_at <= moment))
+        session.execute(delete(Outbox).where(Outbox.expires_at <= moment))
+        session.execute(delete(AssistantAnswer).where(AssistantAnswer.expires_at <= moment))
+        session.execute(delete(Draft).where(Draft.expires_at <= moment))
+        for item in session.scalars(select(Outbox).where(
+            Outbox.state == "sending", Outbox.run_after <= moment - timedelta(seconds=30)
+        ).with_for_update(skip_locked=True)):
+            item.state = "uncertain"

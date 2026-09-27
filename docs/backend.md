@@ -91,3 +91,59 @@ BASE_URL=http://127.0.0.1:8080/team/zhkh DEMO_ACCESS_CODE=<private> python scrip
 ```
 
 Скрипт передаёт синтетический текстовый PDF как multipart bytes, ждёт persisted job, проверяет извлечение → edit CAS → confirm → explain. Затем загружает синтетический PNG и проверяет работу контейнерного Tesseract, `source=ocr`, `needs_review` и предупреждение `OCR_REVIEW_REQUIRED`. После restart читает обе квитанции и то же подтверждённое объяснение. В state file только UUID квитанций и номер ревизии, без токена или кода. Этот сценарий не проверяет MAX и VM.
+
+## E3 MAX webhook checkpoint (2026-09-27)
+
+`/api/v1/auth/max` verifies signed initData and exchanges it for a revocable
+server session. The validation follows the [official MAX WebApp algorithm](https://dev.max.ru/docs/webapps/validation):
+the HMAC key is derived with `WebAppData`, then the decoded sorted parameter
+string is signed. `auth_date` is limited to five minutes with 30 seconds of
+future skew. Raw initData and tokens are never logged.
+
+`POST /integrations/max/webhook` compares `X-Max-Bot-Api-Secret` in constant
+time, normalizes a bounded update, commits the minimal payload to
+`webhook_inbox`, and only then returns 200. The worker performs one inbox or
+outbox unit per idle cycle and during the OCR child tick. Replays share a
+deduplication key. Direct `/start` and `/help` have text responses; attachments
+are directed to mini-app upload. Direct text questions call C's same local
+knowledge function and persist an owner-scoped answer. Group content is not stored or
+answered. The outbox marks unknown network outcomes `uncertain` and does not
+automatically resend them. All inbox and outbox records expire within 24 hours.
+
+`/start` persists a MAX inline keyboard with a `message` button to prompt a
+question and an `open_app` button for receipt upload. `MAX_WEB_APP`, if set to
+the registered bot username or its `max.ru` link, is sent as `web_app`; linking
+and opening the real mini-app still require a live MAX client check.
+Production startup requires this setting together with MAX token and webhook
+secret, so the start button cannot silently omit its destination.
+
+Outbound messages use the [official MAX POST /messages](https://dev.max.ru/docs-api/methods/POST/messages)
+with `Authorization` header and `user_id` query parameter; redirects are
+rejected to avoid forwarding credentials. The [Update object](https://dev.max.ru/docs-api/objects/Update)
+describes the accepted envelope. These are synthetic contract checks only;
+live MAX delivery requires credentials and E4 acceptance.
+
+## E3 persisted answers and drafts
+
+`POST /api/v1/assistant/answers` derives role and territory from the stored
+profile and loads the fixed local knowledge catalog. An optional receipt must
+be owned by the requester and at its current confirmed revision. The engine
+produces the answer, including clarification or unsupported status; the API
+stores its version and provenance for 30 days. Reads recalculate stale reasons
+from the receipt revision, source review dates and catalog version. Stale
+cards do not expose their old actions.
+
+The backend validates the installed knowledge bundle at startup. `/meta` reports
+that exact version; `/catalog` derives territories, topics and organizations
+from the same bundle. Profile territory updates accept only catalog IDs.
+Local Moscow/Moscow Oblast routing remains unavailable until a verified
+regional source and organization are added by C; displaying a region in the
+catalog does not imply a verified local instruction.
+
+`POST /api/v1/drafts` uses at most two owned current confirmed receipts and
+the public C draft function. Creation has a 24-hour idempotency record. The
+text is editable by revision CAS and can be copied by the user; there is no
+send route. Reads mark a draft stale when a receipt, source or knowledge
+version changes. Deleting a receipt removes associated answers, drafts and
+their draft idempotency records. The demo catalog has no verified local
+recipient, so the draft recipient remains null.

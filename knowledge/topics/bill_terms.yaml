@@ -1,0 +1,16 @@
+id: bill_terms
+title: "Термины квитанции"
+utterances: ["что означает строка квитанции", "что значит термин в платежке"]
+keywords: ["термин", "строка", "означает"]
+required_context: []
+applicability:
+  territory_ids: []
+  roles: []
+  service_codes: []
+  document_kinds: []
+answer_template: "Укажите конкретную строку или термин. Без него значение поля нельзя определить по одной общей формулировке."
+steps: ["Откройте строку в подтверждённой квитанции."]
+source_ids: []
+action_templates: []
+review_after: "2026-12-31T00:00:00Z"
+content_version: "1.0"

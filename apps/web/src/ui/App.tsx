@@ -1,19 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, hasSessionToken, setSessionToken } from '../api/client';
-import type { AnswerContext, AnswerView, Catalog, MetaResponse, Profile } from '../api/types';
+import type { AnswerContext, AnswerView, Catalog, MetaResponse, Profile, ReceiptView } from '../api/types';
 import { Onboarding, canUpload } from './Onboarding';
 import { Processing, Upload } from './Upload';
 import { ReceiptReview } from './ReceiptReview';
 import { ReceiptExplanation } from './ReceiptExplanation';
+import { History } from './History';
+import { Comparison } from './Comparison';
+import { Draft } from './Draft';
+import { ActionList } from './ActionList';
 import { ErrorMessage } from './errors';
 
 const mockEnabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_MOCK === 'true';
 const screens = [
   { path: '/', title: 'Главная', text: 'Вопросы, платёжки, история и учебные примеры.', states: 'пустая история, demo-пометка' },
-  { path: '/comparison', title: 'Сравнение', text: 'Выбор двух документов и объяснение различий.', states: 'incompatible, identity confirmation, ambiguous, partial' },
-  { path: '/draft', title: 'Черновик', text: 'Проверка, редактирование и копирование текста.', states: 'copied, clipboard unavailable, stale' },
-  { path: '/history', title: 'История и настройки', text: 'Документы, удаление и профиль.', states: 'empty, pagination, deleting, error' },
 ] as const;
 
 function Entry({ meta, onAuth }: { meta: MetaResponse | null; onAuth: (profile: Profile) => void }) {
@@ -53,8 +54,14 @@ function Entry({ meta, onAuth }: { meta: MetaResponse | null; onAuth: (profile: 
   </section>;
 }
 
-function Assistant({ enabled }: { enabled: boolean }) {
+function Assistant({ profile, catalog }: { profile: Profile; catalog: Catalog }) {
+  const [params] = useSearchParams();
+  const receiptId = params.get('receipt');
   const [question, setQuestion] = useState('Почему выросла сумма за воду?');
+  const [topicId, setTopicId] = useState(params.get('topic') ?? '');
+  const [clarified, setClarified] = useState<Partial<AnswerContext>>({});
+  const [receipt, setReceipt] = useState<ReceiptView | null>(null);
+  const [serviceCode, setServiceCode] = useState('');
   const [answer, setAnswer] = useState<AnswerView | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -62,13 +69,21 @@ function Assistant({ enabled }: { enabled: boolean }) {
   useEffect(() => {
     return () => pending.current?.abort();
   }, []);
-  async function ask(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  useEffect(() => { setTopicId(params.get('topic') ?? ''); }, [params]);
+  useEffect(() => {
+    let active = true; setReceipt(null); setServiceCode('');
+    if (receiptId) api.receipt(receiptId).then((value) => { if (active) setReceipt(value); })
+      .catch((cause) => { if (active) setError(cause); });
+    return () => { active = false; };
+  }, [receiptId]);
+  async function ask(event?: React.FormEvent<HTMLFormElement>, extra: Partial<AnswerContext> = {}) {
+    event?.preventDefault();
     if (!question.trim()) return;
     const context: AnswerContext = {
-      territory_id: 'demo-territory', role: 'tenant', topic_id: null,
-      organization_id: null, service_code: null, document_kind: null,
-      receipt_id: null, receipt_revision: null,
+      territory_id: profile.territory_id, role: profile.role, topic_id: topicId || null,
+      organization_id: null, service_code: serviceCode || null, document_kind: null,
+      receipt_id: receipt?.status === 'confirmed' ? receipt.id : null,
+      receipt_revision: receipt?.status === 'confirmed' ? receipt.revision : null, ...clarified, ...extra,
     };
     setBusy(true); setError(null); setAnswer(null);
     pending.current?.abort();
@@ -78,13 +93,14 @@ function Assistant({ enabled }: { enabled: boolean }) {
     catch (cause) { if (!(cause instanceof DOMException && cause.name === 'AbortError')) setError(cause); }
     finally { if (pending.current === controller) { pending.current = null; setBusy(false); } }
   }
-  if (!enabled) return <section className="panel"><h2>Помощник</h2><p className="notice">Ответы пока не подключены в dev backend. Загрузка платёжки доступна после первого запуска.</p></section>;
   return <section className="panel">
     <h2>Помощник</h2>
     <form onSubmit={(event) => void ask(event)}>
+      {receiptId && <div className="notice-box"><p>Документ: {receipt ? `${receipt.bill_data.period ?? 'без периода'} · ревизия ${receipt.revision}` : 'загружаем…'}</p>{receipt && receipt.status !== 'confirmed' && <p className="review-warning">Для вопроса по документу сначала подтвердите его данные.</p>}{receipt?.dataset_kind === 'synthetic' && <p className="badge">Синтетический пример</p>}{receipt?.status === 'confirmed' && <><label htmlFor="answer-service">Услуга</label><select id="answer-service" value={serviceCode} onChange={(event) => setServiceCode(event.target.value)}><option value="">Без выбора услуги</option>{receipt.bill_data.services.map((line) => <option key={line.line_id} value={line.service_code}>{line.raw_name}</option>)}</select></>}</div>}
+      <label htmlFor="answer-topic">Тема</label><select id="answer-topic" value={topicId} onChange={(event) => { setTopicId(event.target.value); setClarified({}); }}><option value="">Определить по вопросу</option>{catalog?.topics.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
       <label htmlFor="question">Ваш вопрос</label>
       <textarea id="question" value={question} onChange={(event) => setQuestion(event.target.value)} maxLength={2000} rows={3} />
-      <button disabled={busy || !hasSessionToken()}>{busy ? 'Ищем ответ…' : 'Спросить'}</button>
+      <button disabled={busy || !hasSessionToken() || (!!receiptId && receipt?.status !== 'confirmed')}>{busy ? 'Ищем ответ…' : 'Спросить'}</button>
     </form>
     {!hasSessionToken() && <p>Войдите на главной, чтобы задать общий вопрос.</p>}
     <ErrorMessage error={error} />
@@ -92,8 +108,11 @@ function Assistant({ enabled }: { enabled: boolean }) {
       <p className="badge">{answer.dataset_kind === 'synthetic' ? 'Синтетический пример' : answer.dataset_kind}</p>
       <h3>{answer.status === 'unsupported' ? 'Пока нет проверенного ответа' : answer.status === 'needs_clarification' ? 'Нужно уточнение' : 'Ответ'}</h3>
       <p>{answer.text}</p>
-      {answer.clarification && <p>{answer.clarification.prompt}</p>}
-      {answer.sources.map((source) => <p key={source.id}>Источник: {source.title}{source.url && <a href={source.url} target="_blank" rel="noopener noreferrer"> {source.url}</a>}</p>)}
+      {answer.clarification && <div className="notice-box"><p>{answer.clarification.prompt}</p>{answer.clarification.options.map((option) => <button key={option.value} type="button" onClick={() => { const extra = { [answer.clarification!.field]: option.value }; setClarified((value) => ({ ...value, ...extra })); void ask(undefined, extra); }}>{option.label}</button>)}</div>}
+      {answer.stale && <p className="review-warning">Ответ устарел: проверьте сведения перед действием.</p>}
+      <p>Территория: {catalog.territories.find((item) => item.id === profile.territory_id)?.label ?? 'не выбрана'} · версия знаний {answer.knowledge_version}</p>
+      {answer.sources.map((source) => <p key={source.id}>Источник: {source.title} · {source.territory_id ? catalog.territories.find((item) => item.id === source.territory_id)?.label ?? source.territory_id : 'общий'} · проверен {source.verified_at} · пересмотреть после {source.review_after}{source.is_synthetic && ' · учебный'}{source.url && <a href={source.url} target="_blank" rel="noopener noreferrer"> Открыть</a>}</p>)}
+      <ActionList actions={answer.actions} />
       {answer.limitations.map((item) => <p key={item}>{item}</p>)}
     </article>}
   </section>;
@@ -163,11 +182,14 @@ export function App() {
       <Routes>
         {screens.map(({ path }) => <Route key={path} path={path} element={<Page path={path} />} />)}
         <Route path="/onboarding" element={!authenticated ? needsLogin : meta && catalog && profile ? <Onboarding meta={meta} catalog={catalog} profile={profile} onSaved={setProfile} /> : waiting} />
-        <Route path="/upload" element={!authenticated ? needsLogin : meta ? <Upload meta={meta} profile={profile} onQueued={(value) => navigate(`/processing?job=${encodeURIComponent(value.job_id)}`)} /> : waiting} />
+        <Route path="/upload" element={!authenticated ? needsLogin : meta ? <Upload meta={meta} profile={profile} catalog={catalog} onQueued={(value) => navigate(`/processing?job=${encodeURIComponent(value.job_id)}`)} /> : waiting} />
         <Route path="/processing" element={!authenticated ? needsLogin : <Processing stub={!!meta?.features.engine_stub} />} />
         <Route path="/review" element={!authenticated ? needsLogin : <ReceiptReview />} />
         <Route path="/explanation" element={!authenticated ? needsLogin : <ReceiptExplanation />} />
-        <Route path="/assistant" element={<Assistant enabled={mockEnabled} />} />
+        <Route path="/history" element={!authenticated ? needsLogin : <History />} />
+        <Route path="/comparison" element={!authenticated ? needsLogin : <Comparison />} />
+        <Route path="/draft" element={!authenticated ? needsLogin : <Draft catalog={catalog} />} />
+        <Route path="/assistant" element={!authenticated ? needsLogin : profile && catalog ? <Assistant profile={profile} catalog={catalog} /> : waiting} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </main>

@@ -53,6 +53,7 @@ EXAMPLE_SCHEMAS = {
     "receipt-list": "ReceiptList", "job-queued": "Job",
     "answer-unsupported": "AnswerView", "answer-clarification": "AnswerView",
     "comparison-partial": "ComparisonView", "comparison-identity": "ComparisonView",
+    "comparison-complete": "ComparisonView",
     "explanation-incomplete": "../engine/v1/ReceiptExplanation.schema.json",
     "draft": "DraftView",
     **{name: "ErrorEnvelope" for name in [

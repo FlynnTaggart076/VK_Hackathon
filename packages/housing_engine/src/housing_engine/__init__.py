@@ -1,6 +1,4 @@
-"""Housing engine v1 public API; later-stage functions remain explicit stubs."""
-
-from datetime import datetime
+"""Housing engine v1 public API."""
 
 from .dto import (
     AnswerResult, BillData, CompareRequest, ComparisonResult, DocumentInput,
@@ -8,28 +6,10 @@ from .dto import (
     KnowledgeBundle, QuestionRequest, ReceiptExplanation, ValidationResult,
 )
 from .errors import EngineError
+from .comparison import compare_receipts
+from .knowledge import answer_question, compose_draft, load_knowledge
 from .extraction import extract_receipt
 from .explanation import explain_receipt
 from .receipts import validate_bill
 
 __version__ = "0.1.0"
-
-
-def _not_implemented() -> None:
-    raise NotImplementedError("housing_engine function is not implemented in this stage")
-
-
-def compare_receipts(request: CompareRequest, knowledge: KnowledgeBundle) -> ComparisonResult:
-    _not_implemented()
-
-
-def answer_question(request: QuestionRequest, knowledge: KnowledgeBundle) -> AnswerResult:
-    _not_implemented()
-
-
-def compose_draft(request: DraftRequest, knowledge: KnowledgeBundle) -> DraftResult:
-    _not_implemented()
-
-
-def load_knowledge(path: str, now: datetime) -> KnowledgeBundle:
-    _not_implemented()

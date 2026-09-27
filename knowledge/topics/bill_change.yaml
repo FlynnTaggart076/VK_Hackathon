@@ -1,0 +1,16 @@
+id: bill_change
+title: "Изменение суммы"
+utterances: ["почему выросла сумма квитанции", "сравнить платежки"]
+keywords: ["изменилась", "сумма", "сравнить", "выросла"]
+required_context: []
+applicability:
+  territory_ids: []
+  roles: []
+  service_codes: []
+  document_kinds: []
+answer_template: "Для объяснения разницы выберите две подтверждённые квитанции. Изменение начислений и суммы к оплате показывается отдельно."
+steps: ["Выберите два периода для сравнения."]
+source_ids: []
+action_templates: [{id: "navigate-comparison", type: navigate, label: "Открыть", source_id: null, target: comparison, requires: []}]
+review_after: "2026-12-31T00:00:00Z"
+content_version: "1.0"
