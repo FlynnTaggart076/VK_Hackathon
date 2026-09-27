@@ -1,0 +1,354 @@
+{
+  "$defs": {
+    "Clarification": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "enum": [
+            "topic_id",
+            "territory_id",
+            "role",
+            "organization_id",
+            "service_code",
+            "document_kind"
+          ],
+          "title": "Field",
+          "type": "string"
+        },
+        "prompt": {
+          "title": "Prompt",
+          "type": "string"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/ClarificationOption"
+          },
+          "title": "Options",
+          "type": "array"
+        }
+      },
+      "required": [
+        "field",
+        "prompt",
+        "options"
+      ],
+      "title": "Clarification",
+      "type": "object"
+    },
+    "ClarificationOption": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "label"
+      ],
+      "title": "ClarificationOption",
+      "type": "object"
+    },
+    "NextAction": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "open_link",
+            "prepare_draft",
+            "select_topic",
+            "navigate"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Url"
+        },
+        "topic_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Topic Id"
+        },
+        "organization_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Organization Id"
+        },
+        "source_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Id"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "enum": [
+                "receipt_upload",
+                "receipt_history",
+                "receipt_detail",
+                "comparison"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target"
+        },
+        "receipt_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReceiptRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requires": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Requires",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "label",
+        "url",
+        "topic_id",
+        "organization_id",
+        "source_id",
+        "target",
+        "receipt_ref",
+        "requires"
+      ],
+      "title": "NextAction",
+      "type": "object"
+    },
+    "ReceiptRef": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "revision"
+      ],
+      "title": "ReceiptRef",
+      "type": "object"
+    },
+    "SourceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Url"
+        },
+        "territory_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Territory Id"
+        },
+        "verified_at": {
+          "format": "date-time",
+          "title": "Verified At",
+          "type": "string"
+        },
+        "review_after": {
+          "format": "date-time",
+          "title": "Review After",
+          "type": "string"
+        },
+        "content_version": {
+          "title": "Content Version",
+          "type": "string"
+        },
+        "is_synthetic": {
+          "title": "Is Synthetic",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "url",
+        "territory_id",
+        "verified_at",
+        "review_after",
+        "content_version",
+        "is_synthetic"
+      ],
+      "title": "SourceRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "enum": [
+        "answered",
+        "needs_clarification",
+        "unsupported"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "text": {
+      "maxLength": 1500,
+      "title": "Text",
+      "type": "string"
+    },
+    "topic_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Topic Id"
+    },
+    "steps": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 5,
+      "title": "Steps",
+      "type": "array"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/SourceRef"
+      },
+      "title": "Sources",
+      "type": "array"
+    },
+    "actions": {
+      "items": {
+        "$ref": "#/$defs/NextAction"
+      },
+      "title": "Actions",
+      "type": "array"
+    },
+    "clarification": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Clarification"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "knowledge_version": {
+      "title": "Knowledge Version",
+      "type": "string"
+    },
+    "receipt_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReceiptRef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "status",
+    "text",
+    "topic_id",
+    "steps",
+    "sources",
+    "actions",
+    "clarification",
+    "limitations",
+    "knowledge_version",
+    "receipt_ref"
+  ],
+  "title": "AnswerResult",
+  "type": "object"
+}

@@ -1,0 +1,38 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "receipt_id": {
+      "format": "uuid",
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "content": {
+      "description": "In-memory bytes only; never a user JSON field",
+      "format": "binary",
+      "title": "Content",
+      "type": "string"
+    },
+    "mime_type": {
+      "enum": [
+        "application/pdf",
+        "image/jpeg",
+        "image/png"
+      ],
+      "title": "Mime Type",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "content",
+    "mime_type",
+    "sha256"
+  ],
+  "title": "DocumentInput",
+  "type": "object"
+}

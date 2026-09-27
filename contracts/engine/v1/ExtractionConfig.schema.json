@@ -1,0 +1,44 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "timeout_seconds": {
+      "default": 90,
+      "maximum": 90,
+      "minimum": 1,
+      "title": "Timeout Seconds",
+      "type": "integer"
+    },
+    "max_pages": {
+      "default": 3,
+      "maximum": 3,
+      "minimum": 1,
+      "title": "Max Pages",
+      "type": "integer"
+    },
+    "max_pixels_per_page": {
+      "default": 25000000,
+      "maximum": 25000000,
+      "minimum": 1,
+      "title": "Max Pixels Per Page",
+      "type": "integer"
+    },
+    "workspace": {
+      "minLength": 1,
+      "title": "Workspace",
+      "type": "string"
+    },
+    "enabled_templates": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Enabled Templates",
+      "type": "array"
+    }
+  },
+  "required": [
+    "workspace",
+    "enabled_templates"
+  ],
+  "title": "ExtractionConfig",
+  "type": "object"
+}
