@@ -9,6 +9,7 @@ from .dto import (
 )
 from .errors import EngineError
 from .extraction import extract_receipt
+from .explanation import explain_receipt
 from .receipts import validate_bill
 
 __version__ = "0.1.0"
@@ -16,10 +17,6 @@ __version__ = "0.1.0"
 
 def _not_implemented() -> None:
     raise NotImplementedError("housing_engine processing starts in E1; E0 publishes DTO only")
-
-
-def explain_receipt(request: ExplainRequest, knowledge: KnowledgeBundle) -> ReceiptExplanation:
-    _not_implemented()
 
 
 def compare_receipts(request: CompareRequest, knowledge: KnowledgeBundle) -> ComparisonResult:
