@@ -114,6 +114,8 @@ automatically resend them. All inbox and outbox records expire within 24 hours.
 question and an `open_app` button for receipt upload. `MAX_WEB_APP`, if set to
 the registered bot username or its `max.ru` link, is sent as `web_app`; linking
 and opening the real mini-app still require a live MAX client check.
+Production startup requires this setting together with MAX token and webhook
+secret, so the start button cannot silently omit its destination.
 
 Outbound messages use the [official MAX POST /messages](https://dev.max.ru/docs-api/methods/POST/messages)
 with `Authorization` header and `user_id` query parameter; redirects are
