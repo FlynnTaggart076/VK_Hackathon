@@ -120,7 +120,7 @@ try {
     try { await api.me(); return null; } catch (error) { return { status: error.status, code: error.code }; }
   });
   if (expired?.status !== 401) throw new Error(`Expected real API 401, got ${JSON.stringify(expired)}`);
-  await page.getByRole('heading', { name: 'Вход' }).waitFor();
+  await page.getByRole('heading', { name: 'Вход', exact: true }).waitFor();
   if (new URL(page.url()).pathname + new URL(page.url()).search !== currentRoute) throw new Error('401 changed deep-link route');
   process.stdout.write(JSON.stringify({ mode: 'real E4 dev API', checks: [
     'injected network abort then real retry', 'real 413', 'real 409 and preserved edit',
