@@ -99,3 +99,34 @@
 ### Открыто
 
 PG17 PDF и PNG HTTP smoke/restart и оба Linux сценария завершения дочернего дерева прошли в run #9. Локальный Windows Docker daemon отсутствует. Подтверждение качества OCR реальных квитанций/фото и VM/MAX не заявляется. Координатор решает приёмку E2-B по этим доказательствам; E3 B без нового задания не начинается.
+
+---
+
+## E3-B-01: сравнение, справка, черновики и MAX-контур
+
+- Ветка `agent-b/e3`; BASE_SHA `b33ed1e0493d76dfd7051a141e2075c698f8e967`; TASK_COMMIT `c11b5235319c12ecb18a6c4ca05c35a54f5c0560`.
+- Pushed checkpoints: MAX auth `4f2514f`; сравнение через принятый C API `ce17db7`, исправление mixed synthetic и identity `7dbc2ab`; webhook/inbox/outbox `268885a`; manifest-bound synthetic upload `6a71e3f`; путь к manifest в контейнере `02f6377`; persisted answer/draft `75d0302`; trusted dynamic catalog и MAX text answer `81eef8f`; расширение E3 HTTP smoke `f055351`; исправление версии знаний `fba594c`; региональный каталог/PG webhook verifier `bd9a969`; кнопки MAX и миграция `6051f43`; production `MAX_WEB_APP` gate `362985a133f82235498105f8fdfd410b6cc7fdce`.
+- C compare, FAQ/draft и регионы Москвы/Московской области включены через `origin/integration/e3` merge `219996e`; вложенные DTO и расчёт 70/40/30 не дублируются в B.
+
+### Реализовано
+
+- `POST /comparisons` читает ровно две принадлежащие пользователю текущие подтверждённые ревизии, вызывает C `compare_receipts`, сохраняет порядок периодов и отклоняет чужие ID, stale revision и несопоставимую identity. Смешанный synthetic/user dataset маркируется synthetic.
+- `POST /assistant/answers` и `POST /drafts` вызывают публичные функции C с серверным профилем и текущими receipt snapshots. Результаты, `knowledge_version` и provenance сохраняются на 30 дней; чтение пересчитывает stale по ревизии, источникам и каталогу. Черновик редактируется по CAS и имеет 24-часовую идемпотентность; отправки обращений нет.
+- `/catalog` и `/meta.knowledge_version` получают данные из установленного валидированного knowledge bundle, включая `demo-territory`, `moscow`, `moscow-oblast` и 15 тем. Профиль принимает только доверенные territory IDs. Выбор региона пока не означает проверенный местный маршрут: УК и региональные источники не назначены.
+- Опциональный `demo_sample_id` требует точное совпадение ID и SHA/размера/MIME байтов с manifest. Эти байты всё равно идут в реальный OCR job. Обычный upload остаётся `user_provided`; sample fixture не выбирается по имени файла.
+- MAX `initData` проверяется HMAC и временем, после чего выдаётся серверная сессия. Webhook проверяет `X-Max-Bot-Api-Secret`, ограничивает тело и сохраняет минимальное событие до HTTP 200. Dedup уникален в БД; worker обрабатывает личные `/start`, `/help`, текстовые вопросы через C, инструкции для вложений, но не групповой контент. Outbox имеет ограниченные повторы и `uncertain` после неизвестного исхода. `/start` сохраняет inline keyboard `message`/`open_app`; production требует `MAX_WEB_APP`. Секреты и raw initData не логируются.
+
+### Проверки и границы
+
+| Уровень | Доказательство | Итог |
+|---|---|---|
+| Локальный backend | `PYTHONPATH=apps/backend;packages/housing_engine/src`, `%TEMP%/vk_zhkh_b_e2_python/Scripts/python.exe -m pytest apps/backend/tests -q --tb=short` на `362985a` | `26 passed, 3 skipped, 1 Starlette warning`. PG-зависимые тесты пропущены без локального URL. |
+| HTTP contract | `python scripts/check_http_contract.py`; `python scripts/make_e3_compare_example.py` после обновления C | OpenAPI 3.1, 28 операций, 25 примеров; `comparison-complete` несёт текущую версию `1.0.2-e3-regions+dae01cb7efe7`. |
+| Alembic и PG17 Compose | [CI run 36329206031](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36329206031), integration SHA `452c31a3e6de244b17b4a5b2d94aa2e123698430` включает B `6051f43` | Миграция `e3_max_keyboard`, запуск/readiness, E2 PDF/PNG/restart, E3 HTTP comparison/answer/draft и offline PG17 webhook replay пройдены по последовательности workflow; финальный run **failed** на последующем A browser assertion `e3-real-flow.mjs:102`, ожидавшем статус «перед копированием». Production gate `362985a` в этом run ещё не включён; локально проверен. |
+| MAX webhook runtime без send | `scripts/verify_e3_webhook.py` внутри изолированного Compose с случайным secret и пустым bot token в указанном CI run | Wrong secret 403; concurrent duplicate direct event даёт один inbox и один queued outbox, кнопки сохранены. Реальной отправки нет. |
+| Официальный MAX контракт | Проверены 2026-09-27 [WebApp validation](https://dev.max.ru/docs/webapps/validation), [subscriptions](https://dev.max.ru/docs-api/methods/POST/subscriptions), [messages](https://dev.max.ru/docs-api/methods/POST/messages), [keyboard](https://dev.max.ru/docs-api/use-cases/sending-messages/keyboard) | Синтетические HMAC, webhook и wire-body тесты. Нужны действующие token/secret, привязка mini-app и проверка MAX Web/мобильного клиента. |
+| VM и внешний HTTPS | VM SSH доступ координатором подтверждён read-only; E3 release SHA не назначен | B не разворачивал приложение, не менял общий Nginx и не проверял `/team/zhkh/` на VM. Публичная доставка webhook не заявляется. |
+
+### Статус и следующий шаг
+
+E3-B-01 передан на review по code SHA `362985a`; отдельный report SHA — данный commit. Координатор интегрирует production gate, проверяет PG17 шаги и возвращает конкретные B дефекты, если они появятся. Общая E3 browser-приёмка пока блокируется ошибкой A на run 36329206031, а реальный MAX/VM остаётся E4 внешней проверкой. B не начинает E4 без задания и release SHA.
