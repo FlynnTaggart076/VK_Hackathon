@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import type { ComparisonView, ReceiptSummary } from '../api/types';
 import { ErrorMessage } from './errors';
+import { ActionList } from './ActionList';
 
 export function Comparison() {
   const [items, setItems] = useState<ReceiptSummary[]>([]);
@@ -57,7 +58,7 @@ export function Comparison() {
         {result.lines.map((line, index) => <div className="notice-box" key={`${line.older_line_id}-${line.newer_line_id}-${index}`}><h4>{line.label}</h4><p>{line.match_status === 'matched' ? 'Сопоставлена' : line.match_status === 'ambiguous' ? 'Сопоставление неоднозначно' : line.match_status === 'incompatible' ? 'Несовместимая строка' : line.match_status === 'added' ? 'Новая строка' : 'Строка отсутствует в новом документе'}</p><p>{line.explanation}</p><dl className="totals"><div><dt>Разница строки</dt><dd>{line.delta ?? 'не определена'} ₽</dd></div><div><dt>Влияние объёма</dt><dd>{line.quantity_effect ?? 'не определено'} ₽</dd></div><div><dt>Влияние тарифа</dt><dd>{line.tariff_effect ?? 'не определено'} ₽</dd></div></dl></div>)}
       </>}
       {result.issues.map((issue, index) => <p className="review-warning" key={`${issue.code}-${index}`}>{issue.message}</p>)}
-      {result.actions.map((action) => <p key={action.id}>{action.label}</p>)}
+      <ActionList actions={result.actions} />
       <div className="actions"><Link to={`/draft?receipt=${encodeURIComponent(result.newer.id)}`}>Подготовить черновик</Link><Link to="/assistant">Задать вопрос</Link></div>
     </article>}
   </section>;

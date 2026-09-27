@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { Catalog, DraftView, ReceiptView } from '../api/types';
 import { ErrorMessage } from './errors';
+import { ActionList } from './ActionList';
 
 export function Draft({ catalog }: { catalog: Catalog | null }) {
   const [params, setParams] = useSearchParams();
@@ -65,6 +66,7 @@ export function Draft({ catalog }: { catalog: Catalog | null }) {
       {receipt.status !== 'confirmed' && <p className="review-warning">Создать черновик можно после подтверждения квитанции.</p>}
     </div>}
     {receipt && !draft && receipt.status === 'confirmed' && <form onSubmit={(event) => void create(event)}>
+      {!catalog?.topics.length && <p className="notice">Каталог тем пока не загружен. Обновите страницу позднее.</p>}
       <label htmlFor="draft-topic">Тема</label><select id="draft-topic" value={topic} onChange={(event) => setTopic(event.target.value)} required><option value="">Выберите тему</option>{catalog?.topics.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
       <label htmlFor="draft-line">Строка квитанции</label><select id="draft-line" value={lineId} onChange={(event) => setLineId(event.target.value)}><option value="">Без строки</option>{receipt.bill_data.services.map((line) => <option key={line.line_id} value={line.line_id}>{line.raw_name}</option>)}</select>
       <label htmlFor="draft-question">Ваш вопрос</label><textarea id="draft-question" rows={3} maxLength={2000} value={question} onChange={(event) => setQuestion(event.target.value)} />
@@ -72,7 +74,7 @@ export function Draft({ catalog }: { catalog: Catalog | null }) {
     </form>}
     {draft && <article className="answer"><h3>Проверьте текст</h3>
       <p>Получатель: {draft.recipient?.label ?? 'не определён; выберите канал самостоятельно'}</p>
-      {draft.actions.map((action) => <p key={action.id}>{action.label}</p>)}
+      <ActionList actions={draft.actions} />
       {draft.stale && <p className="review-warning">Черновик устарел: исходный документ или сведения изменились.</p>}
       <label htmlFor="draft-text">Текст черновика</label><textarea id="draft-text" rows={12} maxLength={5000} value={text} onChange={(event) => { setText(event.target.value); setStaleApproved(false); }} />
       <div className="actions"><button type="button" disabled={busy || !text.trim()} onClick={() => void save()}>Сохранить изменения</button><button type="button" disabled={busy} onClick={() => void copy()}>Копировать текст</button></div>
