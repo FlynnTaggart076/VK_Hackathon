@@ -1,0 +1,12 @@
+{
+  "user": {
+    "id": "60000000-0000-4000-8000-000000000001"
+  },
+  "profile": {
+    "role": "tenant",
+    "territory_id": "demo-territory",
+    "onboarding_completed": true,
+    "privacy_notice_version": "1.0",
+    "privacy_acknowledged_at": "2026-09-27T10:00:00Z"
+  }
+}

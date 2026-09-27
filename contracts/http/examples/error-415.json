@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": "UNSUPPORTED_MEDIA_TYPE",
+    "message": "Поддерживаются PDF, JPEG и PNG.",
+    "retryable": false,
+    "fields": [],
+    "details": {}
+  },
+  "request_id": "b1399c8c-d010-4e0c-b75f-bd312a647fea"
+}

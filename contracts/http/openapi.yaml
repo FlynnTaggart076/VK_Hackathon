@@ -1,0 +1,803 @@
+﻿openapi: 3.1.0
+info:
+  title: MAX ЖКХ MVP HTTP API
+  version: 1.0.0-e0
+  description: >-
+    P0 HTTP envelope. Engine-owned nested DTO refer to the coordinator-accepted
+    contracts/engine/v1 checkpoint at SHA 89df7e39a165902bf19308cd6512b4a19eb6205b.
+    MAX update envelope follows official Update documentation; event-specific
+    runtime validation remains for E1.
+servers:
+  - url: /team/zhkh
+    description: Public VM prefix; proxy strips this prefix before backend.
+  - url: http://localhost:8080/team/zhkh
+    description: Local Compose prefix.
+tags:
+  - name: meta
+  - name: auth
+  - name: assistant
+  - name: receipts
+  - name: comparisons
+  - name: drafts
+  - name: max
+security:
+  - bearerSession: []
+paths:
+  /api/v1/meta:
+    get:
+      tags: [meta]
+      operationId: getMeta
+      security: []
+      responses:
+        '200':
+          description: Public version, notice, limits and feature flags; no secrets.
+          headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Meta'}
+              examples:
+                default: {$ref: '#/components/examples/Meta'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+  /api/v1/auth/max:
+    post:
+      tags: [auth]
+      operationId: authenticateMax
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MaxAuthRequest'}
+      responses:
+        '200': {$ref: '#/components/responses/AuthResult'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+  /api/v1/auth/demo:
+    post:
+      tags: [auth]
+      operationId: authenticateDemo
+      security: []
+      description: Enabled only in dev/demo with DEMO_AUTH_ENABLED=true.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DemoAuthRequest'}
+      responses:
+        '200': {$ref: '#/components/responses/AuthResult'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+  /api/v1/auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /api/v1/me:
+    get:
+      tags: [auth]
+      operationId: getMe
+      responses:
+        '200': {$ref: '#/components/responses/Me'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /api/v1/me/profile:
+    put:
+      tags: [auth]
+      operationId: updateProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateProfileRequest'}
+      responses:
+        '200': {$ref: '#/components/responses/Profile'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+  /api/v1/catalog:
+    get:
+      tags: [meta]
+      operationId: getCatalog
+      responses:
+        '200': {$ref: '#/components/responses/Catalog'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+  /api/v1/assistant/answers:
+    post:
+      tags: [assistant]
+      operationId: createAnswer
+      description: Unknown topic and clarification are successful structured results.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AnswerRequest'}
+      responses:
+        '200': {$ref: '#/components/responses/Answer'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+  /api/v1/assistant/answers/{id}:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [assistant]
+      operationId: getAnswer
+      responses:
+        '200': {$ref: '#/components/responses/Answer'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/receipts:
+    post:
+      tags: [receipts]
+      operationId: uploadReceipt
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [file]
+              properties:
+                file: {type: string, format: binary, description: 'PDF, JPEG or PNG; at most 10 MiB'}
+            encoding:
+              file:
+                contentType: application/pdf, image/jpeg, image/png
+      responses:
+        '202': {$ref: '#/components/responses/ReceiptQueued'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+    get:
+      tags: [receipts]
+      operationId: listReceipts
+      parameters:
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/Limit'}
+      responses:
+        '200': {$ref: '#/components/responses/ReceiptList'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /api/v1/receipts/manual:
+    post:
+      tags: [receipts]
+      operationId: createManualReceipt
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ManualReceiptRequest'}
+      responses:
+        '201': {$ref: '#/components/responses/Receipt'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+  /api/v1/receipts/demo:
+    post:
+      tags: [receipts]
+      operationId: importDemoReceipt
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DemoReceiptRequest'}
+      responses:
+        '202': {$ref: '#/components/responses/ReceiptQueued'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+  /api/v1/receipts/{id}:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [receipts]
+      operationId: getReceipt
+      responses:
+        '200': {$ref: '#/components/responses/Receipt'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    delete:
+      tags: [receipts]
+      operationId: deleteReceipt
+      description: Idempotent deletion; absent or foreign ID also returns 204.
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /api/v1/receipts/{id}/draft:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    put:
+      tags: [receipts]
+      operationId: editReceipt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/EditReceiptRequest'}
+      responses:
+        '200': {$ref: '#/components/responses/Receipt'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+  /api/v1/receipts/{id}/confirm:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [receipts]
+      operationId: confirmReceipt
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ConfirmReceiptRequest'}
+      responses:
+        '200': {$ref: '#/components/responses/Receipt'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+  /api/v1/receipts/{id}/retry:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [receipts]
+      operationId: retryReceipt
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RetryReceiptRequest'}
+      responses:
+        '202': {$ref: '#/components/responses/ReceiptQueued'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '410': {$ref: '#/components/responses/SourceExpired'}
+        '429': {$ref: '#/components/responses/RateLimited'}
+  /api/v1/receipts/{id}/explanation:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [receipts]
+      operationId: explainReceipt
+      parameters: [{$ref: '#/components/parameters/Revision'}]
+      responses:
+        '200': {$ref: '#/components/responses/Explanation'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+  /api/v1/receipts/{id}/source:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [receipts]
+      operationId: getReceiptSource
+      description: Authenticated bytes, Content-Disposition attachment; never a public URL.
+      responses:
+        '200':
+          description: Original document bytes.
+          headers:
+            X-Request-ID: {$ref: '#/components/headers/RequestId'}
+            Content-Disposition: {description: Attachment filename, schema: {type: string}}
+          content:
+            application/pdf: {schema: {type: string, format: binary}}
+            image/jpeg: {schema: {type: string, format: binary}}
+            image/png: {schema: {type: string, format: binary}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '410': {$ref: '#/components/responses/SourceExpired'}
+  /api/v1/receipts/{id}/pages/{page}:
+    parameters:
+      - {$ref: '#/components/parameters/Id'}
+      - {$ref: '#/components/parameters/Page'}
+    get:
+      tags: [receipts]
+      operationId: getReceiptPage
+      responses:
+        '200':
+          description: Safe raster preview.
+          headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}
+          content:
+            image/png: {schema: {type: string, format: binary}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '410': {$ref: '#/components/responses/SourceExpired'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+  /api/v1/jobs/{id}:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [receipts]
+      operationId: getJob
+      responses:
+        '200': {$ref: '#/components/responses/Job'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/v1/comparisons:
+    post:
+      tags: [comparisons]
+      operationId: compareReceipts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CompareRequest'}
+      responses:
+        '200': {$ref: '#/components/responses/Comparison'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+  /api/v1/drafts:
+    post:
+      tags: [drafts]
+      operationId: createDraft
+      parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateDraftRequest'}
+      responses:
+        '201': {$ref: '#/components/responses/Draft'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+  /api/v1/drafts/{id}:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [drafts]
+      operationId: getDraft
+      responses:
+        '200': {$ref: '#/components/responses/Draft'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    put:
+      tags: [drafts]
+      operationId: editDraft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/EditDraftRequest'}
+      responses:
+        '200': {$ref: '#/components/responses/Draft'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+    delete:
+      tags: [drafts]
+      operationId: deleteDraft
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /integrations/max/webhook:
+    post:
+      tags: [max]
+      operationId: receiveMaxWebhook
+      security:
+        - maxWebhookSecret: []
+      description: >-
+        Verify secret, validate event, atomically deduplicate normalized payload
+        into inbox and acknowledge promptly. Schema of MAX updates must be
+        confirmed against official docs before implementation; no update_id assumed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MaxUpdate'}
+      responses:
+        '200':
+          description: Accepted or duplicate event; processing is asynchronous.
+          headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WebhookAck'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+components:
+  securitySchemes:
+    bearerSession: {type: http, scheme: bearer, bearerFormat: opaque}
+    maxWebhookSecret: {type: apiKey, in: header, name: X-Max-Bot-Api-Secret}
+  headers:
+    RequestId:
+      description: Correlation UUID; contains no user or document data.
+      schema: {$ref: '#/components/schemas/Id'}
+    RetryAfter:
+      description: Seconds before retry.
+      schema: {type: integer, minimum: 1}
+  parameters:
+    Id: {name: id, in: path, required: true, schema: {$ref: '#/components/schemas/Id'}}
+    Page: {name: page, in: path, required: true, schema: {type: integer, minimum: 1}}
+    Revision: {name: revision, in: query, required: true, schema: {type: integer, minimum: 1}}
+    Cursor: {name: cursor, in: query, required: false, schema: {type: string, minLength: 1}}
+    Limit: {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 50, default: 20}}
+    IdempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {$ref: '#/components/schemas/Id'}, description: 'UUID, result retained 24 hours; reuse with different body returns 409.'}
+  schemas:
+    Id: {type: string, format: uuid}
+    Timestamp: {type: string, format: date-time}
+    Period: {type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$'}
+    Money: {type: string, pattern: '^-?(0|[1-9]\d{0,8})\.\d{2}$'}
+    Profile:
+      type: object
+      additionalProperties: false
+      required: [role, territory_id, onboarding_completed, privacy_notice_version, privacy_acknowledged_at]
+      properties:
+        role: {type: string, enum: [owner, tenant, other]}
+        territory_id: {type: [string, 'null']}
+        onboarding_completed: {type: boolean}
+        privacy_notice_version: {type: [string, 'null']}
+        privacy_acknowledged_at: {oneOf: [{$ref: '#/components/schemas/Timestamp'}, {type: 'null'}]}
+    User: {type: object, additionalProperties: false, required: [id], properties: {id: {$ref: '#/components/schemas/Id'}}}
+    UserAndProfile:
+      type: object
+      additionalProperties: false
+      required: [user, profile]
+      properties:
+        user: {$ref: '#/components/schemas/User'}
+        profile: {$ref: '#/components/schemas/Profile'}
+    AuthResponse:
+      type: object
+      additionalProperties: false
+      required: [access_token, token_type, expires_in, user, profile]
+      properties:
+        access_token: {type: string, minLength: 1, description: Opaque 60-minute bearer; never put in URL/logs.}
+        token_type: {type: string, const: bearer}
+        expires_in: {type: integer, const: 3600}
+        user: {$ref: '#/components/schemas/User'}
+        profile: {$ref: '#/components/schemas/Profile'}
+    MaxAuthRequest: {type: object, additionalProperties: false, required: [init_data], properties: {init_data: {type: string, minLength: 1}}}
+    DemoAuthRequest: {type: object, additionalProperties: false, required: [access_code, identity], properties: {access_code: {type: string, minLength: 1}, identity: {type: string, enum: [reviewer_a, reviewer_b]}}}
+    UpdateProfileRequest:
+      type: object
+      additionalProperties: false
+      required: [role, territory_id, privacy_notice_version, privacy_acknowledged]
+      properties:
+        role: {type: string, enum: [owner, tenant, other]}
+        territory_id: {type: [string, 'null']}
+        privacy_notice_version: {type: string, minLength: 1}
+        privacy_acknowledged: {type: boolean, const: true}
+    Meta:
+      type: object
+      additionalProperties: false
+      required: [api_version, engine_version, knowledge_version, mode, limits, features, privacy_notice]
+      properties:
+        api_version: {type: string}
+        engine_version: {type: [string, 'null']}
+        knowledge_version: {type: [string, 'null']}
+        mode: {type: string, enum: [dev, demo, production]}
+        limits:
+          type: object
+          additionalProperties: false
+          required: [upload_max_bytes, pdf_max_pages, receipt_retention_days, source_retention_days]
+          properties:
+            upload_max_bytes: {type: integer, minimum: 1}
+            pdf_max_pages: {type: integer, minimum: 1}
+            receipt_retention_days: {type: integer, minimum: 1}
+            source_retention_days: {type: integer, minimum: 1}
+        features:
+          type: object
+          additionalProperties: false
+          required: [voice, external_submission, receipt_ocr, comparison, engine_stub, demo_auth]
+          properties:
+            voice: {type: boolean, const: false}
+            external_submission: {type: boolean, const: false}
+            receipt_ocr: {type: boolean}
+            comparison: {type: boolean}
+            engine_stub: {type: boolean}
+            demo_auth: {type: boolean}
+        privacy_notice:
+          type: object
+          additionalProperties: false
+          required: [version, text]
+          properties: {version: {type: string}, text: {type: string}}
+    Catalog:
+      type: object
+      additionalProperties: false
+      required: [territories, organizations, topics, service_codes, units, document_kinds, demo_receipts]
+      properties:
+        territories: {type: array, items: {$ref: '#/components/schemas/CatalogItem'}}
+        organizations: {type: array, items: {$ref: '#/components/schemas/CatalogItem'}}
+        topics: {type: array, items: {$ref: '#/components/schemas/CatalogItem'}}
+        service_codes: {type: array, items: {type: string}}
+        units: {type: array, items: {type: string}}
+        document_kinds: {type: array, items: {$ref: '#/components/schemas/DocumentKind'}}
+        demo_receipts:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [fixture_id, label, description]
+            properties: {fixture_id: {type: string}, label: {type: string}, description: {type: string}}
+    AnswerContext:
+      type: object
+      additionalProperties: false
+      required: [territory_id, role, topic_id, organization_id, service_code, document_kind, receipt_id, receipt_revision]
+      properties:
+        territory_id: {type: [string, 'null']}
+        role: {type: [string, 'null'], enum: [owner, tenant, other, null]}
+        topic_id: {type: [string, 'null']}
+        organization_id: {type: [string, 'null']}
+        service_code: {type: [string, 'null']}
+        document_kind: {type: [string, 'null']}
+        receipt_id: {oneOf: [{$ref: '#/components/schemas/Id'}, {type: 'null'}]}
+        receipt_revision: {type: [integer, 'null'], minimum: 1}
+    AnswerRequest: {type: object, additionalProperties: false, required: [question, context], properties: {question: {type: string, minLength: 1, maxLength: 2000}, context: {$ref: '#/components/schemas/AnswerContext'}}}
+    AnswerView:
+      type: object
+      additionalProperties: false
+      required: [id, created_at, stale, stale_reasons, dataset_kind, status, text, topic_id, steps, sources, actions, clarification, limitations, knowledge_version, receipt_ref]
+      properties:
+        id: {$ref: '#/components/schemas/Id'}
+        created_at: {$ref: '#/components/schemas/Timestamp'}
+        stale: {type: boolean}
+        stale_reasons: {type: array, uniqueItems: true, items: {type: string, enum: [receipt_changed, source_expired, knowledge_updated]}}
+        dataset_kind: {type: string, enum: [synthetic, user_provided, public_reference]}
+        status: {$ref: '../engine/v1/AnswerResult.schema.json#/properties/status'}
+        text: {$ref: '../engine/v1/AnswerResult.schema.json#/properties/text'}
+        topic_id: {$ref: '../engine/v1/AnswerResult.schema.json#/properties/topic_id'}
+        steps: {$ref: '../engine/v1/AnswerResult.schema.json#/properties/steps'}
+        sources: {$ref: '../engine/v1/AnswerResult.schema.json#/properties/sources'}
+        actions: {$ref: '../engine/v1/AnswerResult.schema.json#/properties/actions'}
+        clarification: {$ref: '../engine/v1/AnswerResult.schema.json#/properties/clarification'}
+        limitations: {$ref: '../engine/v1/AnswerResult.schema.json#/properties/limitations'}
+        knowledge_version: {$ref: '../engine/v1/AnswerResult.schema.json#/properties/knowledge_version'}
+        receipt_ref: {$ref: '../engine/v1/AnswerResult.schema.json#/properties/receipt_ref'}
+    ReceiptView:
+      type: object
+      additionalProperties: false
+      required: [id, status, revision, created_at, updated_at, dataset_kind, extraction_outcome, bill_data, field_evidence, issues, document, job, confirmed_at, engine_version]
+      properties:
+        id: {$ref: '#/components/schemas/Id'}
+        status: {type: string, enum: [queued, processing, needs_review, confirmed, failed]}
+        revision: {type: integer, minimum: 1}
+        created_at: {$ref: '#/components/schemas/Timestamp'}
+        updated_at: {$ref: '#/components/schemas/Timestamp'}
+        dataset_kind: {type: string, enum: [synthetic, user_provided]}
+        extraction_outcome: {type: [string, 'null'], enum: [recognized, partial, manual_required, null]}
+        bill_data: {$ref: '../engine/v1/BillData.schema.json'}
+        field_evidence: {type: array, items: {$ref: '../engine/v1/FieldEvidence.schema.json'}}
+        issues: {type: array, items: {$ref: '../engine/v1/Issue.schema.json'}}
+        document:
+          type: object
+          additionalProperties: false
+          required: [available, mime_type, page_count, expires_at]
+          properties:
+            available: {type: boolean}
+            mime_type: {type: [string, 'null'], enum: [application/pdf, image/jpeg, image/png, null]}
+            page_count: {type: [integer, 'null'], minimum: 1}
+            expires_at: {oneOf: [{$ref: '#/components/schemas/Timestamp'}, {type: 'null'}]}
+        job:
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [id, state, stage]
+              properties:
+                id: {$ref: '#/components/schemas/Id'}
+                state: {type: string, enum: [queued, running, succeeded, failed]}
+                stage: {type: [string, 'null']}
+            - {type: 'null'}
+        confirmed_at: {oneOf: [{$ref: '#/components/schemas/Timestamp'}, {type: 'null'}]}
+        engine_version: {type: [string, 'null']}
+    ReceiptSummary:
+      type: object
+      additionalProperties: false
+      required: [id, status, revision, period, issuer_name, document_total_due, dataset_kind, created_at, source_available]
+      properties:
+        id: {$ref: '#/components/schemas/Id'}
+        status: {type: string, enum: [queued, processing, needs_review, confirmed, failed]}
+        revision: {type: integer, minimum: 1}
+        period: {oneOf: [{$ref: '#/components/schemas/Period'}, {type: 'null'}]}
+        issuer_name: {type: [string, 'null']}
+        document_total_due: {oneOf: [{$ref: '#/components/schemas/Money'}, {type: 'null'}]}
+        dataset_kind: {type: string, enum: [synthetic, user_provided]}
+        created_at: {$ref: '#/components/schemas/Timestamp'}
+        source_available: {type: boolean}
+    ReceiptQueued:
+      type: object
+      additionalProperties: false
+      required: [receipt, job_id]
+      properties:
+        receipt: {$ref: '#/components/schemas/ReceiptView'}
+        job_id: {$ref: '#/components/schemas/Id'}
+    ReceiptList:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items: {type: array, maxItems: 50, items: {$ref: '#/components/schemas/ReceiptSummary'}}
+        next_cursor: {type: [string, 'null']}
+    ManualReceiptRequest: {type: object, additionalProperties: false, required: [bill_data], properties: {bill_data: {$ref: '../engine/v1/BillData.schema.json'}}}
+    DemoReceiptRequest: {type: object, additionalProperties: false, required: [fixture_id], properties: {fixture_id: {type: string, minLength: 1}}}
+    EditReceiptRequest: {type: object, additionalProperties: false, required: [expected_revision, bill_data], properties: {expected_revision: {type: integer, minimum: 1}, bill_data: {$ref: '../engine/v1/BillData.schema.json'}}}
+    ConfirmReceiptRequest: {type: object, additionalProperties: false, required: [expected_revision, acknowledged_warning_codes], properties: {expected_revision: {type: integer, minimum: 1}, acknowledged_warning_codes: {type: array, uniqueItems: true, items: {type: string}}}}
+    RetryReceiptRequest: {type: object, additionalProperties: false, required: [expected_revision], properties: {expected_revision: {type: integer, minimum: 1}}}
+    Job:
+      type: object
+      additionalProperties: false
+      required: [id, kind, state, stage, receipt_id, error, updated_at]
+      properties:
+        id: {$ref: '#/components/schemas/Id'}
+        kind: {type: string}
+        state: {type: string, enum: [queued, running, succeeded, failed]}
+        stage: {type: [string, 'null']}
+        receipt_id: {oneOf: [{$ref: '#/components/schemas/Id'}, {type: 'null'}]}
+        error: {oneOf: [{$ref: '#/components/schemas/JobError'}, {type: 'null'}]}
+        updated_at: {$ref: '#/components/schemas/Timestamp'}
+    JobError: {type: object, additionalProperties: false, required: [code, message, retryable], properties: {code: {type: string}, message: {type: string}, retryable: {type: boolean}}}
+    ReceiptRef:
+      type: object
+      additionalProperties: false
+      required: [id, revision]
+      properties:
+        id: {$ref: '#/components/schemas/Id'}
+        revision: {type: integer, minimum: 1}
+    CompareRequest:
+      type: object
+      additionalProperties: false
+      required: [left, right, identity_acknowledged]
+      properties:
+        left: {$ref: '#/components/schemas/ReceiptRef'}
+        right: {$ref: '#/components/schemas/ReceiptRef'}
+        identity_acknowledged: {type: boolean}
+    ComparisonView:
+      type: object
+      additionalProperties: false
+      required: [status, older, newer, engine_version, knowledge_version, delta_current_charges, delta_adjustments, delta_total_due, lines, settlement_deltas, unexplained_delta, issues, actions, dataset_kind]
+      properties:
+        dataset_kind: {type: string, enum: [synthetic, user_provided]}
+        status: {$ref: '../engine/v1/ComparisonResult.schema.json#/properties/status'}
+        older: {$ref: '../engine/v1/ComparisonResult.schema.json#/properties/older'}
+        newer: {$ref: '../engine/v1/ComparisonResult.schema.json#/properties/newer'}
+        engine_version: {$ref: '../engine/v1/ComparisonResult.schema.json#/properties/engine_version'}
+        knowledge_version: {$ref: '../engine/v1/ComparisonResult.schema.json#/properties/knowledge_version'}
+        delta_current_charges: {$ref: '../engine/v1/ComparisonResult.schema.json#/properties/delta_current_charges'}
+        delta_adjustments: {$ref: '../engine/v1/ComparisonResult.schema.json#/properties/delta_adjustments'}
+        delta_total_due: {$ref: '../engine/v1/ComparisonResult.schema.json#/properties/delta_total_due'}
+        lines: {$ref: '../engine/v1/ComparisonResult.schema.json#/properties/lines'}
+        settlement_deltas: {$ref: '../engine/v1/ComparisonResult.schema.json#/properties/settlement_deltas'}
+        unexplained_delta: {$ref: '../engine/v1/ComparisonResult.schema.json#/properties/unexplained_delta'}
+        issues: {$ref: '../engine/v1/ComparisonResult.schema.json#/properties/issues'}
+        actions: {$ref: '../engine/v1/ComparisonResult.schema.json#/properties/actions'}
+    CreateDraftRequest:
+      type: object
+      additionalProperties: false
+      required: [topic_id, organization_id, receipt_refs, line_id, user_question]
+      properties:
+        topic_id: {type: string, minLength: 1}
+        organization_id: {type: [string, 'null']}
+        receipt_refs: {type: array, maxItems: 2, items: {$ref: '#/components/schemas/ReceiptRef'}}
+        line_id: {oneOf: [{$ref: '#/components/schemas/Id'}, {type: 'null'}]}
+        user_question: {type: string, maxLength: 2000}
+    EditDraftRequest: {type: object, additionalProperties: false, required: [expected_revision, text], properties: {expected_revision: {type: integer, minimum: 1}, text: {type: string, maxLength: 5000}}}
+    DraftView:
+      type: object
+      additionalProperties: false
+      required: [id, revision, text, recipient, actions, receipt_refs, stale, knowledge_version, created_at, updated_at]
+      properties:
+        id: {$ref: '#/components/schemas/Id'}
+        revision: {type: integer, minimum: 1}
+        text: {type: string, maxLength: 5000}
+        recipient: {$ref: '../engine/v1/DraftResult.schema.json#/properties/recipient'}
+        actions: {$ref: '../engine/v1/DraftResult.schema.json#/properties/actions'}
+        receipt_refs: {type: array, maxItems: 2, items: {$ref: '#/components/schemas/ReceiptRef'}}
+        stale: {type: boolean}
+        knowledge_version: {type: string}
+        created_at: {$ref: '#/components/schemas/Timestamp'}
+        updated_at: {$ref: '#/components/schemas/Timestamp'}
+    WebhookAck: {type: object, additionalProperties: false, required: [accepted], properties: {accepted: {type: boolean, const: true}}}
+    ErrorField: {type: object, additionalProperties: false, required: [path, message], properties: {path: {type: string}, message: {type: string}}}
+    Error:
+      type: object
+      additionalProperties: false
+      required: [code, message, retryable, fields, details]
+      properties:
+        code:
+          type: string
+          enum: [INVALID_REQUEST, INVALID_DOCUMENT, INVALID_PERIOD, AUTH_REQUIRED, INVALID_MAX_AUTH, SESSION_EXPIRED, DEMO_DISABLED, WEBHOOK_FORBIDDEN, NOT_FOUND, REVISION_CONFLICT, IDEMPOTENCY_CONFLICT, INVALID_STATE, RECEIPT_NOT_CONFIRMED, INCOMPARABLE_RECEIPTS, PREVIEW_NOT_READY, SOURCE_EXPIRED, FILE_TOO_LARGE, PAGE_LIMIT_EXCEEDED, IMAGE_TOO_LARGE, UNSUPPORTED_MEDIA_TYPE, VALIDATION_FAILED, WARNINGS_NOT_ACKNOWLEDGED, PRIVACY_NOTICE_REQUIRED, RATE_LIMITED, QUEUE_LIMIT_REACHED, SERVICE_UNAVAILABLE, ENGINE_UNAVAILABLE, PREVIEW_UNAVAILABLE]
+        message: {type: string}
+        retryable: {type: boolean}
+        fields: {type: array, items: {$ref: '#/components/schemas/ErrorField'}}
+        details:
+          type: object
+          description: Only documented safe fields of this error code; no SQL, stack or paths.
+          properties:
+            current_revision: {type: integer, minimum: 1}
+            reasons: {type: array, items: {type: string}}
+          additionalProperties: false
+    ErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required: [error, request_id]
+      properties:
+        error: {$ref: '#/components/schemas/Error'}
+        request_id: {$ref: '#/components/schemas/Id'}
+    CatalogItem:
+      type: object
+      required: [id, label]
+      properties:
+        id: {type: string}
+        label: {type: string}
+      additionalProperties: true
+      description: Catalog-specific public metadata may include synthetic and verified channels.
+    DocumentKind:
+      type: object
+      additionalProperties: false
+      required: [id, label, territory_id]
+      properties:
+        id: {type: string}
+        label: {type: string}
+        territory_id: {type: [string, 'null']}
+    MaxUpdate:
+      type: object
+      required: [update_type, timestamp]
+      properties:
+        update_type: {type: string, minLength: 1}
+        timestamp: {type: integer, format: int64, description: Unix milliseconds}
+      additionalProperties: true
+      description: >-
+        MAX Update envelope per https://dev.max.ru/docs-api/objects/Update.
+        Event-specific fields are retained only as needed and validated per type.
+        No update_id field is assumed.
+  responses:
+    NoContent: {description: Success with no body, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}}
+    AuthResult: {description: Session created, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/AuthResponse'}}}}
+    Me: {description: Current user, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/UserAndProfile'}, examples: {synthetic: {externalValue: './examples/me.json'}}}}}
+    Profile: {description: Updated profile, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/Profile'}}}}
+    Catalog: {description: Public verified catalog, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/Catalog'}, examples: {synthetic: {externalValue: './examples/catalog.json'}}}}}
+    Answer: {description: Answer or structured clarification/unsupported, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/AnswerView'}, examples: {unsupported: {externalValue: './examples/answer-unsupported.json'}, clarification: {externalValue: './examples/answer-clarification.json'}}}}}
+    Receipt: {description: Receipt view, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ReceiptView'}, examples: {synthetic: {externalValue: './examples/receipt-confirmed.json'}, manual_required: {externalValue: './examples/receipt-manual-required.json'}}}}}
+    ReceiptQueued: {description: Accepted processing job, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ReceiptQueued'}, examples: {synthetic: {externalValue: './examples/receipt-queued.json'}}}}}
+    ReceiptList: {description: User-owned receipts, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ReceiptList'}, examples: {synthetic: {externalValue: './examples/receipt-list.json'}}}}}
+    Explanation: {description: Confirmed current revision explanation, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '../engine/v1/ReceiptExplanation.schema.json'}, examples: {incomplete: {externalValue: './examples/explanation-incomplete.json'}}}}}
+    Job: {description: User-owned job, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/Job'}, examples: {queued: {externalValue: './examples/job-queued.json'}}}}}
+    Comparison: {description: 'Complete, partial or identity confirmation result', headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ComparisonView'}, examples: {needs_identity_confirmation: {externalValue: './examples/comparison-identity.json'}, partial: {externalValue: './examples/comparison-partial.json'}}}}}
+    Draft: {description: Editable draft; no send operation, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/DraftView'}, examples: {synthetic: {externalValue: './examples/draft.json'}}}}}
+    BadRequest: {$ref: '#/components/responses/ErrorResponse'}
+    Unauthorized: {description: Missing or invalid session, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorEnvelope'}, examples: {auth_required: {externalValue: './examples/error-401.json'}}}}}
+    Forbidden: {$ref: '#/components/responses/ErrorResponse'}
+    NotFound: {$ref: '#/components/responses/ErrorResponse'}
+    Conflict: {description: 'Revision, idempotency or state conflict', headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorEnvelope'}, examples: {revision: {externalValue: './examples/error-409.json'}, incomparable: {externalValue: './examples/error-409-incomparable.json'}, preview: {externalValue: './examples/error-409-preview.json'}}}}}
+    SourceExpired: {$ref: '#/components/responses/ErrorResponse'}
+    PayloadTooLarge: {description: 'File, page or image exceeds limit', headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorEnvelope'}, examples: {file: {externalValue: './examples/error-413.json'}}}}}
+    UnsupportedMediaType: {$ref: '#/components/responses/ErrorResponse'}
+    ValidationFailed: {description: Invalid fields or unacknowledged warning, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorEnvelope'}, examples: {warnings: {externalValue: './examples/error-422.json'}}}}}
+    RateLimited:
+      description: Rate or queue limit; Retry-After supplied.
+      headers:
+        X-Request-ID: {$ref: '#/components/headers/RequestId'}
+        Retry-After: {$ref: '#/components/headers/RetryAfter'}
+      content: {application/json: {schema: {$ref: '#/components/schemas/ErrorEnvelope'}, examples: {queue: {externalValue: './examples/error-429.json'}}}}
+    ServiceUnavailable: {description: Temporary service or engine failure, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorEnvelope'}, examples: {engine: {externalValue: './examples/error-503.json'}}}}}
+    ErrorResponse:
+      description: Safe structured error envelope; see HTTP/code mapping in spec §7.1.
+      headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}
+      content: {application/json: {schema: {$ref: '#/components/schemas/ErrorEnvelope'}}}
+  examples:
+    Meta:
+      summary: Synthetic local feature flags, never a production claim.
+      externalValue: './examples/meta-dev.json'

@@ -1,0 +1,50 @@
+{
+  "receipt": {
+    "id": "10000000-0000-4000-8000-000000000001",
+    "status": "queued",
+    "revision": 1,
+    "created_at": "2026-09-27T10:00:00Z",
+    "updated_at": "2026-09-27T10:00:00Z",
+    "dataset_kind": "synthetic",
+    "extraction_outcome": null,
+    "bill_data": {
+      "schema_version": "1.0",
+      "period": null,
+      "currency": "RUB",
+      "issuer_name": null,
+      "provider_id": null,
+      "account_number": null,
+      "address_text": null,
+      "template_id": null,
+      "template_version": null,
+      "services": [],
+      "adjustments": [],
+      "settlement": {
+        "formula_kind": "unsupported",
+        "opening_balance": null,
+        "payments_credited": null,
+        "penalties": null,
+        "other_account_changes": null,
+        "document_closing_balance": null
+      },
+      "document_current_charges": null,
+      "document_total_due": null
+    },
+    "field_evidence": [],
+    "issues": [],
+    "document": {
+      "available": true,
+      "mime_type": "application/pdf",
+      "page_count": 1,
+      "expires_at": "2026-10-04T10:00:00Z"
+    },
+    "job": {
+      "id": "30000000-0000-4000-8000-000000000001",
+      "state": "queued",
+      "stage": null
+    },
+    "confirmed_at": null,
+    "engine_version": null
+  },
+  "job_id": "30000000-0000-4000-8000-000000000001"
+}

@@ -1,0 +1,41 @@
+{
+  "territories": [
+    {
+      "id": "demo-territory",
+      "label": "Учебная территория"
+    }
+  ],
+  "organizations": [
+    {
+      "id": "demo-provider",
+      "label": "Учебная управляющая организация",
+      "is_synthetic": true
+    }
+  ],
+  "topics": [
+    {
+      "id": "payment-change",
+      "label": "Изменение суммы"
+    }
+  ],
+  "service_codes": [
+    "cold_water"
+  ],
+  "units": [
+    "m3"
+  ],
+  "document_kinds": [
+    {
+      "id": "bill",
+      "label": "Квитанция",
+      "territory_id": "demo-territory"
+    }
+  ],
+  "demo_receipts": [
+    {
+      "fixture_id": "water-2026-08",
+      "label": "Вода, август",
+      "description": "Синтетическая квитанция"
+    }
+  ]
+}
