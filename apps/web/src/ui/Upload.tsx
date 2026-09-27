@@ -51,6 +51,7 @@ export function Processing({ stub }: { stub: boolean }) {
   const [job, setJob] = useState<Job | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [reload, setReload] = useState(0);
   const pending = useRef<AbortController | null>(null);
 
   async function refresh(id: string) {
@@ -61,7 +62,12 @@ export function Processing({ stub }: { stub: boolean }) {
     catch (cause) { if (!(cause instanceof DOMException && cause.name === 'AbortError')) setError(cause); }
     finally { if (pending.current === controller) { pending.current = null; setBusy(false); } }
   }
-  useEffect(() => { if (jobId) void refresh(jobId); return () => pending.current?.abort(); }, [jobId]);
+  useEffect(() => { if (jobId) void refresh(jobId); return () => pending.current?.abort(); }, [jobId, reload]);
+  useEffect(() => {
+    if (!jobId || !job || !['queued', 'running'].includes(job.state) || error) return;
+    const timer = window.setTimeout(() => setReload((value) => value + 1), 2500);
+    return () => window.clearTimeout(timer);
+  }, [jobId, job, error]);
 
   return <section className="panel">
     <h2>Обработка</h2>
@@ -70,7 +76,11 @@ export function Processing({ stub }: { stub: boolean }) {
       <p>Номер задания: {jobId}</p>
       {busy && <p role="status">Получаем состояние…</p>}
       {job && <p role="status">Состояние: {job.state === 'queued' ? 'в очереди' : job.state === 'running' ? 'обработка выполняется' : job.state === 'failed' ? 'ошибка обработки' : stub ? 'dev обработка завершена без распознавания; требуется ручной ввод' : 'обработка завершена'}.</p>}
+      {job?.stage && <p>Шаг: {job.stage}</p>}
+      {job?.error && <p role="alert">{job.error.message}</p>}
       {stub && <p className="badge">Dev stub: задание завершится без OCR; для платёжки потребуется ручной ввод.</p>}
+      {job?.state === 'succeeded' && job.receipt_id && <p><Link to={`/review?id=${encodeURIComponent(job.receipt_id)}`}>Проверить данные платёжки</Link></p>}
+      {job?.state === 'failed' && <p>Проверьте ошибку задания. Повторная обработка доступна после исправления причины на сервере.</p>}
       <button type="button" onClick={() => void refresh(jobId)} disabled={busy}>Обновить состояние</button>
       <ErrorMessage error={error} />
     </>}

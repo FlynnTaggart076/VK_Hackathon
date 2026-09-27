@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw';
 import { API_BASE } from '../api/client';
-import type { AnswerView, ApiErrorBody, BillData, Catalog, Job, MetaResponse, Profile, ReceiptQueued, ReceiptView, UpdateProfileRequest } from '../api/types';
+import type { AnswerView, ApiErrorBody, BillData, Catalog, Job, MetaResponse, Profile, ReceiptExplanation, ReceiptQueued, ReceiptView, UpdateProfileRequest } from '../api/types';
 
 const requestId = 'b1399c8c-d010-4e0c-b75f-bd312a647fea';
 const receiptId = '10000000-0000-4000-8000-000000000001';
@@ -24,19 +24,19 @@ function authError(request: Request): HttpResponse<ApiErrorBody> | null {
 const newProfile: Profile = { role: 'other', territory_id: null, onboarding_completed: false,
   privacy_notice_version: null, privacy_acknowledged_at: null };
 let profile: Profile = { ...newProfile };
-export function resetMockState(): void { profile = { ...newProfile }; }
+export function resetMockState(): void { profile = { ...newProfile }; currentReceipt = { ...queuedReceipt }; jobReads = 0; }
 const catalog: Catalog = {
   territories: [{ id: 'demo-territory', label: 'Учебная территория' }], organizations: [], topics: [],
   service_codes: [], units: [], document_kinds: [], demo_receipts: [],
 };
 
 const bill: BillData = {
-  schema_version: '1.0', period: '2026-08', currency: 'RUB', issuer_name: 'Учебная управляющая организация',
-  provider_id: 'demo-provider', account_number: '000123', address_text: 'Учебный город, Примерная улица, дом 1, квартира 1',
+  schema_version: '1.0', period: '2026-08', currency: 'RUB', issuer_name: 'Demo Housing Organization',
+  provider_id: null, account_number: '000123', address_text: 'Demo City, Example Street 1, Flat 1',
   template_id: 'demo-bill-v1', template_version: '1.0',
-  services: [{ line_id: '20000000-0000-4000-8000-000000000001', raw_name: 'Холодная вода', service_code: 'cold_water',
+  services: [{ line_id: '20000000-0000-4000-8000-000000000001', raw_name: 'Cold water (m3)', service_code: 'cold_water',
     scope: 'individual', unit: 'm3', unit_label: null, quantity: '5.000000', tariff: '40.000000', charge_amount: '200.00',
-    supplier_key: 'demo-provider', segment_key: null, calculation_kind: 'simple_product' }],
+    supplier_key: null, segment_key: null, calculation_kind: 'simple_product' }],
   adjustments: [], settlement: { formula_kind: 'signed_balance_v1', opening_balance: '0.00', payments_credited: '0.00',
     penalties: '0.00', other_account_changes: '0.00', document_closing_balance: '200.00' },
   document_current_charges: '200.00', document_total_due: '200.00',
@@ -58,7 +58,7 @@ const partialReceipt: ReceiptView = {
 const meta: MetaResponse = {
   api_version: '1.0', engine_version: 'mock-engine-1', knowledge_version: 'mock-knowledge-1', mode: 'dev',
   limits: { upload_max_bytes: 10485760, pdf_max_pages: 3, receipt_retention_days: 30, source_retention_days: 7 },
-  features: { voice: false, external_submission: false, receipt_ocr: false, comparison: false, engine_stub: true, demo_auth: true },
+  features: { voice: false, external_submission: false, receipt_ocr: true, comparison: false, engine_stub: false, demo_auth: true },
   privacy_notice: { version: 'mock-1', text: 'Учебные данные. Не загружайте настоящие документы.' },
 };
 const queuedReceipt: ReceiptView = {
@@ -76,6 +76,14 @@ const queuedReceipt: ReceiptView = {
 const queuedJob: Job = { id: queuedReceipt.job!.id, kind: 'receipt_ocr', state: 'queued', stage: null,
   receipt_id: receiptId, error: null, updated_at: now };
 const queued: ReceiptQueued = { receipt: queuedReceipt, job_id: queuedJob.id };
+let currentReceipt: ReceiptView = { ...queuedReceipt };
+let jobReads = 0;
+const previewPng = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z7rUAAAAASUVORK5CYII='), (char) => char.charCodeAt(0));
+async function syntheticPreview(): Promise<Uint8Array> {
+  if (typeof window === 'undefined') return previewPng;
+  const response = await fetch('/team/zhkh/synthetic-receipt.png');
+  return response.ok ? new Uint8Array(await response.arrayBuffer()) : previewPng;
+}
 
 export const handlers = [
   http.get(`*${API_BASE}/meta`, () => HttpResponse.json(meta, { headers: { 'X-Request-ID': requestId } })),
@@ -125,7 +133,7 @@ export const handlers = [
     const denied = authError(request); if (denied) return denied;
     if (params.id === partialReceiptId) return HttpResponse.json(partialReceipt);
     if (params.id !== receiptId) return error(404, 'NOT_FOUND', 'Документ не найден.');
-    return HttpResponse.json(queuedReceipt, { headers: { 'X-Request-ID': requestId } });
+    return HttpResponse.json(currentReceipt, { headers: { 'X-Request-ID': requestId } });
   }),
   http.post(`*${API_BASE}/receipts`, async ({ request }) => {
     const denied = authError(request); if (denied) return denied;
@@ -137,15 +145,73 @@ export const handlers = [
     if (file.name.includes('conflict')) return error(409, 'IDEMPOTENCY_CONFLICT', 'Повторный ключ использован с другим файлом.');
     if (file.size > meta.limits.upload_max_bytes) return error(413, 'FILE_TOO_LARGE', 'Файл превышает 10 МБ.');
     if (!['application/pdf', 'image/png', 'image/jpeg'].includes(file.type)) return error(415, 'UNSUPPORTED_MEDIA_TYPE', 'Формат не поддерживается.');
-    return HttpResponse.json({ ...queued, receipt: { ...queued.receipt, document: { ...queued.receipt.document, mime_type: file.type } } }, { status: 202 });
+    currentReceipt = { ...queuedReceipt, document: { ...queuedReceipt.document, mime_type: file.type as ReceiptView['document']['mime_type'] } };
+    jobReads = 0;
+    return HttpResponse.json({ ...queued, receipt: currentReceipt }, { status: 202 });
   }),
   http.get(`*${API_BASE}/jobs/:id`, ({ request, params }) => {
     const denied = authError(request); if (denied) return denied;
     if (params.id !== queuedJob.id) return error(404, 'NOT_FOUND', 'Задание не найдено.');
-    return HttpResponse.json(queuedJob);
+    jobReads += 1;
+    if (jobReads >= 3 && currentReceipt.status === 'queued') currentReceipt = { ...partialReceipt, id: receiptId, dataset_kind: 'synthetic',
+      document: currentReceipt.document, job: { id: queuedJob.id, state: 'succeeded', stage: 'completed' } };
+    const state: Job['state'] = jobReads === 1 ? 'queued' : jobReads === 2 ? 'running' : 'succeeded';
+    return HttpResponse.json({ ...queuedJob, state, stage: state === 'queued' ? null : state === 'running' ? 'ocr' : 'completed' });
   }),
-  http.put(`*${API_BASE}/receipts/:id/draft`, ({ request }) => {
-    if (!authorized(request)) return error(401, 'AUTH_REQUIRED', 'Для изменения нужен вход.');
-    return error(409, 'REVISION_CONFLICT', 'Документ изменён в другой вкладке. Загрузите актуальную версию.');
+  http.put(`*${API_BASE}/receipts/:id/draft`, async ({ request, params }) => {
+    const denied = authError(request); if (denied) return denied;
+    if (params.id !== receiptId) return error(404, 'NOT_FOUND', 'Документ не найден.');
+    const body = await request.json() as { expected_revision: number; bill_data: BillData };
+    if (currentReceipt.status === 'queued' || body.expected_revision !== currentReceipt.revision)
+      return error(409, 'REVISION_CONFLICT', 'Ревизия изменилась или обработка ещё идёт.');
+    if (!body.bill_data.period || body.bill_data.services.length === 0 || body.bill_data.services.some((line) => !line.raw_name || !line.charge_amount) || body.bill_data.adjustments.some((item) => item.amount === null))
+      return error(422, 'VALIDATION_FAILED', 'Заполните период, строки начислений и суммы перерасчётов.');
+    currentReceipt = { ...currentReceipt, status: 'needs_review', revision: currentReceipt.revision + 1,
+      bill_data: { ...body.bill_data,
+        template_id: currentReceipt.bill_data.template_id, template_version: currentReceipt.bill_data.template_version,
+        services: body.bill_data.services.map((line) => ({ ...line, calculation_kind: currentReceipt.bill_data.services.find((old) => old.line_id === line.line_id)?.calculation_kind ?? 'document_amount' })),
+        settlement: { ...body.bill_data.settlement, formula_kind: currentReceipt.bill_data.settlement.formula_kind } },
+      field_evidence: [{ path: '/services/0/charge_amount', source: 'manual', page_number: null, bbox: null,
+        source_text: null, needs_review: false, reason: null }] };
+    return HttpResponse.json(currentReceipt);
+  }),
+  http.post(`*${API_BASE}/receipts/:id/confirm`, async ({ request, params }) => {
+    const denied = authError(request); if (denied) return denied;
+    if (params.id !== receiptId) return error(404, 'NOT_FOUND', 'Документ не найден.');
+    const body = await request.json() as { expected_revision: number; acknowledged_warning_codes: string[] };
+    if (body.expected_revision !== currentReceipt.revision) return error(409, 'REVISION_CONFLICT', 'Ревизия изменилась.');
+    if (currentReceipt.status !== 'needs_review') return error(409, 'INVALID_STATE', 'Документ не готов к подтверждению.');
+    if (currentReceipt.issues.some((issue) => issue.severity === 'warning' && !body.acknowledged_warning_codes.includes(issue.code)))
+      return error(422, 'WARNINGS_NOT_ACKNOWLEDGED', 'Примите предупреждения.');
+    currentReceipt = { ...currentReceipt, status: 'confirmed', revision: currentReceipt.revision + 1, confirmed_at: now };
+    return HttpResponse.json(currentReceipt);
+  }),
+  http.get(`*${API_BASE}/receipts/:id/explanation`, ({ request, params }) => {
+    const denied = authError(request); if (denied) return denied;
+    if (params.id !== receiptId) return error(404, 'NOT_FOUND', 'Документ не найден.');
+    if (currentReceipt.status !== 'confirmed') return error(409, 'RECEIPT_NOT_CONFIRMED', 'Сначала подтвердите документ.');
+    const explanation: ReceiptExplanation = {
+      receipt_ref: { id: receiptId, revision: currentReceipt.revision }, engine_version: 'mock-engine-1', knowledge_version: 'mock-knowledge-1',
+      summary: 'Учебное объяснение синтетической платёжки. Сверьте данные с исходником.',
+      current_charges: currentReceipt.bill_data.document_current_charges,
+      document_total_due: currentReceipt.bill_data.document_total_due,
+      calculated_closing_balance: null, calculated_total_due: null, unexplained_difference: null,
+      reconciliation_checks: [], reconciliation_status: 'incomplete',
+      lines: currentReceipt.bill_data.services.map((line) => ({ line_id: line.line_id, title: line.raw_name,
+        explanation: 'Сумма взята из подтверждённых данных пользователя; тариф не проверен.', formula_text: null,
+        calculated_amount: null, difference: null, issues: [] })),
+      balance_components: [], issues: currentReceipt.issues, sources: [], actions: [],
+    };
+    return HttpResponse.json(explanation);
+  }),
+  http.get(`*${API_BASE}/receipts/:id/pages/:page`, async ({ request, params }) => {
+    const denied = authError(request); if (denied) return denied;
+    if (params.id !== receiptId || params.page !== '1') return error(404, 'NOT_FOUND', 'Страница не найдена.');
+    return new HttpResponse(await syntheticPreview(), { headers: { 'Content-Type': 'image/png' } });
+  }),
+  http.get(`*${API_BASE}/receipts/:id/source`, async ({ request, params }) => {
+    const denied = authError(request); if (denied) return denied;
+    if (params.id !== receiptId) return error(404, 'NOT_FOUND', 'Файл не найден.');
+    return new HttpResponse(await syntheticPreview(), { headers: { 'Content-Type': 'image/png' } });
   }),
 ];

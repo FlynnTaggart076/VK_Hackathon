@@ -1,0 +1,150 @@
+name: E2 Compose smoke
+
+on:
+  push:
+    branches: [integration/e2]
+    paths:
+      - .github/workflows/e2-compose-smoke.yml
+      - apps/**
+      - infra/**
+      - compose.yaml
+      - compose.local.yaml
+      - fixtures/**
+      - scripts/**
+
+jobs:
+  compose-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build and start isolated dev stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          export POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+          export DEMO_ACCESS_CODE="$(openssl rand -hex 24)"
+          export APP_MODE=dev ENGINE_MODE=real DEMO_AUTH_ENABLED=true LOCAL_WEB_PORT=18081
+          project="zhkh-e2-ci-${GITHUB_RUN_ID}"
+          compose=(docker compose -p "$project" -f compose.yaml -f compose.local.yaml)
+          on_exit() {
+            status=$?
+            if [[ -n "${vite_pid:-}" ]]; then kill "$vite_pid" 2>/dev/null || true; fi
+            if (( status != 0 )); then "${compose[@]}" logs --no-color --tail=120 || true; fi
+          }
+          trap on_exit EXIT
+          "${compose[@]}" config --quiet
+          if ! "${compose[@]}" up --build --detach > /tmp/zhkh-e2-build.log 2>&1; then
+            build_error="$(tail -n 20 /tmp/zhkh-e2-build.log | tail -c 2200 | tr '\r\n' '  ' | sed -E 's#(postgresql\+psycopg://zhkh:)[^@ ]+#\1***#g')"
+            echo "::error title=E2 Compose build::$build_error"
+            exit 1
+          fi
+          ready_code=000
+          for attempt in $(seq 1 40); do
+            ready_code="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18081/team/zhkh/health/ready || true)"
+            if [[ "$ready_code" == 200 ]]; then break; fi
+            sleep 3
+          done
+          if [[ "$ready_code" != 200 ]]; then
+            web_code="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18081/team/zhkh/ || true)"
+            running="$("${compose[@]}" ps --status running --services | paste -sd, -)"
+            echo "::error title=E2 readiness timeout::ready HTTP $ready_code; web HTTP $web_code; running services $running"
+            worker_log="$("${compose[@]}" logs --no-color --tail=12 worker 2>&1 | tail -c 2400 | tr '\r\n' '  ' | sed -E 's#(postgresql\+psycopg://zhkh:)[^@ ]+#\1***#g')"
+            echo "::error title=E2 worker diagnostic::$worker_log"
+            exit 1
+          fi
+          "${compose[@]}" exec -T web nginx -t
+          web_code="$(curl --silent --output /tmp/zhkh-e2-index.html --write-out '%{http_code}' http://127.0.0.1:18081/team/zhkh/ || true)"
+          meta_code="$(curl --silent --output /tmp/zhkh-e2-meta.json --write-out '%{http_code}' http://127.0.0.1:18081/team/zhkh/api/v1/meta || true)"
+          if [[ "$web_code" != 200 || "$meta_code" != 200 ]]; then
+            echo "::error title=E2 route smoke::web HTTP $web_code; meta HTTP $meta_code"
+            exit 1
+          fi
+          running="$("${compose[@]}" ps --status running --services | paste -sd, -)"
+          if [[ ",$running," != *,worker,* ]]; then
+            echo "::error title=E2 worker smoke::worker is not running; running services $running"
+            exit 1
+          fi
+          asset_path="$(python3 -c 'import re; page=open("/tmp/zhkh-e2-index.html").read(); match=re.search(r"/team/zhkh/assets/[^\" ]+\.js", page); print(match.group(0) if match else "")')"
+          asset_code="$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:18081$asset_path" || true)"
+          deep_code="$(curl --silent --output /dev/null --write-out '%{http_code}' 'http://127.0.0.1:18081/team/zhkh/processing?job=synthetic' || true)"
+          if [[ -z "$asset_path" || "$asset_code" != 200 || "$deep_code" != 200 ]]; then
+            echo "::error title=E2 SPA routes::asset HTTP $asset_code; deep link HTTP $deep_code; asset path present $([[ -n "$asset_path" ]] && echo yes || echo no)"
+            exit 1
+          fi
+          python3 -c 'import json; data=json.load(open("/tmp/zhkh-e2-meta.json")); assert data["features"]["engine_stub"] is False and data["features"]["receipt_ocr"] is True'
+          version="$("${compose[@]}" exec -T db psql -U zhkh -d zhkh -Atqc 'SHOW server_version_num')"
+          test "$version" -ge 170000
+          export BASE_URL=http://127.0.0.1:18081/team/zhkh
+          if ! python3 scripts/smoke_e2_http.py start --state /tmp/zhkh-e2-state.json > /tmp/zhkh-e2-start.log 2>&1; then
+            echo "::error title=E2 HTTP start::$(tail -n 15 /tmp/zhkh-e2-start.log | tr '\r\n' '  ' | tail -c 1800)"
+            exit 1
+          fi
+          "${compose[@]}" restart api worker
+          restarted=000
+          for attempt in $(seq 1 30); do
+            restarted="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18081/team/zhkh/health/ready || true)"
+            if [[ "$restarted" == 200 ]]; then break; fi
+            sleep 2
+          done
+          if [[ "$restarted" != 200 ]]; then
+            echo "::error title=E2 restart readiness::HTTP $restarted"
+            exit 1
+          fi
+          if ! python3 scripts/smoke_e2_http.py verify --state /tmp/zhkh-e2-state.json > /tmp/zhkh-e2-verify.log 2>&1; then
+            echo "::error title=E2 HTTP persistence::$(tail -n 15 /tmp/zhkh-e2-verify.log | tr '\r\n' '  ' | tail -c 1800)"
+            exit 1
+          fi
+          if ! "${compose[@]}" run --rm --no-deps -v "$GITHUB_WORKSPACE:/repo:ro" \
+              -e PYTHONPATH=/workspace worker python /repo/scripts/verify_e2_process_tree.py \
+              > /tmp/zhkh-e2-tree-test.log 2>&1; then
+            echo "::error title=E2 OCR process tree::$(tail -n 20 /tmp/zhkh-e2-tree-test.log | tr '\r\n' '  ' | tail -c 1800)"
+            exit 1
+          fi
+          if ! (cd apps/web && npm ci --no-audit --no-fund) > /tmp/zhkh-e2-npm.log 2>&1; then
+            echo "::error title=E2 frontend dependencies::$(tail -n 20 /tmp/zhkh-e2-npm.log | tr '\r\n' '  ' | tail -c 1800)"
+            exit 1
+          fi
+          chrome_path="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [[ -z "$chrome_path" ]]; then
+            echo '::error title=E2 browser::Chrome/Chromium binary unavailable on CI runner'
+            exit 1
+          fi
+          (cd apps/web && E2_API_PROXY_TARGET=http://127.0.0.1:18081 npm run dev:real -- --port 5173 --strictPort) > /tmp/zhkh-e2-vite.log 2>&1 &
+          vite_pid=$!
+          vite_code=000
+          for attempt in $(seq 1 30); do
+            vite_code="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:5173/team/zhkh/ || true)"
+            if [[ "$vite_code" == 200 ]]; then break; fi
+            sleep 2
+          done
+          if [[ "$vite_code" != 200 ]]; then
+            echo "::error title=E2 Vite dev real::HTTP $vite_code; $(tail -n 15 /tmp/zhkh-e2-vite.log | tr '\r\n' '  ' | tail -c 1200)"
+            exit 1
+          fi
+          if ! BASE_URL=http://127.0.0.1:5173/team/zhkh/ CHROME_PATH="$chrome_path" \
+              node apps/web/scripts/e2-real-flow.mjs > /tmp/zhkh-e2-browser.log 2>&1; then
+            echo "::error title=E2 real browser::$(tail -n 20 /tmp/zhkh-e2-browser.log | tr '\r\n' '  ' | tail -c 1800)"
+            exit 1
+          fi
+          browser_receipt="$(python3 -c 'import json; print(json.load(open("/tmp/zhkh-e2-browser.log"))["receiptId"])')"
+          "${compose[@]}" restart api worker
+          ui_restarted=000
+          for attempt in $(seq 1 30); do
+            ui_restarted="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18081/team/zhkh/health/ready || true)"
+            if [[ "$ui_restarted" == 200 ]]; then break; fi
+            sleep 2
+          done
+          if [[ "$ui_restarted" != 200 ]]; then
+            echo "::error title=E2 UI receipt restart::readiness HTTP $ui_restarted"
+            exit 1
+          fi
+          if ! python3 -c 'import os,sys; from scripts.smoke_e2_http import authenticate,request; base=os.environ["BASE_URL"]; token=authenticate(base,os.environ["DEMO_ACCESS_CODE"]); rid=sys.argv[1]; rec=request(base,"GET",f"/api/v1/receipts/{rid}",token=token); assert rec["status"]=="confirmed" and rec["revision"]==3 and rec["bill_data"]["issuer_name"].endswith(" (reviewed)"); explanation=request(base,"GET",f"/api/v1/receipts/{rid}/explanation?revision=3",token=token); assert explanation["calculated_total_due"]=="200.00"' "$browser_receipt" \
+              > /tmp/zhkh-e2-ui-restart.log 2>&1; then
+            echo "::error title=E2 UI receipt persistence::$(tail -n 15 /tmp/zhkh-e2-ui-restart.log | tr '\r\n' '  ' | tail -c 1800)"
+            exit 1
+          fi
+          echo 'E2 Compose PG17, real PDF/PNG OCR, 360px browser edit/confirm/explain, same receipt after restart, Linux OCR tree kill: OK'

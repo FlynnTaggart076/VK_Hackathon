@@ -16,7 +16,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from PIL import Image, UnidentifiedImageError
 from pypdf import PdfReader
 from starlette.concurrency import run_in_threadpool
@@ -311,7 +311,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if settings.mode != "dev":
             raise RuntimeError("MemoryStore is dev-only")
         store = MemoryStore(settings)
-    app = FastAPI(title="MAX ЖКХ backend", version="1.0.0-e1-dev", root_path=os.getenv("APP_ROOT_PATH", "/team/zhkh"))
+    app = FastAPI(title="MAX ЖКХ backend", version="1.0.0-e2-dev", root_path=os.getenv("APP_ROOT_PATH", "/team/zhkh"))
     app.state.store = store
 
     @app.middleware("http")
@@ -349,11 +349,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/v1/meta")
     def meta():
-        return {"api_version": "1.0", "engine_version": None, "knowledge_version": None,
+        return {"api_version": "1.0", "engine_version": "0.1.0" if settings.engine_mode == "real" else None,
+                "knowledge_version": "0.0.0-e2-arithmetic-only" if settings.engine_mode == "real" else None,
                 "mode": settings.mode,
                 "limits": {"upload_max_bytes": settings.upload_max_bytes, "pdf_max_pages": settings.pdf_max_pages,
                            "receipt_retention_days": 30, "source_retention_days": 7},
-                "features": {"voice": False, "external_submission": False, "receipt_ocr": False,
+                "features": {"voice": False, "external_submission": False,
+                             "receipt_ocr": settings.engine_mode == "real",
                              "comparison": False, "engine_stub": settings.engine_mode == "stub",
                              "demo_auth": settings.demo_auth_enabled},
                 "privacy_notice": {"version": settings.privacy_notice_version,
@@ -425,9 +427,155 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise ApiError(422, "VALIDATION_FAILED", "Выберите демообразец.")
         return await run_in_threadpool(store.import_demo, user_id, idempotency_key, body["fixture_id"])
 
+    @app.post("/api/v1/receipts/manual", status_code=201)
+    async def create_manual_receipt(request: Request,
+                                    idempotency_key: str = Header(alias="Idempotency-Key"),
+                                    user_id: str = Depends(current_user)):
+        if not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Для ручного ввода нужна постоянная БД.")
+        try:
+            uuid.UUID(idempotency_key)
+        except ValueError:
+            raise ApiError(422, "VALIDATION_FAILED", "Idempotency-Key должен быть UUID.") from None
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректный JSON.") from None
+        if not isinstance(body, dict) or set(body) != {"bill_data"}:
+            raise ApiError(422, "VALIDATION_FAILED", "Укажите данные квитанции.")
+        from app.services.engine_adapter import bill_from_client, validation_json
+        from app.services.revision_logic import rebase_evidence
+
+        bill = bill_from_client(body["bill_data"], manual=True)
+        data = bill.model_dump(mode="json")
+        evidence = rebase_evidence({}, data, [])
+        return await run_in_threadpool(store.create_manual, user_id, idempotency_key,
+                                       data, evidence, validation_json(bill))
+
     @app.get("/api/v1/receipts/{receipt_id}")
     def get_receipt(receipt_id: uuid.UUID, user_id: str = Depends(current_user)):
         return store.receipt(user_id, str(receipt_id))
+
+    @app.get("/api/v1/receipts")
+    def list_receipts(cursor: str | None = None, limit: int = 20,
+                      user_id: str = Depends(current_user)):
+        if not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Для списка квитанций нужна постоянная БД.")
+        return store.list_receipts(user_id, cursor, limit)
+
+    @app.get("/api/v1/receipts/{receipt_id}/source")
+    def get_receipt_source(receipt_id: uuid.UUID, user_id: str = Depends(current_user)):
+        if not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Для хранения документа нужна постоянная БД.")
+        content, mime = store.source(user_id, str(receipt_id))
+        suffix = {"application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png"}[mime]
+        return Response(content=content, media_type=mime,
+                        headers={"Content-Disposition": f'attachment; filename="receipt.{suffix}"',
+                                 "Cache-Control": "no-store"})
+
+    @app.get("/api/v1/receipts/{receipt_id}/pages/{page}")
+    def get_receipt_page(receipt_id: uuid.UUID, page: int,
+                         user_id: str = Depends(current_user)):
+        if not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Для страницы нужна постоянная БД.")
+        return Response(content=store.page(user_id, str(receipt_id), page),
+                        media_type="image/png", headers={"Cache-Control": "no-store"})
+
+    @app.delete("/api/v1/receipts/{receipt_id}", status_code=204)
+    def delete_receipt(receipt_id: uuid.UUID, user_id: str = Depends(current_user)):
+        if not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Для удаления нужна постоянная БД.")
+        store.delete_receipt(user_id, str(receipt_id))
+        return Response(status_code=204)
+
+    @app.put("/api/v1/receipts/{receipt_id}/draft")
+    async def edit_receipt(receipt_id: uuid.UUID, request: Request,
+                           user_id: str = Depends(current_user)):
+        if not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Для правки нужна постоянная БД.")
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректный JSON.") from None
+        if not isinstance(body, dict) or set(body) != {"expected_revision", "bill_data"} or \
+                type(body["expected_revision"]) is not int or body["expected_revision"] < 1:
+            raise ApiError(422, "VALIDATION_FAILED", "Укажите версию и данные квитанции.")
+        from app.services.engine_adapter import bill_from_client, validation_json
+        from app.services.revision_logic import rebase_evidence
+
+        previous = store.receipt(user_id, str(receipt_id))
+        if previous["revision"] != body["expected_revision"]:
+            raise ApiError(409, "REVISION_CONFLICT", "Квитанция изменена; обновите данные.",
+                           details={"current_revision": previous["revision"]})
+        canonical = bill_from_client(body["bill_data"], previous["bill_data"])
+        data = canonical.model_dump(mode="json")
+        validation = validation_json(canonical)
+        evidence = rebase_evidence(previous["bill_data"], data, previous["field_evidence"])
+        return await run_in_threadpool(
+            store.edit_revision, user_id, str(receipt_id), body["expected_revision"], data,
+            evidence, previous["issues"], validation, previous["engine_version"] or "manual-v1",
+        )
+
+    @app.post("/api/v1/receipts/{receipt_id}/confirm")
+    async def confirm_receipt(receipt_id: uuid.UUID, request: Request,
+                              idempotency_key: str = Header(alias="Idempotency-Key"),
+                              user_id: str = Depends(current_user)):
+        if not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Для подтверждения нужна постоянная БД.")
+        try:
+            uuid.UUID(idempotency_key)
+        except ValueError:
+            raise ApiError(422, "VALIDATION_FAILED", "Idempotency-Key должен быть UUID.") from None
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректный JSON.") from None
+        if not isinstance(body, dict) or set(body) != {"expected_revision", "acknowledged_warning_codes"} or \
+                type(body["expected_revision"]) is not int or body["expected_revision"] < 1 or \
+                not isinstance(body["acknowledged_warning_codes"], list) or \
+                any(not isinstance(code, str) or not code for code in body["acknowledged_warning_codes"]) or \
+                len(set(body["acknowledged_warning_codes"])) != len(body["acknowledged_warning_codes"]):
+            raise ApiError(422, "VALIDATION_FAILED", "Проверьте версию и предупреждения.")
+        return await run_in_threadpool(
+            store.confirm_revision, user_id, str(receipt_id), body["expected_revision"],
+            body["acknowledged_warning_codes"], idempotency_key,
+        )
+
+    @app.post("/api/v1/receipts/{receipt_id}/retry", status_code=202)
+    async def retry_receipt(receipt_id: uuid.UUID, request: Request,
+                            idempotency_key: str = Header(alias="Idempotency-Key"),
+                            user_id: str = Depends(current_user)):
+        if not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Для повтора нужна постоянная БД.")
+        try:
+            uuid.UUID(idempotency_key)
+        except ValueError:
+            raise ApiError(422, "VALIDATION_FAILED", "Idempotency-Key должен быть UUID.") from None
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректный JSON.") from None
+        if not isinstance(body, dict) or set(body) != {"expected_revision"} or \
+                type(body["expected_revision"]) is not int or body["expected_revision"] < 1:
+            raise ApiError(422, "VALIDATION_FAILED", "Укажите текущую версию.")
+        return await run_in_threadpool(store.retry_receipt, user_id, str(receipt_id),
+                                       body["expected_revision"], idempotency_key)
+
+    @app.get("/api/v1/receipts/{receipt_id}/explanation")
+    def explain_receipt(receipt_id: uuid.UUID, revision: int,
+                        user_id: str = Depends(current_user)):
+        if not settings.database_url:
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Для объяснения нужна постоянная БД.")
+        if revision < 1:
+            raise ApiError(422, "VALIDATION_FAILED", "Версия должна быть положительной.")
+        from app.services.engine_adapter import explain_json
+        from housing_engine import EngineError
+
+        bill, confirmed_at, territory = store.explanation_snapshot(user_id, str(receipt_id), revision)
+        try:
+            return explain_json(receipt_id, revision, bill, confirmed_at, territory)
+        except EngineError as exc:
+            raise ApiError(503 if exc.retryable else 422, exc.code, exc.message, retryable=exc.retryable) from None
 
     @app.get("/api/v1/jobs/{job_id}")
     def get_job(job_id: uuid.UUID, user_id: str = Depends(current_user)):

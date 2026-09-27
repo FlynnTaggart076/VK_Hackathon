@@ -1,59 +1,42 @@
-# Отчёт агента C
+﻿# Отчёт агента C — E2-C-01
 
-- Task ID: `E1-C-01`; этап E1; ветка `agent-c/e1`; статус: `review`.
-- BASE_SHA: `feb1fc7ab12201e6d5a93989d64a8374fe44a139`; TASK_COMMIT: `4449864e24686472130b2569be04b349ed862834`; контракт: engine/HTTP 1.0, DTO v1 не менялись.
-- Code commits: `e58a28aedddad3a8433368f19f3db45c299cd0da` (основная реализация), `d1d6426502a5ddbc0591302903b0e311036fc3d3` (точность Decimal на максимальных значениях). Документация фактического OCR: `ed649aa3c3d4f2850f67ff3b84b5161351c72a3d` (последний pushed SHA до отчёта). SHA отдельного commit отчёта передаётся координатору после push.
-- Принятая история E0: code `8114fd6de0d7112f529012967aaadb6fadedbf92`, report `09a20b1ea6b271138351775b5c38a7d5465e718b`.
+- Этап E2, ветка `agent-c/e2`, статус `review`.
+- BASE_SHA `dae14d9a838154b72e4cf122881b190032ae0a74`; TASK_COMMIT `f613288e5b0a9bc733e6653ba9706bea7e3313d9`; engine/HTTP 1.0, DTO/schema v1 не менялись.
+- Pushed code SHA: checkpoint `7242082cb940c8b05c0435b4802d2220710fa8e7`; основной E2 код `6b251b0e1770a2ca19c169943da38099c7076b7f`; дополнительный E2 public API QA тест `f88d647e55983741c8c9aa95b5edd77b926a40b2`. SHA нового commit отчёта передаётся координатору после push.
+- E1-C-01 принят до начала E2. Чужие компоненты, main, Dockerfile B и VM не менялись.
 
 ## Реализовано
 
-`validate_bill` проверяет период, непустое название услуги, суммы строк/перерасчётов, IDs и ссылки перерасчётов. Внутренний `calculate_bill` на `Decimal` считает строки, текущие начисления, баланс и сумму к оплате с `ROUND_HALF_UP`; неизвестные операнды остаются `null`. Три напечатанных итога сверяются отдельно. Mismatch даёт предупреждение и не закрывает подтверждение автоматически.
+`explain_receipt(ExplainRequest, KnowledgeBundle)` объясняет подтверждённый BillData через Decimal и общий `calculate_bill`: формула строки, разница с напечатанной суммой, услуги и отдельные перерасчёты без повторного учёта, долг, платежи, кредитовый остаток и три сверки итогов. Недостаток данных даёт `incomplete`, неподдерживаемая формула — `unsupported`, расхождение — `mismatch` с сохранением напечатанного числа. Ошибочная квитанция и агрегат вне Money вызывают безопасный `EngineError(INVALID_BILL)`; слишком большое произведение строки остаётся неизвестным с предупреждением. Проверенных нормативов/тарифов/ссылок нет: `sources=[]`, `actions=[]`, `ARITHMETIC_ONLY`.
 
-`extract_receipt` принимает только `DocumentInput.content` bytes и проверяет SHA-256, сигнатуру MIME, размер, число страниц PDF и число пикселей. Учебный `demo-bill-v1` читает текстовый PDF через pypdf, а PNG/скан направляет в Tesseract `rus+eng` без shell, с временным PNG только в каталоге задания и тайм-аутом. Неизвестный макет возвращает `manual_required`, повреждённый документ — `EngineError`, не ложный `recognized`. Публичные `explain_receipt`, `compare_receipts`, `answer_question`, `compose_draft`, `load_knowledge` пока явно не реализованы.
+`extract_receipt` читает только bytes. Шесть текстовых PDF учебного DEMO-BILL-V1 покрывают 200.00, изменение объёма/тарифа до 270.00, отдельный -50.00 перерасчёт, долг 100.00 с оплатой 80.00, переплату с закрытием -30.00 и неизвестную услугу `other`. Шесть PNG/JPEG рендеров и image-only PDF покрывают OCR. Для текстового PDF возвращаются page и нормализованный bbox найденной строки, иначе bbox=null. OCR возвращает page, bbox=null и `needs_review=true` для распознанных полей. Неизвестная услуга сохраняется как `other`, отмечается `SERVICE_UNMAPPED` и даёт `partial`.
 
-Учебные PDF, PNG и image-only PDF созданы из генератора; `fixtures/receipts/manifest.json` фиксирует SHA-256, размер, представление, происхождение и ожидаемые поля всех шести образцов. `.gitattributes` сохраняет PDF/PNG побайтно в Git. Системные зависимости OCR и границы макета задокументированы в `docs/engine.md`; происхождение — в `docs/data-provenance.md`. Чужие компоненты и VM не менялись.
+Негативные fixtures: пустой растр, обрезанный PDF без итогов, чужой макет, повреждённый PDF и PDF с напечатанным 271.00 против рассчитанного 270.00. Сымитированный сырой OCR `2O0.00` на bytes PNG не исправляется скрыто до 200.00: результат `partial` без строки. Это unit проверка парсера после подмены текста OCR, а не фактическое чтение такого символа Tesseract. Все образцы перечислены с SHA-256/provenance в manifest, генератор закреплён lock файлом.
 
-## Проверки и фактический уровень доказательства
+## Проверки
 
-Windows, Python 3.13.14; новая временная venv вне Git. Из корня checkout:
+Среда: Windows, Python 3.13.14, временная venv вне Git по `requirements.lock`; для генератора добавлен `generator-requirements.lock`. Из корня checkout:
 
 ```powershell
-python -m venv "$env:TEMP\zhkh-c-e1-lockcheck"
-& "$env:TEMP\zhkh-c-e1-lockcheck\Scripts\python.exe" -m pip install -r packages/housing_engine/requirements.lock
-& "$env:TEMP\zhkh-c-e1-lockcheck\Scripts\python.exe" -m pip install --no-build-isolation --no-deps -e packages/housing_engine
 & "$env:TEMP\zhkh-c-e1-lockcheck\Scripts\python.exe" packages/housing_engine/verify_contract.py
-& "$env:TEMP\zhkh-c-e1-lockcheck\Scripts\python.exe" -m unittest discover -s packages/housing_engine/tests -v
+& "$env:TEMP\zhkh-c-e1-lockcheck\Scripts\python.exe" -m unittest discover -s packages/housing_engine/tests -q
 & "$env:TEMP\zhkh-c-e1-lockcheck\Scripts\python.exe" -m pip check
-```
-
-Факт: установка 0, verifier 0 (`schemas and synthetic 200 -> 270 fixtures: OK`, knowledge structure OK), unittest 0 (`Ran 17 tests ... OK`), `pip check` — `No broken requirements found`. Тесты покрывают 200/270, -50 adjustment, долг+оплату, переплату, неизвестную оплату, unsupported formula, mismatch, округление и предельную точность Decimal, непустое название, неверную ссылку перерасчёта и испорченный fixture. Git staged diff проверен, ошибки пробелов в исходниках отсутствуют. Индексированные в Git bytes PDF/PNG сверены с SHA-256 manifest.
-
-**PDF-text:** реальное извлечение из синтетического текстового PDF вернуло `recognized`, период `2026-08`, объём `5.000000`, тариф `40.000000`, сумму `200.00`, evidence `pdf_text`. **Синтетический image OCR:** после исходного блокера отсутствующего бинарника координатор подготовил локальный Tesseract `v5.5.3.20260724`; `--list-langs` подтвердил `eng`, `osd`, `rus`. С `PATH` на этот бинарник я вызвал `extract_receipt(DocumentInput(bytes,SHA256), ExtractionConfig(workspace=tempfile.gettempdir(), enabled_templates=['demo-bill-v1']))` отдельно на PNG и image-only PDF. Оба результата: `recognized`, период `2026-08`, объём `5.000000`, тариф `40.000000`, сумма строки и к оплате `200.00`. Координатор независимо повторил этот прогон на принятом integration SHA `27465869ec507b409e18d867245a034af61a2612`, получил 25 evidence, 18 с `needs_review`, и предупреждение `OCR_REVIEW_REQUIRED`. Это проверка фактического Tesseract на синтетических рендерах того же макета, не измерение качества на реальных квитанциях или телефонных фото. Python 3.12, VM и MAX не проверялись.
-
-Команда фактического OCR из checkout (локальный Tesseract находится вне Git):
-
-```powershell
 $env:PATH = "$env:TEMP\zhkh-ocr-tesseract;$env:PATH"
-& "$env:TEMP\zhkh-ocr-tesseract\tesseract.exe" --version
-& "$env:TEMP\zhkh-ocr-tesseract\tesseract.exe" --list-langs
-@'
-from pathlib import Path
-from uuid import UUID
-import hashlib
-import tempfile
-from housing_engine import DocumentInput, ExtractionConfig, extract_receipt
-config = ExtractionConfig(workspace=tempfile.gettempdir(), enabled_templates=["demo-bill-v1"])
-for name, mime in [("demo-bill-2026-08.png", "image/png"), ("demo-bill-2026-08-scan.pdf", "application/pdf")]:
-    content = (Path("fixtures/receipts") / name).read_bytes()
-    document = DocumentInput(receipt_id=UUID("10000000-0000-4000-8000-000000000001"), content=content, mime_type=mime, sha256=hashlib.sha256(content).hexdigest())
-    result = extract_receipt(document, config)
-    line = result.bill_data.services[0] if result.bill_data.services else None
-    print(name, result.outcome, result.bill_data.period, line.quantity if line else None, line.tariff if line else None, line.charge_amount if line else None, result.bill_data.document_total_due)
-'@ | & "$env:TEMP\zhkh-c-e1-lockcheck\Scripts\python.exe" -
+& "$env:TEMP\zhkh-c-e1-lockcheck\Scripts\python.exe" packages/housing_engine/tests/smoke_e2_ocr.py
 ```
 
-## Ограничения и следующий шаг
+Результат: verifier 0 (schemas, SHA manifest, 200→270, knowledge structure OK); unittest 0 (`Ran 25 tests ... OK`); pip check 0 (`No broken requirements found`); Git staged diff check 0. Текстовые PDF bytes отдают реальные 200.00/270.00 и `source=pdf_text`; adjustment 270-50=220, долг/платёж 100+270-80=290, кредит max(-30,0)=0. Mismatch сохраняет напечатанное 271.00 и `unexplained_difference=1.00`.
 
-Распознаётся только английский синтетический учебный макет. PDF-text, PNG и image-only PDF проверены на нём; качество на квитанциях настоящей УК и телефонных фото неизвестно. Рабочий контейнер B ещё должен включить Tesseract 5 с `rus` и `eng`; локальный пользовательский тест не подтверждает сборку Docker или VM. Пилотная территория, проверенные источники и реальные макеты отсутствуют. B может потреблять `validate_bill`/`extract_receipt` через публичный API пакета, а для оставшихся пяти функций держать явный dev stub. Реальное объяснение/сравнение/FAQ/черновик — задачи E2–E3 после отдельного задания.
+Фактический OCR smoke: локальный user-scoped Tesseract `v5.5.3.20260724`; `--list-langs`: `eng`, `osd`, `rus`. Семь синтетических raster/scan inputs: пять обычных/adjustment/debt/credit PNG/JPEG `recognized` с ожидаемыми 200.00/270.00/220.00/290.00/0.00, unknown-service JPEG `partial` с `other`, image-only PDF `recognized` 200.00. У всех OCR evidence `needs_review=true`, есть `OCR_REVIEW_REQUIRED`. Это реальный OCR по сгенерированным изображениям, не проверка настоящих квитанций, телефонных фото, Docker, VM или MAX.
 
-Для приёмки координатору проверить SHA реализации, v1-схемы/fixture manifest, результаты тестов и границу OCR. Отдельного предложения изменения контракта нет. Следующий этап самостоятельно не начинаю.
+## Зависимости и ограничения для B
+
+Python зависимости строго заданы `packages/housing_engine/requirements.lock`; runtime нужны pydantic, pypdf, pypdfium2, Pillow. Системно нужен Tesseract 5 с `eng+rus`, устанавливаемый в образ при сборке; проверить `tesseract --version` и `tesseract --list-langs`. `ExtractionConfig.workspace` — существующий доверенный временный каталог. Лимиты: 10 MiB bytes, 3 PDF страницы, 25 млн пикселей на страницу, OCR до 90 секунд. B отвечает за 120-секундный внешний timeout, RSS/контейнерный лимит и завершение дочерних процессов. Реальная пилотная территория, проверенные внешние источники и реальные макеты отсутствуют; объяснение остаётся арифметическим. Python 3.12 и Linux-контейнер этим отчётом не проверены.
+
+Координатору проверить pushed SHA, схему/manifest, тесты и OCR evidence, затем передать B итоговый public API SHA. E3 самостоятельно не начинаю.
+
+## Дополнительная E2 QA по заданию координатора
+
+Публичный тест `test_manual_required_bytes_and_explicit_unsupported_manual_bill` добавлен без изменения DTO или runtime-кода. `unknown-layout.pdf` читается из bytes и даёт `manual_required` без периода, услуг, начислений и итога. `validate_bill` возвращает `can_confirm=false`; `explain_receipt` не принимает эту неподтверждённую квитанцию (`EngineError(INVALID_BILL)`). Отдельно вручную введённые синтетические значения из `water-2026-09.json` помечены `manual-v1`, `formula_kind=unsupported`, `calculation_kind=document_amount`: подтверждение допустимо, `current_charges` и напечатанный `document_total_due` равны 270.00, но рассчитанные баланс/итог, unexplained difference и формула строки остаются `null`; сверки `matched/unsupported/unsupported`, источников нет. JSON служит тестовыми ручными значениями и не подставляется как результат OCR неизвестного PDF.
+
+На Windows/Python 3.13.14 после commit `f88d647e55983741c8c9aa95b5edd77b926a40b2`: `python -m unittest discover -s packages/housing_engine/tests -q` — `Ran 26 tests ... OK`; `python packages/housing_engine/verify_contract.py` — оба блока OK; `git diff --cached --check` — ошибок нет. Прежние ограничения реальных счетов, Docker/VM/MAX и Python 3.12 сохраняются. Это дополнительная проверка E2, не начало E3.

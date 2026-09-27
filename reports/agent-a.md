@@ -1,37 +1,32 @@
-# Отчёт агента A — E1-A-01
+﻿# Отчёт агента A — E2-A-01
 
-- Статус: review; приёмка координатора ожидается.
-- Ветка: `agent-a/e1`; `BASE_SHA` `feb1fc7ab12201e6d5a93989d64a8374fe44a139`; `TASK_COMMIT` `4449864e24686472130b2569be04b349ed862834`; контракт engine/HTTP 1.0.
-- Принятый B dev API checkpoint `28192753c516d3b3738ea4ac36e8af84475b309a`, merge в ветку A `76f556d3efbd469d39d5b80d1a13565eb1db5b25`.
-- E1 код A: `1a9e30c5d2c320f36d40a38619db26f2dd289259` (API/onboarding), `503cee0340d0985f20c21555981bfc046d7f3592` (wiring, координатор помог после прерывания работы агента), `0ca5aa7b26c2f8c3c7a07b8e4b555ab08e4f2e15` (UX исправления). Документация: `063d8768c114e48c21c41b615ce0d4d197e14f01`. Все pushed в `origin/agent-a/e1`.
+- Статус: review; живой браузерный E2 прогон в CI успешен, окончательная приёмка этапа остаётся у координатора.
+- Ветка `agent-a/e2`; `BASE_SHA` `dae14d9a838154b72e4cf122881b190032ae0a74`; `TASK_COMMIT` `f613288e5b0a9bc733e6653ba9706bea7e3313d9`; контракт engine/HTTP 1.0.
+- Pushed код: mock UI `3033a2a9bbcb6444a04ac8929c953bb45d1c24fe`, server-owned formula и fixture bytes `b1a68b39861b7e6f5b1588f3c0453b079cd59c51`, live script и server-owned поля `b0646ed8216a42942d4b010a4c446d9ec362ef9f`, совместимость CI proxy env `a727351a70081cb8170c22f1b8eb06a54cbb8db0`.
+- E0/E1 приняты координатором до этого этапа; последний E1 A report SHA `3895c6e8aae097b52120dd51ad897a1ff81928cf`.
 
 ## Результат
 
-- `apps/web`: первый запуск берёт `GET /meta`, `GET /catalog`, `GET /me`, сохраняет `PUT /me/profile` с ролью, территорией и явным принятием текущего уведомления. Upload показывается только после актуального серверного профиля; B всё равно повторно проверяет privacy notice.
-- Учебный MSW и реальный dev API используют одинаковые экраны. `npm run dev:real` проксирует `/team/zhkh/api/**` на локальный B `/api/**`; локальный demo code вводится в форме, не включён в исходники/production bundle. Session token остаётся в памяти; 401 открывает вход на том же пути, включая query с job ID.
-- `POST /receipts` отправляет файл и UUID Idempotency-Key; экран обработки читает `GET /jobs/{id}`. Ошибки 401/409/413/422/offline имеют текстовые состояния. Dev stub явно сообщает, что OCR не выполнен и потребуется ручной ввод; `succeeded` не назван распознанной квитанцией.
-- Другие экраны остаются помеченными заглушками. Реальный dev B пока не реализует ответы FAQ, и UI это указывает; в MSW общий вопрос доступен до завершения профиля.
-- Команды запуска и ограничения описаны в `docs/frontend.md`.
+- `/processing?job=` опрашивает состояние задания до завершения; после успеха открывает `/review?id=`. Review загружает ReceiptView по ID, показывает защищённый preview страницы, доступ к исходнику, evidence/issues, маркировку partial/manual/synthetic и редактируемые поля/строки BillData. `template_id`, `template_version`, `calculation_kind`, `formula_kind` показаны только для чтения, поскольку их определяет B.
+- `PUT /receipts/{id}/draft` использует `expected_revision`; при 409 загружает актуальную ревизию без потери несохранённой формы. Для подтверждения требуется сохранить правки, пройти локальную проверку обязательных полей и принять серверные warnings; `POST /confirm` получает UUID Idempotency-Key. `/explanation?id=` заново получает текущую подтверждённую ревизию и показывает серверные суммы, строки, разницы, ограничения и источники без клиентской денежной арифметики.
+- MSW имитирует E2 только в `dev:mock`, включая 409 и частичное извлечение. Browser mock загружает bytes checked-in синтетического `fixtures/receipts/demo-bill-2026-08.png`; preview copy `apps/web/public/synthetic-receipt.png` имеет SHA256 `5d1c0904398857a9941afed423bdd6b0c6667873a06ac6d7ce2ec26eb50bcc53`. Реальный browser script `apps/web/scripts/e2-real-flow.mjs` берёт синтетический PDF из Git и внешний dev код из env.
 
-## Проверки
+## Проверки A
 
-Среда: Windows PowerShell; Node 22.23.3 из `C:\Users\Stepan\AppData\Local\Temp\codex-node-v22.23.3\node-v22.23.3-win-x64`. В `apps/web`: `$nodeDir=Join-Path $env:TEMP 'codex-node-v22.23.3\node-v22.23.3-win-x64'; $env:PATH=$nodeDir+';'+$env:PATH`.
+Среда: Windows PowerShell, Node 22.23.3 (`C:\Users\Stepan\AppData\Local\Temp\codex-node-v22.23.3\node-v22.23.3-win-x64`), Chrome headless. Из `apps/web` подготовка: `$nodeDir=Join-Path $env:TEMP 'codex-node-v22.23.3\node-v22.23.3-win-x64'; $env:PATH=$nodeDir+';'+$env:PATH`.
 
-| Проверка | Результат |
+| Проверка | Фактический результат |
 |---|---|
-| `& (Join-Path $nodeDir 'npm.cmd') ci` | Прошло из lock-файла; 132 пакета. |
-| `& (Join-Path $nodeDir 'npm.cmd') test` | Vitest: 5/5. Проверены consent gate, 422 старой версии, queued job, 401 истёкшей сессии, прежние E0 contract cases. |
-| `& (Join-Path $nodeDir 'npm.cmd') run build` | TypeScript + Vite production build успешно. |
-| `rg --files dist` и `rg -l 'mockServiceWorker\|mock-session\|mock-only\|msw\|devAuth\|auth/demo' dist` | В dist только HTML/CSS/JS; mock/dev auth маркеры не найдены. |
+| `npm ci` после остановки Vite | 133 пакета из lock, успех. Первая попытка при работающем Vite получила Windows EPERM на нативной библиотеке; повтор после остановки успешен. |
+| `npm test` | 7/7: E0/E1 контрактные случаи, E2 mock HTTP flow, сохранённые поля и серверные признаки, null issuer и обязательная сумма перерасчёта. |
+| `npm run build`; `node --check scripts/e2-real-flow.mjs` | Успешно; production `dist` содержит HTML/CSS/JS, поиск `mockServiceWorker|synthetic-receipt|mock-session|mock-only|msw|devAuth|auth/demo` совпадений не дал. |
+| `CHROME_PATH=<локальный Chrome>; npm run dev:mock -- --port 5173; npm run test:browser:e2` | Chrome 360×800: upload → polling → preview → 409 с сохранением правок → edit → confirm → explanation → 401 и повторный вход на том же `/review?id=`. `innerWidth=360`, `scrollWidth=360`. Снимки review/explanation осмотрены локально. |
+| [GitHub Actions E2 Compose/browser CI #11](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36324627223), integration SHA `d38ae6307b6e0fcf1ea50ef05c84a337d72345a9` | **Success**, Linux runner: Vite `dev:real` на 5173 → Compose web на 18081 → API/worker/PG17 с `ENGINE_MODE=real`; `BASE_URL=http://127.0.0.1:5173/team/zhkh/`, `CHROME_PATH` и локальный `DEMO_ACCESS_CODE` заданы в CI env. Выполнен `npm run test:browser:e2:real`: синтетический PDF bytes → OCR job → preview → UI edit → confirm → explanation → reload и повторный вход; 360 px без горизонтального переполнения. Этот уровень — настоящий dev HTTP/worker/OCR в CI, не VM/MAX и не реальная квитанция. |
 
-Локальный Chrome/Playwright-core (временный пакет вне Git), viewport `360×800`:
+## Зависимости, ограничения, следующий шаг
 
-1. `npm run dev:mock -- --port 5173`, затем `& (Join-Path $nodeDir 'node.exe') (Join-Path $env:TEMP 'vk-zhkh-playwright-check\e1-mock-flow.cjs')`: сохранён onboarding, mock upload перешёл в queued, после подстановки истёкшего тестового токена 401 показал форму входа на том же `/team/zhkh/processing?job=40000000-0000-4000-8000-000000000001`; `innerWidth=360`, `scrollWidth=360`. Скриншот осмотрен локально.
-2. Из отдельного принятого checkout `integration/e1` SHA `0b0daaf994315c63de8f0db7d458de6411a31d81` запущен реальный B API в dev MemoryStore командой `python -m uvicorn app.main:app --app-dir apps/backend --host 127.0.0.1 --port 8000` с локальными `APP_MODE=dev`, `ENGINE_MODE=stub`, `DEMO_AUTH_ENABLED=true`, `DEMO_ACCESS_CODE=<локально выбранный код>`, `STORAGE_PATH=<каталог в TEMP>`. Затем `npm run dev:real -- --port 5174` и `& (Join-Path $nodeDir 'node.exe') (Join-Path $env:TEMP 'vk-zhkh-playwright-check\e1-real-flow.cjs')`: meta/auth/profile/upload/job реально вызваны через Vite proxy. Загружен только синтетический PNG 2×2 px из TEMP. Ответ: `mode=dev`, `receipt_ocr=false`, `engine_stub=true`, `job.state=queued`, service worker отсутствует; `innerWidth=360`, `scrollWidth=360`. Скриншот осмотрен локально.
-
-## Границы и следующий шаг
-
-- Живой браузерный B flow использовал dev MemoryStore без PostgreSQL и worker; queued не является результатом OCR и не доказывает сохранность после перезапуска. Координатор отдельно проверяет Compose/PG17 и worker на integration SHA.
-- MAX Bridge, реальный MAX Web/mobile, VM, OCR bytes→review, подтверждение и объяснение не проверялись в E1-A. Реальные обращения не отправляются; голос отсутствует.
-- `public/mockServiceWorker.js` и `src/api/openapi.generated.ts` в локальном checkout имеют CRLF-only статус после `npm ci`; `git diff --numstat` пуст, в commits они не включены. Старый checkout `agent-a/e0` с его незакоммиченными E1 копиями оставлен без сброса/удаления.
-- После приёмки координатором ожидается отдельное задание E2; самостоятельно E2 не начинался.
+- Локальная браузерная проверка A — MSW и синтетический PNG; живой E2 путь выполнен отдельно в CI на синтетическом PDF. На Windows нет локального Compose daemon. Сквозное чтение **того же UI receipt** после перезапуска API/worker координатор проверяет дополнительно; успешный browser reload без restart этого не доказывает.
+- Read-only сверка B выявила серверные warning codes, которые не все попадали в прежний ReceiptView, и запрет edit confirmed. B передал исправления в E2 интеграцию; A не ограничивал кнопку временно. Живой browser CI проверил базовый edit/confirm path, но не все warning/confirmed-edit варианты.
+- MAX Web/mobile, VM и реальные квитанции не проверялись. Все browser файлы синтетические. История, сравнение, FAQ, черновики и удаление относятся к E3; голос и отправка обращений исключены.
+- Локальный `apps/web/public/mockServiceWorker.js` имеет CRLF-only статус после `npm ci`, `git diff --numstat` пуст; в commits не включён. Старые E0/E1 checkout не сбрасывались и не удалялись.
+- Следующий шаг координатора: повторно прочитать UI receipt после API/worker restart и принять E2 по всем критериям. A ждёт конкретные дефекты CI, если появятся; E3 самостоятельно не начинался.
