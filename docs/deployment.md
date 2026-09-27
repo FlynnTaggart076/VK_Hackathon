@@ -125,8 +125,10 @@ MAX prerequisites; пустые/синтетические значения не
 Оператор создаёт `runtime` с режимом 0700, `app.env` с 0600 вне checkout.
 Значения вводятся приватным редактором/каналом без echo в команде или логах:
 `POSTGRES_PASSWORD` (URL-safe случайное значение), `MAX_BOT_TOKEN`,
-`MAX_WEBHOOK_SECRET`, `MAX_WEB_APP` (username или max.ru ссылка бота с
-привязанным mini-app). `DEMO_AUTH_ENABLED=false`, `ENGINE_MODE=real` и
+`MAX_WEBHOOK_SECRET`, `MAX_WEB_APP` (проверенный username или max.ru ссылка
+выданного бота). Привязка mini-app организаторами выполняется после публикации
+HTTPS URL; значение `MAX_WEB_APP` само по себе не доказывает привязку.
+`DEMO_AUTH_ENABLED=false`, `ENGINE_MODE=real` и
 `APP_MODE=production` принудительно задаёт `compose.vm.yaml`; демовход
 недоступен. `runtime/app.env` не добавлять в Git или общий архив исходников.
 
@@ -139,6 +141,16 @@ MAX prerequisites; пустые/синтетические значения не
 `git rev-parse HEAD == RELEASE_SHA`. При незакоммиченных/чужих файлах создать
 отдельный checkout, ничего не сбрасывать. Только после проверки отсутствия
 коллизий создать external сеть `vk-zhkh-edge`.
+
+Checkout публичных исходников должен давать контейнерному пользователю `app`
+чтение файлов и проход по каталогам: `COPY` сохраняет режимы источника. При
+клонировании с `umask 0007` файлы получили `0660`, а каталоги `0770`; миграция
+завершилась `No 'script_location' key found in configuration`, потому что
+`app` не мог прочитать `/workspace/alembic.ini`. На VM были добавлены только
+`a+r` для файлов и `a+rx` для каталогов чистого `deploy`, исключая `.git`;
+после этого `alembic heads` вернул `e3_max_keyboard`. Проверить, что
+`git status --porcelain` пуст и HEAD прежний. Не применять это правило к
+`runtime`: он остаётся `0700`, `app.env` — `0600`.
 
 Из `deploy` выполнять последовательно; `RELEASE_SHA` берётся из задания
 координатора, а не из подвижного `main`/`latest`:
@@ -182,10 +194,15 @@ API/asset и 403 webhook без secret. Повторно проверить `/te
 публичный адрес из-за сетевой петли. Сверить TLS и отсутствие ошибочного
 корневого `/api/v1` в браузере. `docker compose ps` этого не доказывает.
 
-Только после публичного HTTPS smoke настроить URL mini-app и webhook
-`https://flynntaggart075.asuscomm.com/team/zhkh/integrations/max/webhook`
+Только после публичного HTTPS smoke отправить
+`https://flynntaggart075.asuscomm.com/team/zhkh/` организаторам через
+[форму привязки mini-app](https://sbor-ssylok-dlya-mini-prilojeniy.testograf.ru/)
+согласно FAQ. До фактической привязки кнопка бота не считается проверенным
+пользовательским входом. После готовности публичного endpoint зарегистрировать
+webhook `https://flynntaggart075.asuscomm.com/team/zhkh/integrations/max/webhook`
 в MAX, используя тот же секрет из приватного `app.env`. Настройку подписки
-и права бота подтвердить без вывода token/secret. С A пройти полный сценарий
+и права бота подтвердить без вывода token/secret. После подтверждения привязки
+с A пройти полный сценарий
 в MAX Web и реальном мобильном MAX: подпись initData, загрузка, проверка,
 сравнение, FAQ, копирование черновика, восстановление после закрытия.
 Голос, транскрибация и отправка обращения отсутствуют. В отчёте разделить
