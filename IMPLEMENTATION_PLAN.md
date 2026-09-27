@@ -4,7 +4,10 @@
 
 ## Актуальное состояние E4
 
-- E0–E3 приняты. E3 merge/release SHA в `main`: `d223c4e49a12c4ebc5d98c3c8da8fc6c0202e16f`; проверенный runtime candidate `e860f8fce5f88ba80f0c7f3bb299572e459e7102` отличается от merge только руководящими файлами/заданиями. Текущий этап E4; задания `tasks/e4/agent-{a,b,c}.md` выданы от принятого SHA. Развёртывания ещё нет.
+- E4 technical candidate `01a271a506db1e65aedd68efc7101c761827d89a` merged and pushed to `main`; E4 **не принят** до фактического deploy/проверки MAX. [Linux CI 36333584617](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36333584617) прошёл на runtime `2e357624e9f59287b09f2593e13dedf619d1e057`; от merge этот SHA отличается только отчётами и заданиями. PG17/E2–E3 regression, E4 synthetic OCR/FAQ, production Compose topology, shared Nginx syntax, worker DNS/TLS без токена и Chrome 360/1280 real dev API прошли. Локально на объединённой версии: engine verifier + 46 tests, OCR 99/99 растровых полей и 33/33 PDF-text (всего 132/132), 8/8 edge; новый FAQ gold 15/15 тематических, 3/3 неоднозначных, 7/7 вне темы; frontend 14 tests/build. Это синтетика и CI, не VM/MAX acceptance.
+- VM повторно проверена только чтением: `ssh hackathon` успешен, `/srv/team` содержит `web/`, `VK-bot/`, README; только healthy `team-web-nginx-1`; 74G диск/14Gi доступной RAM; внутренние `/team/`, `/healthz` и внешний HTTPS `/team/` дали HTTP 200. Приложение в VM не развёрнуто, MAX bot token/webhook secret/mini-app registration для проекта не подтверждены. B разрешён deploy **только** из candidate `01a271a` после приватных production prerequisites; task/report commits не являются deploy SHA.
+- Независимое продолжение текущего E4 выдано task commit `b09d930` в `tasks/e4/agent-a-demo-followup.md`, `agent-b-deploy-followup.md`, `agent-c-moscow-sources-followup.md`; отдельные `agent-{a,b,c}/e4b` checkout/branches созданы и pushed. A готовит проверяемый синтетический демосценарий, C проверяет официальные источники Москвы/МО и границы применимости, B держит VM неизменной до MAX prerequisites. E5 не выдан.
+- E0–E3 приняты. Исторический E3 merge SHA `d223c4e49a12c4ebc5d98c3c8da8fc6c0202e16f` больше не допускается для production deploy: worker не имел исходящего MAX HTTPS. Текущий этап E4; задания `tasks/e4/agent-{a,b,c}.md` были выданы от E3 базы, новый deploy SHA указан выше. Развёртывания ещё нет.
 - [PG17 CI 36331334237](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36331334237) прошёл E2/E3 OCR/restart, HTTP, offline MAX webhook и 360 px real Chrome. Локально engine verifier/45 tests, backend 26 passed/3 skipped, HTTP 28 операций/25 примеров, frontend 13 tests/build прошли. Пятый независимый FAQ gold `b2f67e5` на C code `654549d`: S55/60 (91,7% при цели ≥90%), A4/5, U10/10, небезопасных unsupported ссылок 0. Остаточные `S247,S249,S251,S252,S299,A30` переданы в E4 C; это ограничение синтетической оценки, не утверждение о реальных вопросах.
 - Владелец выбрал Москву и Московскую область; `moscow`/`moscow-oblast` добавлены в каталог как названия регионов, без подтверждённой УК, региональных процедур и реальных квитанций. `pilot_territory_id=null`; шесть местных тем возвращают `unsupported`, пока нет регионального первоисточника.
 - SSH alias `hackathon` проверен интерактивно, VM инвентаризирована без изменений. MAX bot credentials/регистрация mini-app пока не подтверждены. В E4 VM deploy выполняет только B из принятого release SHA; без production prereqs остаются read-only preflight и независимые проверки.
@@ -49,9 +52,10 @@
 | E3-A-01 | A / `agent-a/e3` | accepted subtask | `tasks/e3/agent-a.md` | code `9a1ecf9`, report `7e34ddd`; 13 tests/build, PG17 Chrome 360 px CI success |
 | E3-B-01 | B / `agent-b/e3` | accepted subtask | `tasks/e3/agent-b.md` | code `362985a`, report `4db1f8f`; 26 tests/3 skipped, PG17 HTTP/webhook offline CI success; MAX live pending E4 |
 | E3-C-01 | C / `agent-c/e3` | accepted with residual QA defects | `tasks/e3/agent-c.md`, `tasks/e3/agent-c-qa-followup-3.md` | code `654549d`, report `71420e5`; fifth independent FAQ S55/60, A4/5, U10/10, unsafe 0; engine 45 tests |
-| E4-A-01 | A / `agent-a/e4` | assigned | `tasks/e4/agent-a.md` | Real API error/recovery UX; MAX Web/mobile only when deployed |
-| E4-B-01 | B / `agent-b/e4` | assigned; VM/MAX external prereqs pending | `tasks/e4/agent-b.md` | VM/Compose preflight; deploy only SHA `d223c4e`; separate HTTPS/MAX evidence |
-| E4-C-01 | C / `agent-c/e4` | assigned | `tasks/e4/agent-c.md` | OCR holdout/edge cases and six FAQ residuals; no real receipt claim |
+| E4-A-01 | A / `agent-a/e4` | technical subtask accepted; live MAX pending | `tasks/e4/agent-a.md` | Code `aae1e25`, report `2c4dbec`; Chrome real API/PG17 360/1280 in CI, local 14 tests/build; MAX Web/mobile unverified |
+| E4-B-01 | B / `agent-b/e4` | config/CA accepted; VM deploy pending | `tasks/e4/agent-b.md` | Code `455804e`, report `066d94d`; CI topology/TLS success and fresh read-only VM preflight; `not deployed` |
+| E4-C-01 | C / `agent-c/e4` | synthetic subtask accepted; real pilot data pending | `tasks/e4/agent-c.md` | Gold `637fe57` before code `8042a0a`, report `77c6163`; OCR 132/132, edge 8/8, sixth FAQ 25/25 |
+| E4-A/B/C-02 | A/B/C / `agent-{a,b,c}/e4b` | A/C in progress; B external prerequisites blocked | `tasks/e4/agent-a-demo-followup.md`, `agent-b-deploy-followup.md`, `agent-c-moscow-sources-followup.md` | A demo/validation docs; B report `d21c2cd`: no real MAX env/registration, `not deployed`; C official source applicability audit |
 
 ## Принятая интеграция E0
 
@@ -62,9 +66,9 @@
 
 ## Блокеры и зависимости
 
-- VM: SSH дошёл до проверки ключа, затем `Permission denied (publickey)`; операторский вход и deploy блокированы, владелец доступа нужен до E4.
-- MAX: bot/mini-app credentials не доступны B в текущем окружении; реальный MAX не проверен, владелец доступа нужен до E4.
-- Выбор реальной пилотной территории и права на реальные обезличенные квитанции ещё не подтверждены. Для E0 используются явно синтетические данные.
+- VM: интерактивный SSH подтверждён координатором; у B в новом процессе нет разблокированного ключа для batch SSH. Это операционная подготовка перед deploy, но текущий решающий blocker — отсутствующие приватные MAX credentials/регистрация mini-app. VM не менялась.
+- MAX: bot token, webhook secret, связанное mini-app/права регистрации не подтверждены в текущем окружении. Реальный MAX Web/mobile не проверен; production с фиктивными значениями не запускается.
+- Выбраны Москва и Московская область, но нет конкретной УК/поставщика и обезличенных реальных квитанций/фото. Оценки OCR и вопросов основаны на синтетике; местные инструкции остаются `unsupported` до источника и проверки применимости.
 - `openapi-typescript` трактует `$defs` C как поле экземпляра BillData; A использует узкий `Omit<'$defs'>` и тест канонического fixture. При обновлении схем повторять generate/test.
 - E1 запускается локально с явными dev mock/stub; VM/MAX и реальные документы не подменяются этими проверками.
 - На координаторском Windows нет Docker daemon/WSL. Docker build/up, PostgreSQL 17, worker, API, web/assets/deep link и `nginx -t` прошли на изолированном GitHub Actions Linux runner [E1 CI #7](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36319065489). Это не VM. Локальный Tesseract 5.5.3 `eng+rus` распознал синтетические PNG и PDF-скан C; реальные квитанции и контейнерный OCR не проверены.
@@ -72,7 +76,7 @@
 
 ## Следующий шаг
 
-Получить B финальные negative/retention тесты и HTTP smoke script; повторить полный bytes→OCR→edit→confirm→explain и restart на PG17 CI. Проверить A read-only формулу и живой браузерный E2 flow с тем же API; вернуть дефекты владельцам. E2 не принимать без полного сценария; VM/MAX остаются внешними проверками будущих этапов.
+Получить pushed E4b docs/source SHA и отчёты A/C; проверить источники и не расширять локальные ответы без подтверждения применимости. Получить от владельца приватные MAX bot/mini-app prerequisites; B разворачивает только `01a271a` по §12.8 после их проверки, затем A/B проводят фактическую приёмку VM, публичного HTTPS, webhook и MAX Web/mobile. E4 и E5 не закрывать синтетикой.
 ## E2 live verification checkpoint (2026-09-27)
 
 - `integration/e2` pushed candidate `b8438db9cc3a975f6299df0b9c19cc4ae8353ad9`; `main` remains at accepted E1 code. C E2 is accepted; A and B E2 remain in review.
