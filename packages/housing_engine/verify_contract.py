@@ -116,6 +116,11 @@ def verify() -> None:
     territory_ids = {item["id"] for item in territories}
     assert territory_ids == set(manifest["territory_ids"])
     assert manifest["pilot_territory_id"] is None or manifest["pilot_territory_id"] in territory_ids
+    assert {item["id"]: item["label"] for item in territories if not item["is_synthetic"]} == {
+        "moscow": "Москва", "moscow-oblast": "Московская область",
+    }
+    assert all(item["source_id"] is None for item in territories if not item["is_synthetic"])
+    assert manifest["pilot_territory_id"] is None
     bundle = load_knowledge(str(KNOWLEDGE), datetime.now(timezone.utc))
     assert len(bundle.topics) == 15
     print("Engine v1 schemas and synthetic 200 -> 270 fixtures: OK")
