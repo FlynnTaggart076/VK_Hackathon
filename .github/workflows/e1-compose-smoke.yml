@@ -43,6 +43,8 @@ jobs:
             web_code="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/team/zhkh/ || true)"
             running="$("${compose[@]}" ps --status running --services | paste -sd, -)"
             echo "::error title=E1 readiness timeout::ready HTTP $ready_code; web HTTP $web_code; running services $running"
+            worker_log="$("${compose[@]}" logs --no-color --tail=12 worker 2>&1 | tail -c 2400 | tr '\r\n' '  ' | sed -E 's#(postgresql\+psycopg://zhkh:)[^@ ]+#\1***#g')"
+            echo "::error title=E1 worker diagnostic::$worker_log"
             exit 1
           fi
           curl --fail --silent http://127.0.0.1:18080/team/zhkh/ >/dev/null
