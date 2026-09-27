@@ -1,0 +1,16 @@
+id: payment_history
+title: "Учтённые оплаты"
+utterances: ["где история оплат", "учтена ли оплата"]
+keywords: ["оплата", "платеж", "история"]
+required_context: []
+applicability:
+  territory_ids: []
+  roles: []
+  service_codes: []
+  document_kinds: []
+answer_template: "По одной квитанции нельзя подтвердить прохождение платежа. Сверьте дату и сумму в своей истории платежей и у получателя."
+steps: ["Откройте историю своих квитанций и платежей."]
+source_ids: []
+action_templates: [{id: "navigate-receipt_history", type: navigate, label: "Открыть", source_id: null, target: receipt_history, requires: []}]
+review_after: "2026-12-31T00:00:00Z"
+content_version: "1.0"

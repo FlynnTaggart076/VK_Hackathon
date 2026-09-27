@@ -42,10 +42,10 @@ def _normalized_address(value: str | None) -> str | None:
         return None
     value = _normalized_text(value)
     # Only unambiguous written abbreviations. Never collapse house/flat numbers.
-    value = re.sub(r"\bул\.?\b", "улица", value)
-    value = re.sub(r"\bд\.?\b", "дом", value)
-    value = re.sub(r"\bкв\.?\b", "квартира", value)
-    return re.sub(r"\s*([,.])\s*", r"\1", value)
+    value = re.sub(r"(?<!\w)ул\.?(?=\s|,|$)", "улица", value)
+    value = re.sub(r"(?<!\w)д\.?(?=\s|,|$)", "дом", value)
+    value = re.sub(r"(?<!\w)кв\.?(?=\s|,|$)", "квартира", value)
+    return " ".join(re.sub(r"[,.;]", " ", value).split())
 
 
 def _identity(old, new) -> tuple[bool, list[Issue]]:

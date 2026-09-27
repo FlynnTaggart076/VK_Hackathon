@@ -1,0 +1,16 @@
+id: new_resident
+title: "После переезда"
+utterances: ["что делать после переезда", "я новый жилец"]
+keywords: ["переезд", "новый", "жилец"]
+required_context: []
+applicability:
+  territory_ids: []
+  roles: []
+  service_codes: []
+  document_kinds: []
+answer_template: "После переезда проверьте реквизиты первой квитанции и определите организации по каждой услуге. Местный порядок действий пока не проверен."
+steps: ["Проверьте свою первую квитанцию."]
+source_ids: []
+action_templates: [{id: "navigate-receipt_upload", type: navigate, label: "Открыть", source_id: null, target: receipt_upload, requires: []}]
+review_after: "2026-12-31T00:00:00Z"
+content_version: "1.0"
