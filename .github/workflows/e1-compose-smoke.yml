@@ -1,0 +1,41 @@
+name: E1 Compose smoke
+
+on:
+  push:
+    branches: [integration/e1]
+    paths:
+      - .github/workflows/e1-compose-smoke.yml
+      - apps/**
+      - infra/**
+      - compose.yaml
+      - compose.local.yaml
+      - fixtures/**
+
+jobs:
+  compose-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start isolated dev stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          export POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+          export DEMO_ACCESS_CODE="$(openssl rand -hex 24)"
+          export APP_MODE=dev ENGINE_MODE=stub DEMO_AUTH_ENABLED=true LOCAL_WEB_PORT=18080
+          project="zhkh-e1-ci-${GITHUB_RUN_ID}"
+          compose=(docker compose -p "$project" -f compose.yaml -f compose.local.yaml)
+          on_exit() {
+            status=$?
+            if (( status != 0 )); then "${compose[@]}" logs --no-color --tail=120 || true; fi
+          }
+          trap on_exit EXIT
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up --build --detach
+          timeout 180 bash -c 'until curl --fail --silent http://127.0.0.1:18080/team/zhkh/health/ready >/dev/null; do sleep 3; done'
+          curl --fail --silent http://127.0.0.1:18080/team/zhkh/ >/dev/null
+          curl --fail --silent http://127.0.0.1:18080/team/zhkh/api/v1/meta | python3 -c 'import json,sys; data=json.load(sys.stdin); assert data["features"]["engine_stub"] is True and data["features"]["receipt_ocr"] is False'
+          version="$("${compose[@]}" exec -T db psql -U zhkh -d zhkh -Atqc 'SHOW server_version_num')"
+          test "$version" -ge 170000
+          echo 'Compose build/up, PostgreSQL 17, API ready and web prefix: OK'
