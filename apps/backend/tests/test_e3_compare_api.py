@@ -50,7 +50,25 @@ def test_compare_http_200_to_270_owner_and_stale(tmp_path):
         assert data["older"]["period"] == "2026-08" and data["newer"]["period"] == "2026-09"
         assert data["delta_current_charges"] == data["delta_total_due"] == "70.00"
         assert (data["lines"][0]["quantity_effect"], data["lines"][0]["tariff_effect"]) == ("40.00", "30.00")
+        with app.state.store.Session.begin() as session:
+            session.get(Receipt, uuid.UUID(IDS[1])).dataset_kind = "user_provided"
+        mixed = client.post("/api/v1/comparisons", json=request, headers=headers)
+        assert mixed.status_code == 200 and mixed.json()["dataset_kind"] == "synthetic"
         assert client.post("/api/v1/comparisons", json=request, headers=other_headers).status_code == 404
+        with app.state.store.Session.begin() as session:
+            revision = session.get(ReceiptRevision, (uuid.UUID(IDS[1]), 3))
+            missing_identity = dict(revision.bill_data)
+            missing_identity["account_number"] = None
+            revision.bill_data = missing_identity
+        identity = client.post("/api/v1/comparisons", json=request, headers=headers)
+        assert identity.status_code == 200, identity.text
+        assert identity.json()["status"] == "needs_identity_confirmation"
+        assert identity.json()["delta_total_due"] is None
+        assert identity.json()["lines"] == identity.json()["settlement_deltas"] == []
+        request["identity_acknowledged"] = True
+        acknowledged = client.post("/api/v1/comparisons", json=request, headers=headers)
+        assert acknowledged.status_code == 200, acknowledged.text
+        assert acknowledged.json()["delta_total_due"] == "70.00"
         with app.state.store.Session.begin() as session:
             row = session.get(Receipt, uuid.UUID(IDS[1]))
             row.current_revision = 4
