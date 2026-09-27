@@ -25,6 +25,7 @@ services:
       DATABASE_URL: postgresql+psycopg://zhkh:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in private .env}@db:5432/zhkh
       STORAGE_PATH: /storage
       FIXTURE_ROOT: /workspace/fixtures/receipts
+      KNOWLEDGE_ROOT: /workspace/knowledge
       ENGINE_MODE: ${ENGINE_MODE:-real}
       DEMO_AUTH_ENABLED: ${DEMO_AUTH_ENABLED:-true}
       DEMO_ACCESS_CODE: ${DEMO_ACCESS_CODE:?set DEMO_ACCESS_CODE in private .env}
