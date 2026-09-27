@@ -39,7 +39,8 @@
 - Pushed основной E1 code SHA: `aafa3348450af3a005e9a30b92411779cac8e9dc`.
 - Pushed merge принятого C checkpoint и первая правка PostgreSQL теста: `a2afba39ce197ca7cd11014defaec69f3c158a78` (второй parent integration SHA `4f653165ed97bea21572231a9f623607f16e89c5`).
 - Pushed итоговая правка изоляции PostgreSQL теста: `d1798ccd1f064fcd40581679a9b283e85ba0c339`.
-- Статус: **review координатора**; общий E1 и продукт не объявлены принятыми.
+- Pushed runtime исправления после GitHub Actions smoke: `599c9f68f20767d5b3edff24549f0f4b4ecef0ac` (worker fixture path и local edge), `5f1e0b3aeb507775c39fee26992a995507255d62` (Nginx static root); documentation SHA `fecf01c791370c57039d4d876efd3c0f6a4fab35`.
+- Статус: B E1 код принят в `integration/e1` и прошёл изолированный Compose runtime smoke; общий E1 и продукт объявляет принятыми только координатор после A/C и остальных критериев.
 
 ### Реализовано
 
@@ -53,13 +54,13 @@
 
 | Уровень | Команда / факт | Результат |
 |---|---|---|
-| Backend API + SQLite | `PYTHONPATH=<isolated Python deps>;apps/backend python -m pytest apps/backend/tests -q` | 7 тестов выполняются без PG; PG тест skipped. Формы JSON и SQLite persistence проверены. |
-| Реальный PostgreSQL | Изолированный PG16.2 cluster в уникальном `%TEMP%` каталоге, loopback `127.0.0.1:55439`, отдельная `zhkh_e1_test` БД. `TEST_POSTGRES_URL=postgresql+psycopg://zhkh@127.0.0.1:55439/zhkh_e1_test`, `PYTHONPATH=%TEMP%/vk_zhkh_b_e1_python;apps/backend`, `python -m pytest apps/backend/tests -q` | Три последовательных прогона в той же среде: каждый `8 passed, 1 warning`. Каждый PG прогон создаёт уникальный test schema; проверены Alembic, JSONB собственной receipt, persistence после restart клиента, own job/worker, idempotency и readiness. Warning из Starlette/anyio deprecation. |
+| Backend API + SQLite | `PYTHONPATH=<isolated Python deps>;apps/backend python -m pytest apps/backend/tests -q` | После runtime fix `8 passed, 1 skipped, 1 warning`; PG тест без URL skipped. Формы JSON и SQLite persistence проверены. |
+| Реальный PostgreSQL | Изолированный PG16.2 cluster в уникальном `%TEMP%` каталоге, loopback `127.0.0.1:55439`, отдельная `zhkh_e1_test` БД. `TEST_POSTGRES_URL=postgresql+psycopg://zhkh@127.0.0.1:55439/zhkh_e1_test`, `PYTHONPATH=%TEMP%/vk_zhkh_b_e1_python;apps/backend`, `python -m pytest apps/backend/tests -q` | Три последовательных прогона до runtime fix: каждый `8 passed, 1 warning`; после fix `9 passed, 1 warning`. Каждый PG прогон создаёт уникальный test schema; проверены Alembic, JSONB собственной receipt, persistence после restart клиента, own job/worker, idempotency и readiness. Warning из Starlette/anyio deprecation. |
 | HTTP контракт после C merge | `python scripts/check_http_contract.py` с `scripts/requirements-contracts.lock` | `OK: OpenAPI 3.1; 28 operations; 24 JSON examples; engine fields linked` |
 | Compose parser | Docker Compose CLI v5.5.1 `--env-file .env.example -f compose.yaml -f compose.local.yaml config -q` и тот же VM override | Оба exit 0 с placeholder значениями; секретный config output не сохранялся. |
-| Docker build/up и PostgreSQL 17 | Docker daemon/CLI runtime в текущей Windows среде недоступен | Не проверено; Compose parser и PG16 не доказывают целевой контейнерный запуск. |
+| Docker build/up и PostgreSQL 17 | [GitHub Actions run #6](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36318770691), integration SHA `0b0daaf994315c63de8f0db7d458de6411a31d81` | **Success** на изолированном Linux runner: Compose `config --quiet`, `up --build --detach`, PostgreSQL major 17, API `/health/ready` и meta HTTP 200, worker running, `nginx -t`, web HTTP 200, JS asset HTTP 200, deep SPA link HTTP 200. Meta подтвердил `engine_stub=true`, `receipt_ocr=false`. Локальная Windows среда по-прежнему не имеет Docker daemon. |
 | VM / MAX | E0 SSH дал `Permission denied (publickey)`; текущих VM/MAX credentials не получено | VM приложение, публичный `/team/zhkh/`, bot auth/webhook и mini-app не проверены. Общий Nginx/VM не изменялись. |
 
 ### Открыто и следующий шаг
 
-Координатор повторяет тесты и Compose parser по pushed `d1798ccd1f064fcd40581679a9b283e85ba0c339`, проверяет совместимость A/C, возвращает конкретные дефекты либо принимает E1-B-01. Для полного E1 остаются Docker build/up на PostgreSQL 17 и frontend вызовы живого backend; внешние VM/MAX блокеры отдельно переносятся в следующие этапы. B не начинает E2 и не разворачивает VM до нового задания и принятого release SHA.
+Первые runtime прогоны [#3](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36318022335) и [#5](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36318607065) выявили, соответственно, eager вычисление несуществующего `parents[4]` в worker и HTTP 500 у web при отсутствии явного Nginx static root. Оба дефекта устранены указанными code SHA; run #6 прошёл. Далее координатор проверяет совместимость с A/C и решает приёмку общего E1. VM/MAX остаются внешними блокерами; CI не доказывает доставку в VM или реальный клиент MAX. B не начинает E2 и не разворачивает VM до нового задания и принятого release SHA.
