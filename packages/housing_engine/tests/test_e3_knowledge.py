@@ -98,12 +98,34 @@ class KnowledgeTests(unittest.TestCase):
                     self.assertEqual(result.sources, [])
                     self.assertEqual(result.actions, [])
         for text in ("Хочу расшифровку ошибки принтера", "Перебои с Wi-Fi роутером",
-                     "Ищу почту поставщика интернета"):
+                     "Ищу почту поставщика интернета", "Почему смартфон отличается от предыдущего?",
+                     "Где оплата билета?", "Составить запрос на расчёт кредита"):
             with self.subTest(text=text):
                 result = answer_question(question(text, **context), self.knowledge)
                 self.assertEqual((result.topic_id, result.status), (None, "unsupported"))
                 self.assertEqual(result.sources, [])
                 self.assertEqual(result.actions, [])
+
+    def test_action_and_object_signals_disambiguate_related_topics(self):
+        context = {"territory_id": "moscow", "role": "owner", "service_code": "cold_water"}
+        cases = (
+            ("Почему сумма коммунального платежа отличается за два периода?", "bill_change", "answered", None),
+            ("Где журнал оплаченных счетов за ЖКУ?", "payment_history", "answered", None),
+            ("Внёс плату за ЖКУ, где её запись?", "payment_history", "answered", None),
+            ("Кредитовый баланс остался после оплаты ЖКУ", "arrears_or_credit", "answered", None),
+            ("Доначислили плату за прошлый период", "adjustment", "answered", None),
+            ("Подготовьте вопрос о детализации суммы за услугу", "request_breakdown", "answered", None),
+            ("Как попросить пояснить состав платы за воду?", "request_breakdown", "answered", None),
+            ("Нужна бумага с подтверждением сведений о жилье", "housing_document", "needs_clarification", "document_kind"),
+            ("После переезда что проверить по коммунальным платежам?", "new_resident", "answered", None),
+            ("Стал собственником жилья недавно, как начать?", "new_resident", "answered", None),
+            ("Как запросить детализацию и объяснить термин строки?", None, "needs_clarification", "topic_id"),
+        )
+        for text, topic_id, status, field in cases:
+            with self.subTest(text=text):
+                result = answer_question(question(text, **context), self.knowledge)
+                self.assertEqual((result.topic_id, result.status), (topic_id, status))
+                self.assertEqual(result.clarification.field if result.clarification else None, field)
 
     def test_verified_generic_source_and_local_region_boundary(self):
         for region in ("moscow", "moscow-oblast"):
