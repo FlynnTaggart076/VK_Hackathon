@@ -2,7 +2,7 @@ name: E2 Compose smoke
 
 on:
   push:
-    branches: [integration/e2, integration/e3]
+    branches: [integration/e2, integration/e3, integration/e4]
     paths:
       - .github/workflows/e2-compose-smoke.yml
       - apps/**
@@ -35,6 +35,7 @@ jobs:
           on_exit() {
             status=$?
             if [[ -n "${vite_pid:-}" ]]; then kill "$vite_pid" 2>/dev/null || true; fi
+            if [[ -n "${nginx_dummy:-}" ]]; then docker rm -f "$nginx_dummy" >/dev/null 2>&1 || true; fi
             if (( status != 0 )); then "${compose[@]}" logs --no-color --tail=120 || true; fi
           }
           trap on_exit EXIT
@@ -100,7 +101,7 @@ jobs:
             echo "::error title=E2 HTTP persistence::$(tail -n 15 /tmp/zhkh-e2-verify.log | tr '\r\n' '  ' | tail -c 1800)"
             exit 1
           fi
-          if [[ "$GITHUB_REF_NAME" == integration/e3 ]]; then
+          if [[ "$GITHUB_REF_NAME" == integration/e3 || "$GITHUB_REF_NAME" == integration/e4 ]]; then
             if ! python3 scripts/smoke_e3_http.py > /tmp/zhkh-e3-http.log 2>&1; then
               echo "::error title=E3 HTTP comparison::$(tail -n 20 /tmp/zhkh-e3-http.log | tr '\r\n' '  ' | tail -c 1800)"
               exit 1
@@ -112,13 +113,55 @@ jobs:
             echo "::error title=E2 OCR process tree::$(tail -n 20 /tmp/zhkh-e2-tree-test.log | tr '\r\n' '  ' | tail -c 1800)"
             exit 1
           fi
-          if [[ "$GITHUB_REF_NAME" == integration/e3 ]]; then
+          if [[ "$GITHUB_REF_NAME" == integration/e3 || "$GITHUB_REF_NAME" == integration/e4 ]]; then
             if ! "${compose[@]}" run --rm --no-deps -v "$GITHUB_WORKSPACE:/repo:ro" \
                 -e PYTHONPATH=/workspace worker python /repo/scripts/verify_e3_webhook.py \
                 > /tmp/zhkh-e3-webhook.log 2>&1; then
               echo "::error title=E3 webhook PG replay::$(tail -n 20 /tmp/zhkh-e3-webhook.log | tr '\r\n' '  ' | tail -c 1800)"
               exit 1
             fi
+          fi
+          if [[ "$GITHUB_REF_NAME" == integration/e4 ]]; then
+            docker network create vk-zhkh-edge >/dev/null
+            python3 - <<'PY'
+          from pathlib import Path
+          snippet = Path('infra/nginx/team-web-route.conf.example').read_text()
+          Path('/tmp/zhkh-team-web-route.conf').write_text('server { listen 8080;\n' + snippet + '\n}\n')
+          PY
+            nginx_dummy="$(docker run --detach --network vk-zhkh-edge --network-alias vk-zhkh-web nginx:1.27.5-alpine)"
+            if ! docker run --rm --network vk-zhkh-edge \
+                -v /tmp/zhkh-team-web-route.conf:/etc/nginx/conf.d/default.conf:ro \
+                nginx:1.27.5-alpine nginx -t > /tmp/zhkh-e4-nginx-syntax.log 2>&1; then
+              echo "::error title=E4 shared Nginx snippet syntax::$(tail -n 20 /tmp/zhkh-e4-nginx-syntax.log | tr '\r\n' '  ' | tail -c 1800)"
+              exit 1
+            fi
+            docker rm -f "$nginx_dummy" >/dev/null
+            nginx_dummy=''
+            if ! "${compose[@]}" run --rm --no-deps -v "$GITHUB_WORKSPACE:/repo:ro" \
+                -e PYTHONPATH=/workspace worker python /repo/packages/housing_engine/eval_ocr_e4.py \
+                > /tmp/zhkh-e4-ocr.log 2>&1; then
+              echo "::error title=E4 synthetic OCR holdout::$(tail -n 20 /tmp/zhkh-e4-ocr.log | tr '\r\n' '  ' | tail -c 1800)"
+              exit 1
+            fi
+            if ! "${compose[@]}" run --rm --no-deps -v "$GITHUB_WORKSPACE:/repo:ro" \
+                -e PYTHONPATH=/workspace worker python /repo/packages/housing_engine/eval_questions_e4.py \
+                > /tmp/zhkh-e4-faq.log 2>&1; then
+              echo "::error title=E4 FAQ holdout::$(tail -n 20 /tmp/zhkh-e4-faq.log | tr '\r\n' '  ' | tail -c 1800)"
+              exit 1
+            fi
+            export MAX_BOT_TOKEN='ci-synthetic-token'
+            export MAX_WEB_APP='ci-synthetic-bot'
+            vm_compose=(docker compose -p "$project" -f compose.yaml -f compose.vm.yaml)
+            "${vm_compose[@]}" config --quiet
+            "${vm_compose[@]}" config --format json | python3 scripts/verify_e4_vm_network.py config
+            if ! "${vm_compose[@]}" run --rm --no-deps -v "$GITHUB_WORKSPACE:/repo:ro" \
+                worker python /repo/scripts/verify_e4_vm_network.py egress \
+                > /tmp/zhkh-e4-vm-network.log 2>&1; then
+              echo "::error title=E4 VM egress::$(tail -n 20 /tmp/zhkh-e4-vm-network.log | tr '\r\n' '  ' | tail -c 1800)"
+              exit 1
+            fi
+            export MAX_BOT_TOKEN=''
+            export MAX_WEB_APP=''
           fi
           if ! (cd apps/web && npm ci --no-audit --no-fund) > /tmp/zhkh-e2-npm.log 2>&1; then
             echo "::error title=E2 frontend dependencies::$(tail -n 20 /tmp/zhkh-e2-npm.log | tr '\r\n' '  ' | tail -c 1800)"
@@ -163,10 +206,17 @@ jobs:
             echo "::error title=E2 UI receipt persistence::$(tail -n 15 /tmp/zhkh-e2-ui-restart.log | tr '\r\n' '  ' | tail -c 1800)"
             exit 1
           fi
-          if [[ "$GITHUB_REF_NAME" == integration/e3 ]]; then
+          if [[ "$GITHUB_REF_NAME" == integration/e3 || "$GITHUB_REF_NAME" == integration/e4 ]]; then
             if ! BASE_URL=http://127.0.0.1:5173/team/zhkh/ CHROME_PATH="$chrome_path" \
                 node apps/web/scripts/e3-real-flow.mjs > /tmp/zhkh-e3-browser.log 2>&1; then
               echo "::error title=E3 real browser::$(tail -n 20 /tmp/zhkh-e3-browser.log | tr '\r\n' '  ' | tail -c 1800)"
+              exit 1
+            fi
+          fi
+          if [[ "$GITHUB_REF_NAME" == integration/e4 ]]; then
+            if ! BASE_URL=http://127.0.0.1:5173/team/zhkh/ CHROME_PATH="$chrome_path" \
+                node apps/web/scripts/e4-real-resilience.mjs > /tmp/zhkh-e4-browser.log 2>&1; then
+              echo "::error title=E4 real browser::$(tail -n 20 /tmp/zhkh-e4-browser.log | tr '\r\n' '  ' | tail -c 1800)"
               exit 1
             fi
           fi

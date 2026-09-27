@@ -13,7 +13,9 @@
     "test:browser:e2": "node scripts/e2-mock-flow.mjs",
     "test:browser:e2:real": "node scripts/e2-real-flow.mjs",
     "test:browser:e3:mock": "node scripts/e3-mock-flow.mjs",
-    "test:browser:e3:real": "node scripts/e3-real-flow.mjs"
+    "test:browser:e3:real": "node scripts/e3-real-flow.mjs",
+    "test:browser:e4:real": "node scripts/e4-real-resilience.mjs",
+    "test:browser:e4:bridge-sim": "node scripts/e4-bridge-sim.mjs"
   },
   "dependencies": {
     "react": "19.3.0",

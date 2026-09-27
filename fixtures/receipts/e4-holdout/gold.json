@@ -1,0 +1,404 @@
+{
+  "schema_version": "1.0",
+  "provenance": "Generator-defined numeric and printed-field gold for the English DEMO-BILL-V1 educational layout; created before any E4 engine evaluation",
+  "created_at": "2026-09-27",
+  "scoring": {
+    "population": "clean only; each path in critical_fields is a separate critical field",
+    "critical_fields_per_document": 11,
+    "document_count": 12,
+    "denominator": 132,
+    "errors_in_denominator": true,
+    "ocr_representations": [
+      "png",
+      "jpeg",
+      "image_only_pdf"
+    ],
+    "pdf_text_reported_separately": true
+  },
+  "clean": [
+    {
+      "file": "clean-01.pdf",
+      "sha256": "a8866e74f3968e5a230232904989e3e432c217f5eafa1b4dda103cd64b489536",
+      "bytes": 2274,
+      "representation": "text_pdf",
+      "media_type": "application/pdf",
+      "template_id": "demo-bill-v1",
+      "is_synthetic": true,
+      "case_id": "C01",
+      "critical_fields": {
+        "/period": "2026-01",
+        "/services/count": 1,
+        "/services/0/raw_name": "Cold water (m3)",
+        "/services/0/charge_amount": "96.00",
+        "/document_current_charges": "96.00",
+        "/settlement/opening_balance": "0.00",
+        "/settlement/payments_credited": "0.00",
+        "/settlement/penalties": "0.00",
+        "/settlement/other_account_changes": "0.00",
+        "/settlement/document_closing_balance": "96.00",
+        "/document_total_due": "96.00"
+      }
+    },
+    {
+      "file": "clean-02.pdf",
+      "sha256": "ef0c2067d0e6d2d981bb1253a608e446ed615941758a35884968186b7b0d78e1",
+      "bytes": 2278,
+      "representation": "text_pdf",
+      "media_type": "application/pdf",
+      "template_id": "demo-bill-v1",
+      "is_synthetic": true,
+      "case_id": "C02",
+      "critical_fields": {
+        "/period": "2026-02",
+        "/services/count": 1,
+        "/services/0/raw_name": "Cold water (m3)",
+        "/services/0/charge_amount": "132.00",
+        "/document_current_charges": "132.00",
+        "/settlement/opening_balance": "0.00",
+        "/settlement/payments_credited": "0.00",
+        "/settlement/penalties": "0.00",
+        "/settlement/other_account_changes": "0.00",
+        "/settlement/document_closing_balance": "132.00",
+        "/document_total_due": "132.00"
+      }
+    },
+    {
+      "file": "clean-03.pdf",
+      "sha256": "9d474f533296b06d0be98d1e786fad7e5a9d9ae0f36ef0074559f16d6e612efe",
+      "bytes": 2278,
+      "representation": "text_pdf",
+      "media_type": "application/pdf",
+      "template_id": "demo-bill-v1",
+      "is_synthetic": true,
+      "case_id": "C03",
+      "critical_fields": {
+        "/period": "2026-03",
+        "/services/count": 1,
+        "/services/0/raw_name": "Cold water (m3)",
+        "/services/0/charge_amount": "170.00",
+        "/document_current_charges": "170.00",
+        "/settlement/opening_balance": "0.00",
+        "/settlement/payments_credited": "0.00",
+        "/settlement/penalties": "0.00",
+        "/settlement/other_account_changes": "0.00",
+        "/settlement/document_closing_balance": "170.00",
+        "/document_total_due": "170.00"
+      }
+    },
+    {
+      "file": "clean-04.png",
+      "sha256": "773c0845900f202e013a0ad396a988f92c8823cfcb1f403a5f42c8a6fda83ed2",
+      "bytes": 97211,
+      "representation": "png",
+      "media_type": "image/png",
+      "template_id": "demo-bill-v1",
+      "is_synthetic": true,
+      "case_id": "C04",
+      "critical_fields": {
+        "/period": "2026-04",
+        "/services/count": 1,
+        "/services/0/raw_name": "Cold water (m3)",
+        "/services/0/charge_amount": "210.00",
+        "/document_current_charges": "210.00",
+        "/settlement/opening_balance": "0.00",
+        "/settlement/payments_credited": "0.00",
+        "/settlement/penalties": "0.00",
+        "/settlement/other_account_changes": "0.00",
+        "/settlement/document_closing_balance": "210.00",
+        "/document_total_due": "210.00"
+      }
+    },
+    {
+      "file": "clean-05.png",
+      "sha256": "4561f9d5a431316763131497bc9c87c5ebb95dd2b897a022f61f11a8ae2d874d",
+      "bytes": 99811,
+      "representation": "png",
+      "media_type": "image/png",
+      "template_id": "demo-bill-v1",
+      "is_synthetic": true,
+      "case_id": "C05",
+      "critical_fields": {
+        "/period": "2026-05",
+        "/services/count": 1,
+        "/services/0/raw_name": "Cold water (m3)",
+        "/services/0/charge_amount": "252.00",
+        "/document_current_charges": "252.00",
+        "/settlement/opening_balance": "0.00",
+        "/settlement/payments_credited": "0.00",
+        "/settlement/penalties": "0.00",
+        "/settlement/other_account_changes": "0.00",
+        "/settlement/document_closing_balance": "252.00",
+        "/document_total_due": "252.00"
+      }
+    },
+    {
+      "file": "clean-06.png",
+      "sha256": "cfb7e45aac3a1161e9b73ccc31ec5ed21110be5fb3f69d53b1bbd629233a9f87",
+      "bytes": 100994,
+      "representation": "png",
+      "media_type": "image/png",
+      "template_id": "demo-bill-v1",
+      "is_synthetic": true,
+      "case_id": "C06",
+      "critical_fields": {
+        "/period": "2026-06",
+        "/services/count": 1,
+        "/services/0/raw_name": "Cold water (m3)",
+        "/services/0/charge_amount": "296.00",
+        "/document_current_charges": "296.00",
+        "/settlement/opening_balance": "0.00",
+        "/settlement/payments_credited": "0.00",
+        "/settlement/penalties": "0.00",
+        "/settlement/other_account_changes": "0.00",
+        "/settlement/document_closing_balance": "296.00",
+        "/document_total_due": "296.00"
+      }
+    },
+    {
+      "file": "clean-07.jpg",
+      "sha256": "4cdf4845480f7284d47d5187ebd72fe665257c46a87fc00d69c20840afa1f788",
+      "bytes": 140528,
+      "representation": "jpeg",
+      "media_type": "image/jpeg",
+      "template_id": "demo-bill-v1",
+      "is_synthetic": true,
+      "case_id": "C07",
+      "critical_fields": {
+        "/period": "2026-07",
+        "/services/count": 1,
+        "/services/0/raw_name": "Cold water (m3)",
+        "/services/0/charge_amount": "342.00",
+        "/document_current_charges": "342.00",
+        "/settlement/opening_balance": "0.00",
+        "/settlement/payments_credited": "0.00",
+        "/settlement/penalties": "0.00",
+        "/settlement/other_account_changes": "0.00",
+        "/settlement/document_closing_balance": "342.00",
+        "/document_total_due": "342.00"
+      }
+    },
+    {
+      "file": "clean-08.jpg",
+      "sha256": "9d364e92f68617c95357fb9d8556f9c7d4abe644a87f866f36c6ec13f65d8dbf",
+      "bytes": 140728,
+      "representation": "jpeg",
+      "media_type": "image/jpeg",
+      "template_id": "demo-bill-v1",
+      "is_synthetic": true,
+      "case_id": "C08",
+      "critical_fields": {
+        "/period": "2026-08",
+        "/services/count": 1,
+        "/services/0/raw_name": "Cold water (m3)",
+        "/services/0/charge_amount": "390.00",
+        "/document_current_charges": "390.00",
+        "/settlement/opening_balance": "0.00",
+        "/settlement/payments_credited": "0.00",
+        "/settlement/penalties": "0.00",
+        "/settlement/other_account_changes": "0.00",
+        "/settlement/document_closing_balance": "390.00",
+        "/document_total_due": "390.00"
+      }
+    },
+    {
+      "file": "clean-09.jpg",
+      "sha256": "883705dd6f5e0a9b0b6f1b2190354875a0ddc4ab2430a3860955c7ba1a1018b0",
+      "bytes": 140212,
+      "representation": "jpeg",
+      "media_type": "image/jpeg",
+      "template_id": "demo-bill-v1",
+      "is_synthetic": true,
+      "case_id": "C09",
+      "critical_fields": {
+        "/period": "2026-09",
+        "/services/count": 1,
+        "/services/0/raw_name": "Cold water (m3)",
+        "/services/0/charge_amount": "440.00",
+        "/document_current_charges": "440.00",
+        "/settlement/opening_balance": "0.00",
+        "/settlement/payments_credited": "0.00",
+        "/settlement/penalties": "0.00",
+        "/settlement/other_account_changes": "0.00",
+        "/settlement/document_closing_balance": "440.00",
+        "/document_total_due": "440.00"
+      }
+    },
+    {
+      "file": "clean-10.pdf",
+      "sha256": "f90dd92fb3792a99a0207553a5b134c76a7576c776f51710e0ad43e5a44a41d2",
+      "bytes": 91162,
+      "representation": "image_only_pdf",
+      "media_type": "application/pdf",
+      "template_id": "demo-bill-v1",
+      "is_synthetic": true,
+      "case_id": "C10",
+      "critical_fields": {
+        "/period": "2026-10",
+        "/services/count": 1,
+        "/services/0/raw_name": "Cold water (m3)",
+        "/services/0/charge_amount": "492.00",
+        "/document_current_charges": "492.00",
+        "/settlement/opening_balance": "0.00",
+        "/settlement/payments_credited": "0.00",
+        "/settlement/penalties": "0.00",
+        "/settlement/other_account_changes": "0.00",
+        "/settlement/document_closing_balance": "492.00",
+        "/document_total_due": "492.00"
+      }
+    },
+    {
+      "file": "clean-11.pdf",
+      "sha256": "39d48907631992b31437eecbe3a5a925533c63875882b8979b4b872a4a4e7f5b",
+      "bytes": 90920,
+      "representation": "image_only_pdf",
+      "media_type": "application/pdf",
+      "template_id": "demo-bill-v1",
+      "is_synthetic": true,
+      "case_id": "C11",
+      "critical_fields": {
+        "/period": "2026-11",
+        "/services/count": 1,
+        "/services/0/raw_name": "Cold water (m3)",
+        "/services/0/charge_amount": "546.00",
+        "/document_current_charges": "546.00",
+        "/settlement/opening_balance": "0.00",
+        "/settlement/payments_credited": "0.00",
+        "/settlement/penalties": "0.00",
+        "/settlement/other_account_changes": "0.00",
+        "/settlement/document_closing_balance": "546.00",
+        "/document_total_due": "546.00"
+      }
+    },
+    {
+      "file": "clean-12.pdf",
+      "sha256": "db36b54842ec835817721b0e542fb1b0aced4bd0d163fdc2149cb9461882dee3",
+      "bytes": 91177,
+      "representation": "image_only_pdf",
+      "media_type": "application/pdf",
+      "template_id": "demo-bill-v1",
+      "is_synthetic": true,
+      "case_id": "C12",
+      "critical_fields": {
+        "/period": "2026-12",
+        "/services/count": 1,
+        "/services/0/raw_name": "Cold water (m3)",
+        "/services/0/charge_amount": "602.00",
+        "/document_current_charges": "602.00",
+        "/settlement/opening_balance": "0.00",
+        "/settlement/payments_credited": "0.00",
+        "/settlement/penalties": "0.00",
+        "/settlement/other_account_changes": "0.00",
+        "/settlement/document_closing_balance": "602.00",
+        "/document_total_due": "602.00"
+      }
+    }
+  ],
+  "edge_controls": [
+    {
+      "file": "../demo-bill-cropped.pdf",
+      "sha256": "2bc8c3a7dd3e6af1a01b41bc1fc71288c7b58a87597959213a1cdc9697588f45",
+      "bytes": 1898,
+      "representation": "existing_synthetic_edge",
+      "media_type": "application/pdf",
+      "template_id": "demo-bill-v1",
+      "is_synthetic": true,
+      "expected_outcome": "partial",
+      "expected_fields": {
+        "/period": "2026-09",
+        "/document_total_due": null
+      }
+    },
+    {
+      "file": "../demo-bill-unreadable.png",
+      "sha256": "939a5e926ee5c5776c4b899883703bb43a0c4993462be73f88f7c950ed841bca",
+      "bytes": 7264,
+      "representation": "existing_synthetic_edge",
+      "media_type": "image/png",
+      "template_id": null,
+      "is_synthetic": true,
+      "expected_outcome": "manual_required",
+      "expected_fields": {}
+    },
+    {
+      "file": "../unknown-layout.pdf",
+      "sha256": "5f6a2a45a583ba0333438333631c87b989d380f9a1c29d8f6a1b9f637c7d79d7",
+      "bytes": 1655,
+      "representation": "existing_synthetic_edge",
+      "media_type": "application/pdf",
+      "template_id": null,
+      "is_synthetic": true,
+      "expected_outcome": "manual_required",
+      "expected_fields": {}
+    },
+    {
+      "file": "../corrupt.pdf",
+      "sha256": "72db2793b64340f3a3530b0579d6e2673374ac1e51d9d909ab017307a069b66c",
+      "bytes": 19,
+      "representation": "existing_synthetic_edge",
+      "media_type": "application/pdf",
+      "template_id": null,
+      "is_synthetic": true,
+      "expected_outcome": "error:CORRUPT_DOCUMENT",
+      "expected_fields": {}
+    },
+    {
+      "file": "../demo-bill-2026-09-adjustment.png",
+      "sha256": "ada43ff3252762839fa2fea68ecef88c11da361e30b54fc66e02c23ca587857d",
+      "bytes": 105697,
+      "representation": "existing_synthetic_edge",
+      "media_type": "image/png",
+      "template_id": "demo-bill-v1",
+      "is_synthetic": true,
+      "expected_outcome": "recognized",
+      "expected_fields": {
+        "/adjustments/0/amount": "-50.00",
+        "/document_current_charges": "220.00",
+        "/document_total_due": "220.00"
+      }
+    },
+    {
+      "file": "../demo-bill-2026-09-debt-payment.jpg",
+      "sha256": "990f33a2b29e0d0ffd8ba5cd4d507c0080f47fbeb517af72c44506d39de8d044",
+      "bytes": 141142,
+      "representation": "existing_synthetic_edge",
+      "media_type": "image/jpeg",
+      "template_id": "demo-bill-v1",
+      "is_synthetic": true,
+      "expected_outcome": "recognized",
+      "expected_fields": {
+        "/settlement/opening_balance": "100.00",
+        "/settlement/payments_credited": "80.00",
+        "/document_total_due": "290.00"
+      }
+    },
+    {
+      "file": "../demo-bill-2026-09-credit.png",
+      "sha256": "3d0905fce474f5ff17ff156785b38343e55c69be177f1b8763016fd54265f338",
+      "bytes": 97782,
+      "representation": "existing_synthetic_edge",
+      "media_type": "image/png",
+      "template_id": "demo-bill-v1",
+      "is_synthetic": true,
+      "expected_outcome": "recognized",
+      "expected_fields": {
+        "/settlement/opening_balance": "-300.00",
+        "/settlement/document_closing_balance": "-30.00",
+        "/document_total_due": "0.00"
+      }
+    },
+    {
+      "file": "../demo-bill-2026-09-unknown-service.jpg",
+      "sha256": "eb374fbafcb021988c3c21406510c70a87d02b79e88a5f06d92dfac8bb67a06c",
+      "bytes": 141193,
+      "representation": "existing_synthetic_edge",
+      "media_type": "image/jpeg",
+      "template_id": "demo-bill-v1",
+      "is_synthetic": true,
+      "expected_outcome": "partial",
+      "expected_fields": {
+        "/services/0/service_code": "other",
+        "/document_total_due": "270.00"
+      }
+    }
+  ]
+}
