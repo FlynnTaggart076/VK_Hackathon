@@ -1,4 +1,4 @@
-"""Minimal durable MAX webhook and text outbox. No raw update or token is logged."""
+"""Minimal durable MAX webhook and message outbox. No raw update or token is logged."""
 
 from __future__ import annotations
 
@@ -92,9 +92,20 @@ def command_text(item: WebhookInbox) -> str | None:
         return "Помогу разобраться с начислениями ЖКХ. Откройте мини-приложение, чтобы загрузить квитанцию, или задайте текстовый вопрос. Команда /help — возможности и ограничения."
     if (item.text or "").strip().lower() == "/help":
         return "Можно спросить о начислениях и проверить квитанцию в мини-приложении. Файлы и фото загружайте только там. Голосовые сообщения и отправка обращений не поддерживаются."
+    if (item.text or "").strip().lower() == "задать вопрос":
+        return "Напишите текстовый вопрос о начислениях ЖКХ в этом личном диалоге."
     if item.attachment_kind:
         return "Загрузите PDF или фото квитанции в мини-приложении. Голосовые сообщения не обрабатываются."
     return None
+
+
+def start_keyboard(settings: object) -> list[dict]:
+    open_app = {"type": "open_app", "text": "Разобрать платёжку"}
+    if settings.max_web_app:
+        open_app["web_app"] = settings.max_web_app
+    return [{"type": "inline_keyboard", "payload": {"buttons": [
+        [{"type": "message", "text": "Задать вопрос"}], [open_app],
+    ]}}]
 
 
 def question_text(session, item: WebhookInbox) -> str | None:
@@ -140,19 +151,25 @@ def process_inbox_once(store: SqlStore) -> bool:
             return False
         reply = command_text(item) or question_text(session, item)
         if reply:
+            is_start = item.event_type == "bot_started" or (item.text or "").strip().lower() == "/start"
             session.add(Outbox(id=uuid.uuid4(), business_key=item.dedup_key,
-                               max_user_id=item.max_user_id, text=reply, state="queued", attempt=0,
+                               max_user_id=item.max_user_id, text=reply,
+                               attachments=start_keyboard(store.settings) if is_start else [],
+                               state="queued", attempt=0,
                                run_after=now(), created_at=now(),
                                expires_at=now() + timedelta(hours=24)))
         item.state = "done"
     return True
 
 
-def send_text(settings: object, max_user_id: int, text: str) -> int:
+def send_text(settings: object, max_user_id: int, text: str, attachments: list[dict]) -> int:
     if not settings.max_bot_token:
         raise RuntimeError("MAX_BOT_TOKEN unavailable")
     url = settings.max_api_base_url.rstrip("/") + "/messages?" + urlencode({"user_id": max_user_id})
-    data = json.dumps({"text": text}, ensure_ascii=False).encode("utf-8")
+    body = {"text": text}
+    if attachments:
+        body["attachments"] = attachments
+    data = json.dumps(body, ensure_ascii=False).encode("utf-8")
     request = Request(url, data=data, method="POST", headers={
         "Authorization": settings.max_bot_token, "Content-Type": "application/json",
     })
@@ -177,9 +194,9 @@ def process_outbox_once(store: SqlStore, sender=send_text) -> bool:
             return False
         item.state = "sending"  # Crash after this point is an uncertain send, never auto-retried.
         item.attempt += 1
-        item_id, recipient, content = item.id, item.max_user_id, item.text
+        item_id, recipient, content, attachments = item.id, item.max_user_id, item.text, item.attachments
     try:
-        status = sender(store.settings, recipient, content)
+        status = sender(store.settings, recipient, content, attachments)
     except (URLError, TimeoutError, OSError):
         status = None
     with store.Session.begin() as session:
