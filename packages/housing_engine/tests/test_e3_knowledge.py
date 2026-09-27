@@ -127,6 +127,26 @@ class KnowledgeTests(unittest.TestCase):
                 self.assertEqual((result.topic_id, result.status), (topic_id, status))
                 self.assertEqual(result.clarification.field if result.clarification else None, field)
 
+    def test_e4_receipt_labels_comparison_and_new_home_intents(self):
+        context = {"territory_id": "moscow", "role": "owner", "service_code": "cold_water"}
+        cases = (
+            ("Расшифровать название услуги в квитанции", "bill_terms", "answered"),
+            ("Счёт подорожал по сравнению с прошлым месяцем", "bill_change", "answered"),
+            ("Сопоставьте две платёжки по сумме", "bill_change", "answered"),
+            ("Итог к оплате изменился за месяц", "bill_change", "answered"),
+            ("После покупки жилья с чего начать с квитанциями?", "new_resident", "answered"),
+            ("Можно расшифровать строку и попросить расчёт?", None, "needs_clarification"),
+            ("Подготовьте запрос на расшифровку платы в строке", "request_breakdown", "answered"),
+        )
+        for text, topic_id, status in cases:
+            with self.subTest(text=text):
+                result = answer_question(question(text, **context), self.knowledge)
+                self.assertEqual((result.topic_id, result.status), (topic_id, status))
+        off_topic = answer_question(question("Цена нового смартфона подорожала", **context), self.knowledge)
+        self.assertEqual((off_topic.topic_id, off_topic.status), (None, "unsupported"))
+        self.assertEqual(off_topic.sources, [])
+        self.assertEqual(off_topic.actions, [])
+
     def test_verified_generic_source_and_local_region_boundary(self):
         for region in ("moscow", "moscow-oblast"):
             with self.subTest(region=region):

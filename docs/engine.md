@@ -1,4 +1,18 @@
-# Housing engine: contract v1 (E3)
+# Housing engine: contract v1 (E4)
+
+## E4 synthetic OCR holdout and FAQ calibration
+
+The E4 critical-field gold in `fixtures/receipts/e4-holdout/gold.json` was frozen in pushed commit `637fe574f583e40e7b1b6e96fc1ec49b7fb49f94` before the engine was evaluated or tuned. Its generator and document SHA-256 values are checked in. Twelve clean `DEMO-BILL-V1` files contribute eleven predeclared critical fields each: period, service count and printed name, service charge, current charges, opening balance, credited payment, penalties, other account changes, closing balance, and total due. Nine PNG/JPEG/image-only PDF files use Tesseract and contribute 99 fields; three text PDFs contribute 33 fields. Extraction failure or an absent field counts as incorrect in the fixed denominator. Eight separate negative/settlement controls check outcomes and expected fields but are excluded from the clean recognition rate.
+
+With Python 3.13, pinned `requirements.lock` and `generator-requirements.lock`, and Tesseract 5 with `eng` and `rus` in `PATH`, run from the repository root:
+
+```powershell
+& .\packages\housing_engine\.venv\Scripts\python.exe packages/housing_engine/eval_ocr_e4.py --json-out $env:TEMP\zhkh-e4-ocr-eval.json
+```
+
+The E4 local run with Tesseract `v5.5.3.20260724` scored OCR 99/99, text PDF 33/33, all clean 132/132, and edge controls 8/8. The harness passes document bytes through the public `extract_receipt` call, checks manifest hashes, field evidence source, OCR `needs_review`, and `OCR_REVIEW_REQUIRED`. These are synthetic English renderings of one supported educational layout; the result does not measure actual Russian invoices, camera photos, other layouts, or field quality after user confirmation. Every OCR value still requires review.
+
+The six exposed E3 FAQ errors were addressed with general intent cues for labels, month-to-month charges, housing purchase, and a two-intent clarification. All five previously published 75-question corpora are now calibration regressions. A new independent corpus is needed to measure post-fix FAQ quality; local source/channel boundaries remain unchanged.
 
 The v1 DTO and JSON Schema remain unchanged. All seven public engine calls run locally. The E3 functions `compare_receipts`, `answer_question`, `compose_draft`, and `load_knowledge` are implemented on branch `agent-c/e3`; B should use a coordinator-accepted code SHA before enabling them in an integrated release.
 
