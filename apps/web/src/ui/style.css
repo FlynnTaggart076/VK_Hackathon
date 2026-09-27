@@ -18,7 +18,7 @@ a:focus-visible, button:focus-visible, textarea:focus-visible { outline: 3px sol
 .error { border-left: 4px solid #b93434; padding: 8px; background: #fff0f0; }
 .error small { display: block; }
 label { display: block; font-weight: 600; margin-bottom: 6px; }
-textarea, select, input[type="password"], input[type="file"] { width: 100%; border: 1px solid #6d8291; border-radius: 8px; padding: 8px; font: inherit; margin-bottom: 12px; }
+textarea, select, input[type="password"], input[type="file"], input:not([type]) { width: 100%; border: 1px solid #6d8291; border-radius: 8px; padding: 8px; font: inherit; margin-bottom: 12px; }
 .check { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; }
 .check input { margin-top: 4px; }
 .notice-box { padding: 12px; margin-top: 8px; border: 1px solid #c9d8e1; border-radius: 8px; }
@@ -28,4 +28,14 @@ form button { margin-top: 8px; }
 .skip { position: absolute; left: -9999px; }
 .skip:focus { left: 12px; top: 8px; background: white; padding: 8px; z-index: 10; }
 footer { padding: 20px 0; font-size: .85rem; }
+.receipt-page { display: block; width: 100%; height: auto; max-height: 550px; object-fit: contain; border: 1px solid #c9d8e1; background: #f4f6f7; }
+.field, fieldset { min-width: 0; }
+fieldset { border: 1px solid #c9d8e1; border-radius: 8px; margin: 16px 0; padding: 12px; }
+.field-note { margin: -8px 0 12px; font-size: .85rem; overflow-wrap: anywhere; }
+.field-note p { margin: 4px 0; }
+.review-warning { color: #845500; }
+.totals { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.totals div { display: contents; }
+.totals dt { min-width: 0; }.totals dd { margin: 0; text-align: right; }
+.panel { overflow-wrap: anywhere; }
 @media (max-width: 380px) { .app { padding: 10px; } .panel { padding: 14px; } nav a { flex: 1 1 auto; text-align: center; } }

@@ -1,4 +1,4 @@
-import type { AnswerContext, AnswerView, ApiErrorBody, Catalog, Job, MeResponse, MetaResponse, Profile, ReceiptQueued, ReceiptView, UnexpectedErrorBody, UpdateProfileRequest } from './types';
+import type { AnswerContext, AnswerView, ApiErrorBody, Catalog, ConfirmReceiptRequest, EditReceiptRequest, Job, MeResponse, MetaResponse, Profile, ReceiptExplanation, ReceiptQueued, ReceiptView, UnexpectedErrorBody, UpdateProfileRequest } from './types';
 
 export const API_BASE = '/team/zhkh/api/v1';
 let sessionToken: string | null = null;
@@ -21,27 +21,37 @@ function isErrorBody(value: unknown): value is ApiErrorBody {
   return !!error && typeof error === 'object' && 'message' in error && 'code' in error;
 }
 
+async function responseError(response: Response): Promise<never> {
+  let parsed: unknown;
+  try { parsed = await response.json(); } catch { /* Gateway may return non-JSON. */ }
+  if (response.status === 401 && sessionToken) {
+    setSessionToken(null);
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('zhkh:session-expired'));
+  }
+  if (isErrorBody(parsed)) throw new ApiRequestError(response.status, parsed);
+  throw new ApiRequestError(response.status, {
+    error: { code: 'UNEXPECTED_RESPONSE', message: 'Сервер вернул неожиданный ответ.', retryable: response.status >= 500, fields: [], details: {} },
+    request_id: response.headers.get('X-Request-ID') ?? 'unknown',
+  });
+}
+
 export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   if (sessionToken) headers.set('Authorization', `Bearer ${sessionToken}`);
   if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
   const url = new URL(`${API_BASE}${path}`, globalThis.location?.origin ?? 'http://localhost');
   const response = await fetch(url, { ...options, headers });
-  if (!response.ok) {
-    let parsed: unknown;
-    try { parsed = await response.json(); } catch { /* Gateway may return non-JSON. */ }
-    if (response.status === 401 && sessionToken) {
-      setSessionToken(null);
-      if (typeof window !== 'undefined') window.dispatchEvent(new Event('zhkh:session-expired'));
-    }
-    if (isErrorBody(parsed)) throw new ApiRequestError(response.status, parsed);
-    throw new ApiRequestError(response.status, {
-      error: { code: 'UNEXPECTED_RESPONSE', message: 'Сервер вернул неожиданный ответ.', retryable: response.status >= 500, fields: [], details: {} },
-      request_id: response.headers.get('X-Request-ID') ?? 'unknown',
-    });
-  }
+  if (!response.ok) return responseError(response);
   if (response.status === 204) return undefined as T;
   return await response.json() as T;
+}
+
+export async function requestBlob(path: string, signal?: AbortSignal): Promise<Blob> {
+  const headers = new Headers();
+  if (sessionToken) headers.set('Authorization', `Bearer ${sessionToken}`);
+  const response = await fetch(new URL(`${API_BASE}${path}`, globalThis.location?.origin ?? 'http://localhost'), { headers, signal });
+  if (!response.ok) return responseError(response);
+  return response.blob();
 }
 
 export const api = {
@@ -61,4 +71,13 @@ export const api = {
     return request<ReceiptQueued>('/receipts', { method: 'POST', body, headers: { 'Idempotency-Key': idempotencyKey }, signal });
   },
   job: (id: string, signal?: AbortSignal) => request<Job>(`/jobs/${encodeURIComponent(id)}`, { signal }),
+  page: (id: string, page: number, signal?: AbortSignal) => requestBlob(`/receipts/${encodeURIComponent(id)}/pages/${page}`, signal),
+  source: (id: string, signal?: AbortSignal) => requestBlob(`/receipts/${encodeURIComponent(id)}/source`, signal),
+  editReceipt: (id: string, body: EditReceiptRequest, signal?: AbortSignal) => request<ReceiptView>(`/receipts/${encodeURIComponent(id)}/draft`, {
+    method: 'PUT', body: JSON.stringify(body), signal,
+  }),
+  confirmReceipt: (id: string, body: ConfirmReceiptRequest, key: string, signal?: AbortSignal) => request<ReceiptView>(`/receipts/${encodeURIComponent(id)}/confirm`, {
+    method: 'POST', body: JSON.stringify(body), headers: { 'Idempotency-Key': key }, signal,
+  }),
+  explanation: (id: string, revision: number, signal?: AbortSignal) => request<ReceiptExplanation>(`/receipts/${encodeURIComponent(id)}/explanation?revision=${revision}`, { signal }),
 };

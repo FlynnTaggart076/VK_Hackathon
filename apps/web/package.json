@@ -9,7 +9,8 @@
     "dev:real": "vite --host 127.0.0.1 --mode real",
     "build": "tsc -b && vite build",
     "generate:types": "openapi-typescript ../../contracts/http/openapi.yaml -o src/api/openapi.generated.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:browser:e2": "node scripts/e2-mock-flow.mjs"
   },
   "dependencies": {
     "react": "19.3.0",
@@ -25,6 +26,7 @@
     "ajv-formats": "3.0.1",
     "msw": "2.15.0",
     "openapi-typescript": "7.13.0",
+    "playwright-core": "1.63.0",
     "typescript": "5.9.3",
     "vite": "8.3.1",
     "vitest": "5.0.2"
