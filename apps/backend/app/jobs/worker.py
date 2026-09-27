@@ -7,9 +7,12 @@ an explicitly imported synthetic demo fixture may be copied into a revision.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import logging
 import os
+import subprocess
+import sys
 import tempfile
 import time
 import uuid
@@ -24,6 +27,19 @@ from app.main import Settings, empty_bill
 
 
 logger = logging.getLogger(__name__)
+
+
+class JobCancelled(Exception):
+    pass
+
+
+def kill_child(process: subprocess.Popen) -> None:
+    if process.poll() is None:
+        try:
+            process.kill()
+        except OSError:
+            pass  # child may have exited between poll and kill
+    process.communicate()
 
 
 def fixture_root(module_file: Path, configured: str | None) -> Path:
@@ -215,6 +231,75 @@ def finish_real(store: SqlStore, job_id: uuid.UUID, token: uuid.UUID, result: di
             preview.replace(store.settings.storage_path / f"{document.storage_key}.page-{number}.png")
 
 
+def communicate_bounded(process: subprocess.Popen, payload: bytes, seconds: float,
+                        on_tick) -> tuple[bytes, bytes]:
+    """Keep the parent responsive; always kill a child beyond the outer budget."""
+    deadline = time.monotonic() + seconds
+    first = True
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            kill_child(process)
+            from housing_engine import EngineError
+            raise EngineError("OCR_TIMEOUT", "Превышено время обработки документа.", retryable=True)
+        try:
+            return process.communicate(input=payload if first else None,
+                                       timeout=min(25.0, remaining))
+        except subprocess.TimeoutExpired:
+            first = False
+            try:
+                active = on_tick()
+            except Exception:
+                kill_child(process)
+                raise
+            if not active:
+                kill_child(process)
+                raise JobCancelled
+
+
+def job_active(store: SqlStore, job_id: uuid.UUID, token: uuid.UUID) -> bool:
+    with store.Session() as session:
+        job = session.get(Job, job_id)
+        return bool(job and job.state == "running" and job.lease_token == token and
+                    job.lease_until is not None and aware(job.lease_until) > now())
+
+
+def bounded_extract(store: SqlStore, job_id: uuid.UUID, token: uuid.UUID,
+                    receipt_id: uuid.UUID, content: bytes, mime_type: str) -> tuple[dict, dict]:
+    from housing_engine import EngineError
+
+    payload = json.dumps({
+        "receipt_id": str(receipt_id), "content": base64.b64encode(content).decode("ascii"),
+        "mime_type": mime_type, "workspace": str(store.settings.storage_path),
+    }).encode("utf-8")
+    try:
+        process = subprocess.Popen([sys.executable, "-m", "app.jobs.engine_child"],
+                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE, shell=False)
+    except OSError:
+        raise EngineError("INTERNAL_ENGINE_ERROR", "Не удалось запустить обработку документа.", retryable=True) from None
+
+    def tick() -> bool:
+        heartbeat(store)
+        return job_active(store, job_id, token)
+
+    try:
+        stdout, _stderr = communicate_bounded(process, payload, 120, tick)
+    finally:
+        if process.poll() is None:
+            kill_child(process)
+    if process.returncode != 0:
+        raise EngineError("INTERNAL_ENGINE_ERROR", "Обработка документа завершилась с ошибкой.", retryable=True)
+    try:
+        value = json.loads(stdout)
+        if "error" in value:
+            error = value["error"]
+            raise EngineError(error["code"], error["message"], retryable=error["retryable"])
+        return value["result"], value["validation"]
+    except (ValueError, KeyError, TypeError):
+        raise EngineError("INTERNAL_ENGINE_ERROR", "Некорректный результат обработки.", retryable=True) from None
+
+
 def run_once(store: SqlStore) -> bool:
     if store.settings.engine_mode == "stub" and store.settings.mode != "dev":
         raise RuntimeError("Fixture worker is allowed only in dev stub mode")
@@ -227,8 +312,6 @@ def run_once(store: SqlStore) -> bool:
         if store.settings.engine_mode == "stub":
             finish(store, job_id, token)
         else:
-            from housing_engine import BillData
-            from app.services.engine_adapter import extract_json, validation_json
             from app.services.preview import generate_previews
 
             with store.Session() as session:
@@ -238,11 +321,10 @@ def run_once(store: SqlStore) -> bool:
                 return True
             item = real_work_item(store, job_id, token)
             if item is None:
-                fail_or_retry(store, job_id, token, retryable=False)
+                fail_or_retry(store, job_id, token, retryable=False, error_code="SOURCE_EXPIRED")
                 return True
             receipt_id, content, mime_type, _storage_key = item
-            result = extract_json(receipt_id, content, mime_type, str(store.settings.storage_path))
-            validation = validation_json(BillData.model_validate_json(json.dumps(result["bill_data"])))
+            result, validation = bounded_extract(store, job_id, token, receipt_id, content, mime_type)
             with tempfile.TemporaryDirectory(prefix="preview-", dir=store.settings.storage_path) as directory:
                 try:
                     previews = generate_previews(content, mime_type, Path(directory))
@@ -250,6 +332,8 @@ def run_once(store: SqlStore) -> bool:
                     logger.exception("Receipt preview generation failed")
                     previews = []  # extraction remains usable; preview endpoint reports PREVIEW_UNAVAILABLE
                 finish_real(store, job_id, token, result, validation, previews)
+    except JobCancelled:
+        return True
     except (ValueError, FileNotFoundError):
         fail_or_retry(store, job_id, token, retryable=False)
     except Exception as exc:

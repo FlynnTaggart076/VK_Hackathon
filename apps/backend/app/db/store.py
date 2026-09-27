@@ -357,7 +357,15 @@ class SqlStore:
         available = bool(document and document.deleted_at is None and aware(document.expires_at) > now()
                          and (self.settings.storage_path / document.storage_key).is_file())
         evidence = revision.extraction_meta.get("field_evidence", []) if revision else []
-        issues = revision.extraction_meta.get("issues", []) if revision else []
+        issues = []
+        if revision:
+            seen = set()
+            for issue in (revision.validation.get("errors", []) + revision.validation.get("warnings", []) +
+                          revision.extraction_meta.get("issues", [])):
+                key = (issue.get("code"), issue.get("path"), issue.get("severity"))
+                if key not in seen:
+                    seen.add(key)
+                    issues.append(issue)
         return {
             "id": str(receipt.id), "status": receipt.status, "revision": receipt.current_revision,
             "created_at": stamp(receipt.created_at), "updated_at": stamp(receipt.updated_at),
@@ -492,20 +500,27 @@ class SqlStore:
             if receipt.current_revision != expected_revision:
                 raise ApiError(409, "REVISION_CONFLICT", "Квитанция изменена; обновите данные.",
                                details={"current_revision": receipt.current_revision})
-            if receipt.status != "needs_review":
+            if receipt.status not in {"needs_review", "confirmed"}:
                 raise ApiError(409, "INVALID_STATE", "Редактирование сейчас недоступно.")
             previous = session.get(ReceiptRevision, (receipt.id, expected_revision))
             if previous is None:
                 raise ApiError(409, "INVALID_STATE", "Извлечение ещё не завершено.")
             new_revision = expected_revision + 1
+            previous_validation = {
+                (item.get("code"), item.get("path"), item.get("severity"))
+                for item in previous.validation.get("errors", []) + previous.validation.get("warnings", [])
+            }
+            extraction_issues = [item for item in issues if (
+                item.get("code"), item.get("path"), item.get("severity")) not in previous_validation]
             session.add(ReceiptRevision(receipt_id=receipt.id, revision=new_revision,
                                         bill_data=deepcopy(bill_data),
                                         extraction_meta={"field_evidence": deepcopy(evidence),
-                                                         "issues": deepcopy(issues),
+                                                         "issues": deepcopy(extraction_issues),
                                                          "outcome": receipt.extraction_outcome},
                                         validation=deepcopy(validation), confirmed_at=None,
                                         engine_version=engine_version))
             receipt.current_revision = new_revision
+            receipt.status = "needs_review"
             receipt.updated_at = now()
             session.flush()
             return self._receipt_view(session, receipt)

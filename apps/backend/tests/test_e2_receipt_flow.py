@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
@@ -15,15 +18,16 @@ from jsonschema import Draft202012Validator, FormatChecker
 import pytest
 from sqlalchemy import create_engine, select, text
 
-from app.db.models import Document, Job, Receipt
+from app.db.models import Document, Job, Receipt, ReceiptRevision
 from app.db.store import now
 from app.jobs.retention import run_retention_once
 from app.services.revision_logic import rebase_evidence
 from app.main import Settings, create_app
-from app.jobs.worker import run_once
+from app.jobs.worker import communicate_bounded, run_once
 from test_contract_responses import validate_response
 from test_dev_api import accept_privacy, headers, login, upload
 from test_sql_store import migrate
+from housing_engine import EngineError
 
 
 FIXTURE = Path(__file__).resolve().parents[3] / "fixtures" / "receipts" / "demo-bill-2026-08.pdf"
@@ -77,7 +81,6 @@ def test_real_bytes_edit_confirm_explain_after_restart(tmp_path, monkeypatch):
         replay = client.post(confirm_url, headers=headers(owner, key),
                              json={"expected_revision": 2, "acknowledged_warning_codes": []})
         assert replay.json() == confirmed.json()
-        assert client.put(edit_url, headers=headers(owner), json={"expected_revision": 3, "bill_data": data}).status_code == 409
         assert client.get(f"/api/v1/receipts/{receipt_id}/explanation?revision=2", headers=headers(owner)).status_code == 409
         assert client.get(f"/api/v1/receipts/{receipt_id}/explanation?revision=3", headers=headers(stranger)).status_code == 404
     with TestClient(create_app(settings)) as restarted:
@@ -90,6 +93,24 @@ def test_real_bytes_edit_confirm_explain_after_restart(tmp_path, monkeypatch):
         assert explanation.json()["calculated_total_due"] == "200.00"
         assert explanation.json()["sources"] == []
         assert "ARITHMETIC_ONLY" in [item["code"] for item in explanation.json()["issues"]]
+        next_bill = dict(confirmed.json()["bill_data"], issuer_name="Повторная правка")
+        reopened = restarted.put(edit_url, headers=headers(owner),
+                                 json={"expected_revision": 3, "bill_data": next_bill})
+        assert reopened.status_code == 200, reopened.json()
+        assert reopened.json()["revision"] == 4 and reopened.json()["status"] == "needs_review"
+        assert restarted.get(f"/api/v1/receipts/{receipt_id}/explanation?revision=3",
+                             headers=headers(owner)).status_code == 409
+        with restarted.app.state.store.Session() as session:
+            old_confirmed = session.get(ReceiptRevision, (uuid.UUID(receipt_id), 3))
+            assert old_confirmed.confirmed_at is not None
+            assert old_confirmed.bill_data["issuer_name"] == "Проверенное название"
+    with TestClient(create_app(settings)) as restarted_again:
+        owner = login(restarted_again, "reviewer_a")["access_token"]
+        persisted = restarted_again.get(f"/api/v1/receipts/{receipt_id}", headers=headers(owner)).json()
+        assert persisted["revision"] == 4 and persisted["bill_data"]["issuer_name"] == "Повторная правка"
+        stale = restarted_again.put(edit_url, headers=headers(owner),
+                                    json={"expected_revision": 3, "bill_data": next_bill})
+        assert stale.status_code == 409 and stale.json()["error"]["code"] == "REVISION_CONFLICT"
 
 
 def test_manual_receipt_is_owned_idempotent_and_server_canonical(tmp_path, monkeypatch):
@@ -105,6 +126,7 @@ def test_manual_receipt_is_owned_idempotent_and_server_canonical(tmp_path, monke
         bill = json.loads((FIXTURE.parent / "water-2026-08.json").read_text(encoding="utf-8"))
         bill["template_id"] = "client-forged-template"
         bill["settlement"]["formula_kind"] = "signed_balance_v1"
+        bill["document_total_due"] = None
         key = str(uuid.uuid4())
         created = client.post("/api/v1/receipts/manual", headers=headers(a, key), json={"bill_data": bill})
         assert created.status_code == 201, created.json()
@@ -116,6 +138,17 @@ def test_manual_receipt_is_owned_idempotent_and_server_canonical(tmp_path, monke
         assert client.post("/api/v1/receipts/manual", headers=headers(a, key), json={"bill_data": bill}).json() == created.json()
         assert client.get(f"/api/v1/receipts/{rid}", headers=headers(b)).status_code == 404
         assert client.get(f"/api/v1/receipts/{rid}/source", headers=headers(a)).status_code == 404
+        warnings = {item["code"] for item in created.json()["issues"] if item["severity"] == "warning"}
+        assert "TOTAL_DUE_UNKNOWN" in warnings
+        confirmation = f"/api/v1/receipts/{rid}/confirm"
+        unacknowledged = client.post(confirmation, headers=headers(a, str(uuid.uuid4())),
+                                     json={"expected_revision": 1, "acknowledged_warning_codes": []})
+        assert unacknowledged.status_code == 422
+        assert set(unacknowledged.json()["error"]["details"]["unacknowledged_warning_codes"]) <= warnings
+        acknowledged = client.post(confirmation, headers=headers(a, str(uuid.uuid4())),
+                                   json={"expected_revision": 1,
+                                         "acknowledged_warning_codes": sorted(warnings)})
+        assert acknowledged.status_code == 200, acknowledged.json()
 
 
 @pytest.mark.parametrize("name,outcome", [
@@ -263,3 +296,14 @@ def test_evidence_follows_stable_line_id_after_reorder():
     evidence = rebase_evidence(old, new, [extracted])
     assert next(item for item in evidence if item["path"] == "/services/1/charge_amount")["source"] == "pdf_text"
     assert next(item for item in evidence if item["path"] == "/services/0/charge_amount")["source"] == "manual"
+
+
+def test_outer_engine_budget_kills_child():
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(5)"],
+                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    started = time.monotonic()
+    with pytest.raises(EngineError) as error:
+        communicate_bounded(child, b"", 0.2, lambda: True)
+    assert error.value.code == "OCR_TIMEOUT"
+    assert child.poll() is not None
+    assert time.monotonic() - started < 2
