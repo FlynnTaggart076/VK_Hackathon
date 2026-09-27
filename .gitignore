@@ -1,0 +1,27 @@
+# Local owner material; keep outside the shared repository.
+Работа с сервером.md
+Prompt.txt
+Умный город.pdf
+.checkouts/
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/dist/
+**/build/
+**/.coverage
+**/coverage/
+runtime/
+storage/
+*.sqlite3
+*.db
+*.dump
+*.log
+*.pem
+*.key
