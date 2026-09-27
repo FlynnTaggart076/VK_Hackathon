@@ -124,13 +124,15 @@ def _cue_scores(normalized: str) -> dict[str, int]:
     def exact(*words: str) -> bool:
         return any(token in words for token in tokens)
 
-    payment_document = has("платежн", "коммунальн") and has("документ")
+    housing = has("квартир", "жиль", "дом", "коммунальн") or exact("жку")
+    payment_document = (has("платежн", "коммунальн") and has("документ")) or (has("документ") and has("оплат") and housing)
     bill_document = (has("квитанц", "платежк", "платежек") or payment_document
                      or exact("счет", "счета", "счете", "счету"))
     bill = bill_document or has("коммуналк") or exact("жку")
     first = has("перв", "впервые")
-    move = has("переех", "переезд", "въех", "засел", "жильц", "жилец", "жилц", "новосел")
-    broad_move = move and has("организац", "обслуживан", "шаг", "действ")
+    new_owner = exact("новый", "новая", "новым", "нового") and has("собственник") and housing
+    move = has("переех", "переезд", "въех", "въезд", "засел", "жильц", "жилец", "жилц", "новосел") or new_owner
+    broad_move = move and (has("организац", "обслуживан", "шаг", "действ") or (exact("кто") and has("выставля")))
     meaning = has("знач", "означ", "термин", "обознач", "граф", "поним", "объясн", "разбор", "подразумев", "смысл", "непонят")
     line = has("строк", "граф", "обознач", "назван", "термин", "сокращен")
     change = has("дороже", "прибав", "разниц", "измен", "вырос", "больш", "сравн", "рост")
@@ -138,24 +140,30 @@ def _cue_scores(normalized: str) -> dict[str, int]:
     meter = has("показан", "счетчик", "водомер", "электросчетчик") or (has("прибор") and has("учет"))
     transfer = has("переда", "передат", "сдава", "сдать", "отправ", "сообщ", "ввод", "цифр", "данн")
     measurement_data = has("цифр", "данн", "показан", "переда", "сдава", "сдать", "ввод")
-    time = has("срок", "дат", "числ", "последн", "когда", "день")
+    time = has("срок", "дат", "числ", "последн", "когда", "день") or exact("дня", "дню", "днем")
     resource = has("вод", "электр", "газ", "тепл", "отоплен", "мусор")
     personal_account = has("лицев") or exact("лс")
     account_reference = has("номер", "реквизит") and bill
+    connected_accounts = has("подключ") and has("счет") and exact("гис") and exact("жкх")
     management = has("управля", "управляйк") or exact("ук") or (has("обслужива") and has("дом"))
-    supplier = has("поставщик", "ресурсоснабж", "выставля")
+    supplier = has("поставщик", "ресурсоснабж", "поставля", "выставля")
+    supplier_context = housing or resource or meter or has("ресурсоснабж")
     contact = has("контакт", "телефон", "обращ") or exact("кому", "куда")
-    payment = (has("оплат", "платил", "платеж", "внесен", "внесенн", "зачисл")
-               and not has("платежк", "платежек", "платежн"))
-    payment_record = has("истор", "запис", "увид", "провер", "учл", "учет", "зачисл")
+    supplier_contact = contact or has("связ", "позвон", "адрес", "почт", "найт", "искать") or exact("кто")
+    payment = (has("оплат", "платил", "внесен", "внесенн", "зачисл", "перечисл")
+               or (has("платеж") and not has("платежк", "платежек", "платежн")))
+    payment_record = has("истор", "запис", "увид", "провер", "учл", "учет", "зачисл", "отраж")
     debt = has("долг", "задолж", "переплат", "остаток", "отрицател") or exact("минус")
-    adjustment = has("перерасчет", "корректиров", "корректир")
+    extra_charge = has("доначисл") and (has("расчет", "исправ") or bill or resource)
+    adjustment = has("перерасчет", "корректиров", "корректир") or extra_charge
     removed = has("снял", "сняли", "удерж")
     breakdown = (has("расшифров", "детализ", "подробн") and (amount or bill or resource)
                  and not (meaning and line and not amount))
     request = has("запрос", "попрос", "состав")
     calculation = has("расчет", "расчит", "начисл", "строк")
-    issue = has("проблем", "жалоб", "плох") or (has("перебо", "неисправн") and resource)
+    service_context = resource or (has("коммунальн", "услуг") and has("дом", "квартир"))
+    outage = has("перебо", "неисправн", "прерыва") or (has("пропал", "отсутств") and resource)
+    issue = has("проблем", "жалоб", "плох") or (outage and service_context)
     cold_battery = has("батар") and has("холодн")
     no_service = exact("нет") and resource
     document = has("справк", "выписк", "проживан") or (has("документ") and (has("жилищн", "получ", "оформ")))
@@ -169,10 +177,12 @@ def _cue_scores(normalized: str) -> dict[str, int]:
         "bill_change": 7 if change and (bill or amount) else (5 if change else 0),
         "meter_readings": 7 if meter and transfer else (5 if transfer and resource and measurement_data else (3 if meter else 0)),
         "meter_deadline": 9 if time and meter else (8 if time and transfer and resource else 0),
-        "account_number": 8 if personal_account else (5 if account_reference else 0),
+        "account_number": 8 if personal_account or connected_accounts else (5 if account_reference else 0),
         "management_contacts": 8 if management else 0,
-        "supplier_contacts": 8 if supplier else (6 if contact and resource and not meter else 0),
-        "payment_history": 7 if payment and payment_record else (4 if payment and not (first and bill or change and bill) else 0),
+        "supplier_contacts": (8 if supplier and supplier_contact and supplier_context
+                              else (6 if contact and resource and not meter
+                                    else (3 if supplier and supplier_context else 0))),
+        "payment_history": 0 if first and bill else (7 if payment and payment_record else (4 if payment and not (change and bill) else 0)),
         "arrears_or_credit": 10 if debt and bill else (8 if debt else 0),
         "adjustment": 8 if adjustment else (6 if removed and line and amount else 0),
         "request_breakdown": 8 if breakdown else (7 if request and calculation else 0),
