@@ -47,10 +47,23 @@ jobs:
             echo "::error title=E1 worker diagnostic::$worker_log"
             exit 1
           fi
-          web_code="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/team/zhkh/ || true)"
+          "${compose[@]}" exec -T web nginx -t
+          web_code="$(curl --silent --output /tmp/zhkh-e1-index.html --write-out '%{http_code}' http://127.0.0.1:18080/team/zhkh/ || true)"
           meta_code="$(curl --silent --output /tmp/zhkh-e1-meta.json --write-out '%{http_code}' http://127.0.0.1:18080/team/zhkh/api/v1/meta || true)"
           if [[ "$web_code" != 200 || "$meta_code" != 200 ]]; then
             echo "::error title=E1 route smoke::web HTTP $web_code; meta HTTP $meta_code"
+            exit 1
+          fi
+          running="$("${compose[@]}" ps --status running --services | paste -sd, -)"
+          if [[ ",$running," != *,worker,* ]]; then
+            echo "::error title=E1 worker smoke::worker is not running; running services $running"
+            exit 1
+          fi
+          asset_path="$(python3 -c 'import re; page=open("/tmp/zhkh-e1-index.html").read(); match=re.search(r"/team/zhkh/assets/[^\" ]+\.js", page); print(match.group(0) if match else "")')"
+          asset_code="$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:18080$asset_path" || true)"
+          deep_code="$(curl --silent --output /dev/null --write-out '%{http_code}' 'http://127.0.0.1:18080/team/zhkh/processing?job=synthetic' || true)"
+          if [[ -z "$asset_path" || "$asset_code" != 200 || "$deep_code" != 200 ]]; then
+            echo "::error title=E1 SPA routes::asset HTTP $asset_code; deep link HTTP $deep_code; asset path present $([[ -n "$asset_path" ]] && echo yes || echo no)"
             exit 1
           fi
           python3 -c 'import json; data=json.load(open("/tmp/zhkh-e1-meta.json")); assert data["features"]["engine_stub"] is True and data["features"]["receipt_ocr"] is False'
