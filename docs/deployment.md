@@ -1,8 +1,8 @@
 # E1 Compose и маршрутизация
 
-Статус: конфигурация первого dev стенда; контейнерный runtime и VM пока не
-проверены. Развёртывание на общей VM требует принятого release SHA и порядка
-из `TECHNICAL_SPEC.md` §12.8.
+Статус: первый dev стенд проверен в изолированном GitHub Actions runtime на
+PostgreSQL 17; общая VM и MAX пока не проверены. Развёртывание на общей VM
+требует принятого release SHA и порядка из `TECHNICAL_SPEC.md` §12.8.
 
 ## Локальная схема
 
@@ -48,3 +48,14 @@ docker compose --env-file ../runtime/app.env -p vk-zhkh -f compose.yaml -f compo
 `runtime/app.env` и реальные токены живут вне Git. `.env.example` содержит
 только placeholder значения. E1 dev image не содержит Tesseract и не выполняет
 OCR; настоящий engine и MAX будут интегрированы в последующих этапах.
+
+## Проверка E1 в CI
+
+[Actions run #6](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36318770691)
+на integration SHA `0b0daaf994315c63de8f0db7d458de6411a31d81` завершился
+успешно. В изолированном Compose project он выполнил `config --quiet`,
+`up --build --detach`, проверил PostgreSQL major version 17, HTTP 200 для
+`/team/zhkh/health/ready`, `/team/zhkh/` и `/team/zhkh/api/v1/meta`,
+запущенный worker, `nginx -t`, загрузку JS asset и refresh вложенной SPA
+страницы. Meta подтвердил явные `engine_stub=true` и `receipt_ocr=false`.
+Эта проверка не является приёмкой VM или реального клиента MAX.
