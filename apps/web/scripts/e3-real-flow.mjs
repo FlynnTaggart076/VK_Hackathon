@@ -99,7 +99,7 @@ try {
   }, newer);
   await page.getByRole('button', { name: 'Копировать текст' }).click();
   await page.getByText('Черновик устарел').waitFor();
-  await page.getByRole('status').filter({ hasText: 'перед копированием' }).waitFor();
+  await page.getByRole('status').filter({ hasText: 'подтвердите копирование устаревшего черновика' }).waitFor();
   await page.getByRole('checkbox', { name: 'Я проверил устаревшие факты перед копированием' }).check();
   await page.getByRole('button', { name: 'Копировать текст' }).click();
   await page.getByRole('status').filter({ hasText: 'Текст скопирован' }).waitFor();
