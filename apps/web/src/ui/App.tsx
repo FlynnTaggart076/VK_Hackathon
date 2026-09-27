@@ -4,13 +4,13 @@ import { api, hasSessionToken, setSessionToken } from '../api/client';
 import type { AnswerContext, AnswerView, Catalog, MetaResponse, Profile } from '../api/types';
 import { Onboarding, canUpload } from './Onboarding';
 import { Processing, Upload } from './Upload';
+import { ReceiptReview } from './ReceiptReview';
+import { ReceiptExplanation } from './ReceiptExplanation';
 import { ErrorMessage } from './errors';
 
 const mockEnabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_MOCK === 'true';
 const screens = [
   { path: '/', title: 'Главная', text: 'Вопросы, платёжки, история и учебные примеры.', states: 'пустая история, demo-пометка' },
-  { path: '/review', title: 'Проверка', text: 'Исходник, реквизиты и исправляемые строки.', states: 'missing, warning, invalid, saving, revision conflict' },
-  { path: '/explanation', title: 'Объяснение', text: 'Начисления и итог к оплате показываются отдельно.', states: 'complete, partial, source expired' },
   { path: '/comparison', title: 'Сравнение', text: 'Выбор двух документов и объяснение различий.', states: 'incompatible, identity confirmation, ambiguous, partial' },
   { path: '/draft', title: 'Черновик', text: 'Проверка, редактирование и копирование текста.', states: 'copied, clipboard unavailable, stale' },
   { path: '/history', title: 'История и настройки', text: 'Документы, удаление и профиль.', states: 'empty, pagination, deleting, error' },
@@ -165,10 +165,12 @@ export function App() {
         <Route path="/onboarding" element={!authenticated ? needsLogin : meta && catalog && profile ? <Onboarding meta={meta} catalog={catalog} profile={profile} onSaved={setProfile} /> : waiting} />
         <Route path="/upload" element={!authenticated ? needsLogin : meta ? <Upload meta={meta} profile={profile} onQueued={(value) => navigate(`/processing?job=${encodeURIComponent(value.job_id)}`)} /> : waiting} />
         <Route path="/processing" element={!authenticated ? needsLogin : <Processing stub={!!meta?.features.engine_stub} />} />
+        <Route path="/review" element={!authenticated ? needsLogin : <ReceiptReview />} />
+        <Route path="/explanation" element={!authenticated ? needsLogin : <ReceiptExplanation />} />
         <Route path="/assistant" element={<Assistant enabled={mockEnabled} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </main>
-    <footer>Учебный интерфейс E1. Распознавание и ответы проверяйте по доступным возможностям API.</footer>
+    <footer>Интерфейс разработки. Распознавание и ответы проверяйте по доступным возможностям API.</footer>
   </div>;
 }

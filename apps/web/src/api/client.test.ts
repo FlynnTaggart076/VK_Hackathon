@@ -8,6 +8,7 @@ import { demoAuth } from './devAuth';
 import { handlers, resetMockState } from '../mock/handlers';
 import type { AnswerContext, BillData } from './types';
 import { canUpload } from '../ui/Onboarding';
+import { billErrors, normalizeBill } from '../ui/billForm';
 
 const server = setupServer(...handlers);
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
@@ -81,5 +82,36 @@ describe('E1 first run', () => {
     setSessionToken('expired-session');
     await expect(api.me()).rejects.toMatchObject({ status: 401, code: 'SESSION_EXPIRED' });
     expect(hasSessionToken()).toBe(false);
+  });
+});
+
+describe('E2 synthetic receipt flow', () => {
+  it('polls, edits with revision, confirms acknowledged warnings and reads explanation', async () => {
+    setSessionToken((await demoAuth('mock-only')).access_token);
+    const meta = await api.meta();
+    await api.updateProfile({ role: 'tenant', territory_id: 'demo-territory',
+      privacy_notice_version: meta.privacy_notice.version, privacy_acknowledged: true });
+    const upload = await api.upload(new File(['synthetic'], 'bill.png', { type: 'image/png' }), crypto.randomUUID());
+    expect((await api.job(upload.job_id)).state).toBe('queued');
+    expect((await api.job(upload.job_id)).state).toBe('running');
+    expect((await api.job(upload.job_id)).state).toBe('succeeded');
+    const receipt = await api.receipt(upload.receipt.id);
+    expect(receipt.status).toBe('needs_review');
+    expect(receipt.extraction_outcome).toBe('partial');
+    expect((await api.page(receipt.id, 1)).type).toBe('image/png');
+    const bill = normalizeBill({ ...receipt.bill_data, services: [{ ...receipt.bill_data.services[0], tariff: '40,00', charge_amount: '200' }] });
+    expect(billErrors(bill)).toEqual([]);
+    await expect(api.editReceipt(receipt.id, { expected_revision: 20, bill_data: bill })).rejects.toMatchObject({ status: 409, code: 'REVISION_CONFLICT' });
+    const edited = await api.editReceipt(receipt.id, { expected_revision: receipt.revision, bill_data: bill });
+    expect(edited.revision).toBe(receipt.revision + 1);
+    expect(edited.field_evidence[0].source).toBe('manual');
+    await expect(api.confirmReceipt(edited.id, { expected_revision: edited.revision, acknowledged_warning_codes: [] }, crypto.randomUUID()))
+      .rejects.toMatchObject({ status: 422, code: 'WARNINGS_NOT_ACKNOWLEDGED' });
+    const confirmed = await api.confirmReceipt(edited.id, { expected_revision: edited.revision,
+      acknowledged_warning_codes: edited.issues.filter((issue) => issue.severity === 'warning').map((issue) => issue.code) }, crypto.randomUUID());
+    expect(confirmed.status).toBe('confirmed');
+    const explanation = await api.explanation(confirmed.id, confirmed.revision);
+    expect(explanation.receipt_ref.revision).toBe(confirmed.revision);
+    expect(explanation.lines[0].title).toBe(bill.services[0].raw_name);
   });
 });
