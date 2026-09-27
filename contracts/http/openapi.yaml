@@ -631,9 +631,9 @@ components:
       properties:
         items: {type: array, maxItems: 50, items: {$ref: '#/components/schemas/ReceiptSummary'}}
         next_cursor: {type: [string, 'null']}
-    ManualReceiptRequest: {type: object, additionalProperties: false, required: [bill_data], properties: {bill_data: {$ref: '../engine/v1/BillData.schema.json'}}}
+    ManualReceiptRequest: {type: object, additionalProperties: false, required: [bill_data], description: 'Full BillData snapshot; server sets manual-v1 template, unsupported settlement formula and line calculation kinds.', properties: {bill_data: {$ref: '../engine/v1/BillData.schema.json'}}}
     DemoReceiptRequest: {type: object, additionalProperties: false, required: [fixture_id], properties: {fixture_id: {type: string, minLength: 1}}}
-    EditReceiptRequest: {type: object, additionalProperties: false, required: [expected_revision, bill_data], properties: {expected_revision: {type: integer, minimum: 1}, bill_data: {$ref: '../engine/v1/BillData.schema.json'}}}
+    EditReceiptRequest: {type: object, additionalProperties: false, required: [expected_revision, bill_data], description: 'Full BillData snapshot. Server preserves template_id, template_version, settlement.formula_kind and calculation_kind for existing line IDs; new lines use document_amount.', properties: {expected_revision: {type: integer, minimum: 1}, bill_data: {$ref: '../engine/v1/BillData.schema.json'}}}
     ConfirmReceiptRequest: {type: object, additionalProperties: false, required: [expected_revision, acknowledged_warning_codes], properties: {expected_revision: {type: integer, minimum: 1}, acknowledged_warning_codes: {type: array, uniqueItems: true, items: {type: string}}}}
     RetryReceiptRequest: {type: object, additionalProperties: false, required: [expected_revision], properties: {expected_revision: {type: integer, minimum: 1}}}
     Job:

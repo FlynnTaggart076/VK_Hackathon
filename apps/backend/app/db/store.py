@@ -298,6 +298,57 @@ class SqlStore:
                                        response_body=deepcopy(result), expires_at=created + timedelta(hours=24)))
             return result
 
+    def retry_receipt(self, user_id: str, receipt_id: str, expected_revision: int, key: str) -> dict:
+        uid, rid, key_id = uuid.UUID(user_id), uuid.UUID(receipt_id), uuid.UUID(key)
+        route = f"POST /api/v1/receipts/{receipt_id}/retry"
+        fingerprint = hashlib.sha256(f"{receipt_id}:{expected_revision}".encode()).hexdigest()
+        with self.Session.begin() as session:
+            profile = session.get(Profile, uid, with_for_update=True)
+            if profile is None:
+                raise ApiError(401, "AUTH_REQUIRED", "Войдите в приложение.")
+            existing = session.scalar(select(IdempotencyKey).where(
+                IdempotencyKey.user_id == uid, IdempotencyKey.route == route,
+                IdempotencyKey.key == key_id).with_for_update())
+            if existing and aware(existing.expires_at) > now():
+                if existing.fingerprint != fingerprint:
+                    raise ApiError(409, "IDEMPOTENCY_CONFLICT", "Ключ уже использован с другим запросом.")
+                return deepcopy(existing.response_body)
+            if existing:
+                session.delete(existing)
+                session.flush()
+            receipt = session.scalar(select(Receipt).where(
+                Receipt.id == rid, Receipt.user_id == uid).with_for_update())
+            if receipt is None:
+                raise ApiError(404, "NOT_FOUND", "Квитанция не найдена.")
+            if receipt.current_revision != expected_revision:
+                raise ApiError(409, "REVISION_CONFLICT", "Квитанция изменена; обновите данные.",
+                               details={"current_revision": receipt.current_revision})
+            if receipt.status != "failed":
+                raise ApiError(409, "INVALID_STATE", "Повтор доступен после ошибки обработки.")
+            document = session.get(Document, receipt.document_id) if receipt.document_id else None
+            if document is None or document.deleted_at is not None or aware(document.expires_at) <= now() or \
+                    not (self.settings.storage_path / document.storage_key).is_file():
+                raise ApiError(410, "SOURCE_EXPIRED", "Исходный документ недоступен для повтора.")
+            pending = session.scalar(select(func.count()).select_from(Job).where(
+                Job.user_id == uid, Job.state.in_(["queued", "running"])))
+            if pending >= 2:
+                raise ApiError(429, "QUEUE_LIMIT_REACHED", "Дождитесь обработки другой квитанции.", retryable=True)
+            created = now()
+            job = Job(id=uuid.uuid4(), user_id=uid, kind="receipt_ocr", resource_id=rid,
+                      operation_key=f"receipt-ocr-retry:{rid}:{key_id}", state="queued", stage=None,
+                      attempt=0, run_after=created, created_at=created, updated_at=created)
+            session.add(job)
+            receipt.status = "queued"
+            receipt.extraction_outcome = None
+            receipt.updated_at = created
+            session.flush()
+            result = {"receipt": self._receipt_view(session, receipt), "job_id": str(job.id)}
+            session.add(IdempotencyKey(id=uuid.uuid4(), user_id=uid, route=route, key=key_id,
+                                       fingerprint=fingerprint, status_code=202,
+                                       response_body=deepcopy(result),
+                                       expires_at=created + timedelta(hours=24)))
+            return result
+
     def _receipt_view(self, session: Session, receipt: Receipt) -> dict:
         document = session.get(Document, receipt.document_id) if receipt.document_id else None
         job = session.scalar(select(Job).where(Job.resource_id == receipt.id)
@@ -334,6 +385,8 @@ class SqlStore:
             raise ApiError(400, "INVALID_REQUEST", "Некорректный размер страницы.")
         boundary = None
         if cursor is not None:
+            if len(cursor) > 512:
+                raise ApiError(400, "INVALID_REQUEST", "Некорректный курсор.")
             try:
                 raw = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4))
                 value = json.loads(raw)
@@ -489,10 +542,14 @@ class SqlStore:
             prior = session.get(ReceiptRevision, (rid, expected_revision))
             if prior is None:
                 raise ApiError(409, "INVALID_STATE", "Извлечение ещё не завершено.")
-            if not prior.validation.get("can_confirm") or prior.validation.get("errors"):
+            from housing_engine import BillData
+            from app.services.engine_adapter import validation_json
+
+            validation = validation_json(BillData.model_validate_json(json.dumps(prior.bill_data)))
+            if not validation.get("can_confirm") or validation.get("errors"):
                 raise ApiError(422, "VALIDATION_FAILED", "Исправьте ошибки в квитанции.",
-                               details={"issues": prior.validation.get("errors", [])})
-            warnings = prior.validation.get("warnings", []) + [
+                               details={"issues": validation.get("errors", [])})
+            warnings = validation.get("warnings", []) + [
                 issue for issue in prior.extraction_meta.get("issues", [])
                 if issue.get("severity") == "warning"]
             required = {item["code"] for item in warnings}
@@ -503,7 +560,7 @@ class SqlStore:
             session.add(ReceiptRevision(
                 receipt_id=rid, revision=expected_revision + 1,
                 bill_data=deepcopy(prior.bill_data), extraction_meta=deepcopy(prior.extraction_meta),
-                validation=deepcopy(prior.validation), confirmed_at=created,
+                validation=validation, confirmed_at=created,
                 engine_version=prior.engine_version))
             receipt.current_revision = expected_revision + 1
             receipt.status = "confirmed"

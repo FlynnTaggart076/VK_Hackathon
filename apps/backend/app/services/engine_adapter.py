@@ -37,9 +37,11 @@ def bill_from_client(payload: dict, previous: dict | None = None, *, manual: boo
             previous.get("settlement", {}).get("formula_kind", "unsupported") if previous else "unsupported"))
     services = data.get("services")
     if isinstance(services, list):
-        data["services"] = [dict(line, calculation_kind=(
-            "simple_product" if line.get("quantity") is not None and line.get("tariff") is not None
-            else "document_amount")) if isinstance(line, dict) else line for line in services]
+        previous_kinds = {line["line_id"]: line["calculation_kind"]
+                          for line in previous.get("services", [])} if previous else {}
+        data["services"] = [dict(line, calculation_kind=previous_kinds.get(
+            line.get("line_id"), "document_amount")) if isinstance(line, dict) else line
+            for line in services]
     try:
         return BillData.model_validate_json(json.dumps(data, ensure_ascii=False))
     except ValidationError as exc:

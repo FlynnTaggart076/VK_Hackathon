@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import tempfile
 import time
@@ -20,6 +21,9 @@ from sqlalchemy import and_, or_, select
 from app.db.models import Document, Job, Receipt, ReceiptRevision, WorkerHeartbeat
 from app.db.store import SqlStore, aware, now
 from app.main import Settings, empty_bill
+
+
+logger = logging.getLogger(__name__)
 
 
 def fixture_root(module_file: Path, configured: str | None) -> Path:
@@ -188,7 +192,7 @@ def finish_real(store: SqlStore, job_id: uuid.UUID, token: uuid.UUID, result: di
         if not receipt or receipt.status != "processing":
             return
         document = session.get(Document, receipt.document_id, with_for_update=True) if receipt.document_id else None
-        if document is None or document.deleted_at is not None:
+        if document is None or document.deleted_at is not None or aware(document.expires_at) <= now():
             return
         if session.get(ReceiptRevision, (receipt.id, 1)) is None:
             session.add(ReceiptRevision(
@@ -243,6 +247,7 @@ def run_once(store: SqlStore) -> bool:
                 try:
                     previews = generate_previews(content, mime_type, Path(directory))
                 except Exception:
+                    logger.exception("Receipt preview generation failed")
                     previews = []  # extraction remains usable; preview endpoint reports PREVIEW_UNAVAILABLE
                 finish_real(store, job_id, token, result, validation, previews)
     except (ValueError, FileNotFoundError):
@@ -270,7 +275,16 @@ def main() -> None:
     if args.once:
         run_once(store)
         return
+    from app.jobs.retention import run_retention_once
+
+    last_retention = 0.0
     while True:
+        if time.monotonic() - last_retention >= 60:
+            last_retention = time.monotonic()
+            try:
+                run_retention_once(store)
+            except Exception:
+                logger.exception("Retention sweep failed")
         ran = run_once(store)
         if not ran:
             time.sleep(1)
