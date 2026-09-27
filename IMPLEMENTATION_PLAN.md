@@ -2,12 +2,12 @@
 
 Обновлено: 2026-09-27. Владелец: координатор. Источник требований: `TECHNICAL_SPEC.md` v1.1, 2026-09-27. Контракты: engine/HTTP v1.0 приняты для E0.
 
-## Актуальное состояние E3
+## Актуальное состояние E4
 
-- E0–E2 приняты; текущий этап E3 по task commit `c11b5235319c12ecb18a6c4ca05c35a54f5c0560`, база `b33ed1e0493d76dfd7051a141e2075c698f8e967`. A/B/C работают в отдельных ветках и checkout. E3 целиком не принят; release SHA не назначен.
-- `integration/e3` runtime checkpoint `e0aad750e589e6475aba7e43ead7c70eeb1f9981` содержит сравнение, 15 тем, черновики, историю, MAX webhook/outbox и реальный UI. [PG17 CI 36329625261](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36329625261) и [36330295351](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36330295351) прошли HTTP, OCR/restart, offline webhook и Chrome 360 px на синтетике. A/B завершили E3 подпакеты; C продолжает исправлять поиск тем. Последний независимый набор дал S 50/60, A 4/5, U 10/10 при цели §15.4 не менее 54/60; E3 не принят. Следующая версия C и отдельный контрольный прогон ожидаются.
+- E0–E3 приняты. E3 merge/release SHA в `main`: `d223c4e49a12c4ebc5d98c3c8da8fc6c0202e16f`; проверенный runtime candidate `e860f8fce5f88ba80f0c7f3bb299572e459e7102` отличается от merge только руководящими файлами/заданиями. Текущий этап E4; задания `tasks/e4/agent-{a,b,c}.md` выданы от принятого SHA. Развёртывания ещё нет.
+- [PG17 CI 36331334237](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36331334237) прошёл E2/E3 OCR/restart, HTTP, offline MAX webhook и 360 px real Chrome. Локально engine verifier/45 tests, backend 26 passed/3 skipped, HTTP 28 операций/25 примеров, frontend 13 tests/build прошли. Пятый независимый FAQ gold `b2f67e5` на C code `654549d`: S55/60 (91,7% при цели ≥90%), A4/5, U10/10, небезопасных unsupported ссылок 0. Остаточные `S247,S249,S251,S252,S299,A30` переданы в E4 C; это ограничение синтетической оценки, не утверждение о реальных вопросах.
 - Владелец выбрал Москву и Московскую область; `moscow`/`moscow-oblast` добавлены в каталог как названия регионов, без подтверждённой УК, региональных процедур и реальных квитанций. `pilot_territory_id=null`; шесть местных тем возвращают `unsupported`, пока нет регионального первоисточника.
-- SSH alias `hackathon` проверен интерактивно, VM инвентаризирована без изменений. MAX bot credentials/регистрация mini-app пока не подтверждены. VM deploy только B из принятого release SHA в E4.
+- SSH alias `hackathon` проверен интерактивно, VM инвентаризирована без изменений. MAX bot credentials/регистрация mini-app пока не подтверждены. В E4 VM deploy выполняет только B из принятого release SHA; без production prereqs остаются read-only preflight и независимые проверки.
 - Папка коллеги переименована в локальную `colleague_anton/` и исключена из Git из-за `.env`, заметки SSH и кэшей. Её HouseScore/Dominfo прототип не является OCR квитанций и не включён в P0: адресный lookup требует отдельной проверки источников и не должен использовать недокументированный Dominfo API.
 
 ## История ранних checkpoint
@@ -48,7 +48,10 @@
 | E2-C-01 | C / `agent-c/e2` | accepted | `tasks/e2/agent-c.md` | `7242082` + `6b251b0` code, `056ea2e` report; verifier/25 tests/21 hashes/7 synthetic OCR cases |
 | E3-A-01 | A / `agent-a/e3` | accepted subtask | `tasks/e3/agent-a.md` | code `9a1ecf9`, report `7e34ddd`; 13 tests/build, PG17 Chrome 360 px CI success |
 | E3-B-01 | B / `agent-b/e3` | accepted subtask | `tasks/e3/agent-b.md` | code `362985a`, report `4db1f8f`; 26 tests/3 skipped, PG17 HTTP/webhook offline CI success; MAX live pending E4 |
-| E3-C-01 | C / `agent-c/e3` | in_progress; quality gate open | `tasks/e3/agent-c.md`, `tasks/e3/agent-c-qa-followup-3.md` | C compare/knowledge/draft integrated; fourth independent FAQ S50/60 below 90%, new ranking + fifth sealed holdout pending |
+| E3-C-01 | C / `agent-c/e3` | accepted with residual QA defects | `tasks/e3/agent-c.md`, `tasks/e3/agent-c-qa-followup-3.md` | code `654549d`, report `71420e5`; fifth independent FAQ S55/60, A4/5, U10/10, unsafe 0; engine 45 tests |
+| E4-A-01 | A / `agent-a/e4` | assigned | `tasks/e4/agent-a.md` | Real API error/recovery UX; MAX Web/mobile only when deployed |
+| E4-B-01 | B / `agent-b/e4` | assigned; VM/MAX external prereqs pending | `tasks/e4/agent-b.md` | VM/Compose preflight; deploy only SHA `d223c4e`; separate HTTPS/MAX evidence |
+| E4-C-01 | C / `agent-c/e4` | assigned | `tasks/e4/agent-c.md` | OCR holdout/edge cases and six FAQ residuals; no real receipt claim |
 
 ## Принятая интеграция E0
 
