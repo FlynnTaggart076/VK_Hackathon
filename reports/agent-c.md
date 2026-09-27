@@ -2,7 +2,7 @@
 
 - Этап E2, ветка `agent-c/e2`, статус `review`.
 - BASE_SHA `dae14d9a838154b72e4cf122881b190032ae0a74`; TASK_COMMIT `f613288e5b0a9bc733e6653ba9706bea7e3313d9`; engine/HTTP 1.0, DTO/schema v1 не менялись.
-- Pushed code SHA: checkpoint `7242082cb940c8b05c0435b4802d2220710fa8e7`; итоговый `6b251b0e1770a2ca19c169943da38099c7076b7f`. SHA commit отчёта передаётся координатору после push.
+- Pushed code SHA: checkpoint `7242082cb940c8b05c0435b4802d2220710fa8e7`; основной E2 код `6b251b0e1770a2ca19c169943da38099c7076b7f`; дополнительный E2 public API QA тест `f88d647e55983741c8c9aa95b5edd77b926a40b2`. SHA нового commit отчёта передаётся координатору после push.
 - E1-C-01 принят до начала E2. Чужие компоненты, main, Dockerfile B и VM не менялись.
 
 ## Реализовано
@@ -34,3 +34,9 @@ $env:PATH = "$env:TEMP\zhkh-ocr-tesseract;$env:PATH"
 Python зависимости строго заданы `packages/housing_engine/requirements.lock`; runtime нужны pydantic, pypdf, pypdfium2, Pillow. Системно нужен Tesseract 5 с `eng+rus`, устанавливаемый в образ при сборке; проверить `tesseract --version` и `tesseract --list-langs`. `ExtractionConfig.workspace` — существующий доверенный временный каталог. Лимиты: 10 MiB bytes, 3 PDF страницы, 25 млн пикселей на страницу, OCR до 90 секунд. B отвечает за 120-секундный внешний timeout, RSS/контейнерный лимит и завершение дочерних процессов. Реальная пилотная территория, проверенные внешние источники и реальные макеты отсутствуют; объяснение остаётся арифметическим. Python 3.12 и Linux-контейнер этим отчётом не проверены.
 
 Координатору проверить pushed SHA, схему/manifest, тесты и OCR evidence, затем передать B итоговый public API SHA. E3 самостоятельно не начинаю.
+
+## Дополнительная E2 QA по заданию координатора
+
+Публичный тест `test_manual_required_bytes_and_explicit_unsupported_manual_bill` добавлен без изменения DTO или runtime-кода. `unknown-layout.pdf` читается из bytes и даёт `manual_required` без периода, услуг, начислений и итога. `validate_bill` возвращает `can_confirm=false`; `explain_receipt` не принимает эту неподтверждённую квитанцию (`EngineError(INVALID_BILL)`). Отдельно вручную введённые синтетические значения из `water-2026-09.json` помечены `manual-v1`, `formula_kind=unsupported`, `calculation_kind=document_amount`: подтверждение допустимо, `current_charges` и напечатанный `document_total_due` равны 270.00, но рассчитанные баланс/итог, unexplained difference и формула строки остаются `null`; сверки `matched/unsupported/unsupported`, источников нет. JSON служит тестовыми ручными значениями и не подставляется как результат OCR неизвестного PDF.
+
+На Windows/Python 3.13.14 после commit `f88d647e55983741c8c9aa95b5edd77b926a40b2`: `python -m unittest discover -s packages/housing_engine/tests -q` — `Ran 26 tests ... OK`; `python packages/housing_engine/verify_contract.py` — оба блока OK; `git diff --cached --check` — ошибок нет. Прежние ограничения реальных счетов, Docker/VM/MAX и Python 3.12 сохраняются. Это дополнительная проверка E2, не начало E3.
