@@ -1,4 +1,4 @@
-"""Offline E3 question holdout; gold fixture is independent of engine output."""
+"""Offline E3 question evaluation against a frozen, human-authored gold corpus."""
 
 from __future__ import annotations
 
@@ -23,8 +23,8 @@ TOPICS = frozenset({
 })
 
 
-def _read_gold() -> dict:
-    corpus = json.loads(CORPUS.read_text(encoding="utf-8"))
+def _read_gold(corpus_path: Path) -> dict:
+    corpus = json.loads(corpus_path.read_text(encoding="utf-8"))
     cases = corpus["cases"]
     ids = [case["id"] for case in cases]
     assert corpus["schema_version"] == "1.0"
@@ -35,8 +35,8 @@ def _read_gold() -> dict:
     return corpus
 
 
-def evaluate() -> dict:
-    corpus = _read_gold()
+def evaluate(corpus_path: Path = CORPUS) -> dict:
+    corpus = _read_gold(corpus_path)
     knowledge = load_knowledge(str(ROOT / "knowledge"), EVAL_NOW)
     by_group = {key: {"total": 0, "correct": 0} for key in ("S", "A", "U")}
     errors = []
@@ -64,7 +64,7 @@ def evaluate() -> dict:
         else:
             errors.append({"id": case["id"], "question": case["question"], "expected": expected, "actual": actual})
     return {
-        "corpus": str(CORPUS.relative_to(ROOT)).replace("\\", "/"),
+        "corpus": corpus_path.as_posix(),
         "eval_at": EVAL_NOW.isoformat(),
         "knowledge_version": knowledge.version,
         "by_group": by_group,
@@ -76,9 +76,10 @@ def evaluate() -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--corpus", type=Path, default=CORPUS, help="Path to a frozen 75-case UTF-8 gold JSON")
     parser.add_argument("--json-out", type=Path, help="Optional path for machine-readable results")
     args = parser.parse_args()
-    result = evaluate()
+    result = evaluate(args.corpus)
     if args.json_out is not None:
         args.json_out.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     for key, value in result["by_group"].items():

@@ -67,6 +67,34 @@ class KnowledgeTests(unittest.TestCase):
         self.assertEqual(unknown.status, "unsupported")
         self.assertEqual(unknown.sources, [])
 
+    def test_household_synonyms_keep_topics_and_unrelated_questions_separate(self):
+        context = {"territory_id": "moscow", "role": "owner", "service_code": "cold_water"}
+        cases = (
+            ("Первый платёжный документ за жильё: что сверить?", "first_bill", "answered"),
+            ("В счёте не понимаю сокращение в графе", "bill_terms", "answered"),
+            ("Прошу детализацию суммы начисления за отопление", "request_breakdown", "answered"),
+            ("Хочу сравнить квитанции и понять рост суммы", "bill_change", "answered"),
+            ("Как передавать данные прибора учёта?", "meter_readings", "unsupported"),
+            ("Когда крайняя дата для прибора учёта?", "meter_deadline", "unsupported"),
+            ("В квартире перебои с водой, кому сообщать?", "service_issue", "unsupported"),
+            ("В счёте есть долг, что он означает?", "arrears_or_credit", "answered"),
+            ("После заселения впервые занялся коммуналкой", "new_resident", "answered"),
+            ("Стал новым жильцом: первая квитанция и обслуживание дома", None, "needs_clarification"),
+        )
+        for text, topic_id, status in cases:
+            with self.subTest(text=text):
+                result = answer_question(question(text, **context), self.knowledge)
+                self.assertEqual((result.topic_id, result.status), (topic_id, status))
+                if status == "unsupported":
+                    self.assertEqual(result.sources, [])
+                    self.assertEqual(result.actions, [])
+        for text in ("Хочу расшифровку ошибки принтера", "Перебои с Wi-Fi роутером"):
+            with self.subTest(text=text):
+                result = answer_question(question(text, **context), self.knowledge)
+                self.assertEqual((result.topic_id, result.status), (None, "unsupported"))
+                self.assertEqual(result.sources, [])
+                self.assertEqual(result.actions, [])
+
     def test_verified_generic_source_and_local_region_boundary(self):
         for region in ("moscow", "moscow-oblast"):
             with self.subTest(region=region):
