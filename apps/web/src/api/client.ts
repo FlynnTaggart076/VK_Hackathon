@@ -1,4 +1,4 @@
-import type { AnswerContext, AnswerView, ApiErrorBody, AuthResponse, MetaResponse, ReceiptView, UnexpectedErrorBody } from './types';
+import type { AnswerContext, AnswerView, ApiErrorBody, Catalog, Job, MeResponse, MetaResponse, Profile, ReceiptQueued, ReceiptView, UnexpectedErrorBody, UpdateProfileRequest } from './types';
 
 export const API_BASE = '/team/zhkh/api/v1';
 let sessionToken: string | null = null;
@@ -30,6 +30,10 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
   if (!response.ok) {
     let parsed: unknown;
     try { parsed = await response.json(); } catch { /* Gateway may return non-JSON. */ }
+    if (response.status === 401 && sessionToken) {
+      setSessionToken(null);
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('zhkh:session-expired'));
+    }
     if (isErrorBody(parsed)) throw new ApiRequestError(response.status, parsed);
     throw new ApiRequestError(response.status, {
       error: { code: 'UNEXPECTED_RESPONSE', message: 'Сервер вернул неожиданный ответ.', retryable: response.status >= 500, fields: [], details: {} },
@@ -42,11 +46,19 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
 
 export const api = {
   meta: (signal?: AbortSignal) => request<MetaResponse>('/meta', { signal }),
-  demoAuth: (accessCode: string, signal?: AbortSignal) => request<AuthResponse>('/auth/demo', {
-    method: 'POST', body: JSON.stringify({ access_code: accessCode, identity: 'reviewer_a' }), signal,
+  me: (signal?: AbortSignal) => request<MeResponse>('/me', { signal }),
+  catalog: (signal?: AbortSignal) => request<Catalog>('/catalog', { signal }),
+  updateProfile: (body: UpdateProfileRequest, signal?: AbortSignal) => request<Profile>('/me/profile', {
+    method: 'PUT', body: JSON.stringify(body), signal,
   }),
   answer: (question: string, context: AnswerContext, signal?: AbortSignal) => request<AnswerView>('/assistant/answers', {
     method: 'POST', body: JSON.stringify({ question, context }), signal,
   }),
   receipt: (id: string, signal?: AbortSignal) => request<ReceiptView>(`/receipts/${encodeURIComponent(id)}`, { signal }),
+  upload: (file: File, idempotencyKey: string, signal?: AbortSignal) => {
+    const body = new FormData();
+    body.append('file', file);
+    return request<ReceiptQueued>('/receipts', { method: 'POST', body, headers: { 'Idempotency-Key': idempotencyKey }, signal });
+  },
+  job: (id: string, signal?: AbortSignal) => request<Job>(`/jobs/${encodeURIComponent(id)}`, { signal }),
 };

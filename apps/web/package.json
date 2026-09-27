@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "dev:mock": "vite --host 127.0.0.1 --mode mock",
+    "dev:real": "vite --host 127.0.0.1 --mode real",
     "build": "tsc -b && vite build",
     "generate:types": "openapi-typescript ../../contracts/http/openapi.yaml -o src/api/openapi.generated.ts",
     "test": "vitest run"

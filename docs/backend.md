@@ -1,4 +1,8 @@
-# Backend: схема E0
+# Backend: E0 проектная схема и E1 dev реализация
+
+Разделы ниже описывают E0 проектную схему. В E1 реализованы базовые таблицы,
+миграция, закрытое хранилище документов и persisted worker с явным dev stub.
+MAX, настоящий OCR, сравнение и production запуск ещё не интегрированы.
 
 Статус: проектная схема, 2026-09-27. Таблицы, worker, storage и MAX здесь ещё не реализованы. Источник требований — `TECHNICAL_SPEC.md` §§6, 7, 11, 12. Контракты содержимого принадлежат `housing_engine`; backend использует их через один адаптер.
 
@@ -55,3 +59,19 @@ python scripts/check_http_contract.py
 Проверка валидирует OpenAPI 3.1, точные 28 операций §7 и webhook, ссылки на схемы C, совпадение полей и обязательности server/engine view, а также все JSON-примеры по JSON Schema с проверкой UUID/date-time. Генератор примеров берёт BillData из принятого C fixture. Исходные поля C не переписаны в HTTP schema: ссылки ведут в `contracts/engine/v1`. Для повторения проверки не требуются Docker, MAX, VM или токены.
 
 Примеры ответов, кроме `meta-dev.json`, показывают будущую форму данных и не являются доказательством работающих endpoint. `meta-dev.json` показывает честное состояние каркаса E0: `engine_stub=true`, OCR/сравнение/демовход выключены, версии engine/knowledge неизвестны. Значения `features` в реальном API должны отражать запущенные функции; production со stub не принимается.
+
+## E1 ранний dev checkpoint
+
+`apps/backend/app/main.py` сейчас запускает только dev `MemoryStore`. Для проверки связки A ↔ B доступны `GET /api/v1/meta`, `POST /api/v1/auth/demo`, `GET /api/v1/me`, `PUT /api/v1/me/profile`, `GET /api/v1/catalog`, `POST /api/v1/receipts`, `GET /api/v1/receipts/{id}`, `GET /api/v1/jobs/{id}`. OCR ещё не выполняется: job остаётся `queued`, `meta.features.receipt_ocr=false`, `engine_stub=true`; `GET /health/ready` отвечает 503. Состояние `MemoryStore` не переживает перезапуск. При заданном `DATABASE_URL` этот checkpoint отказывается запускаться, поэтому его нельзя случайно принять за PostgreSQL-реализацию.
+
+Пример локального запуска из корня checkout после установки `apps/backend/requirements.lock` (секретный dev-код выбирается локально, не коммитится):
+
+```powershell
+$env:APP_MODE = 'dev'
+$env:ENGINE_MODE = 'stub'
+$env:DEMO_AUTH_ENABLED = 'true'
+$env:DEMO_ACCESS_CODE = '<локально выбранный код>'
+python -m uvicorn app.main:app --app-dir apps/backend --host 127.0.0.1 --port 8000
+```
+
+В другом терминале: `curl.exe http://127.0.0.1:8000/api/v1/meta`. Авторизация demo принимает `identity=reviewer_a` или `reviewer_b`; перед загрузкой вызовите `PUT /api/v1/me/profile` с `privacy_notice_version` из meta и `privacy_acknowledged=true`. Загружайте PDF/JPEG/PNG через `multipart/form-data` с UUID в `Idempotency-Key`. Этот прямой API доступен A для dev-интеграции; публикация под `/team/zhkh/` появится в Compose позже в E1.

@@ -19,8 +19,9 @@ class ContractVerifierTest(unittest.TestCase):
     def test_changed_charge_exits_nonzero(self):
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory)
-            for fixture in FIXTURES.glob("*.json"):
-                shutil.copy2(fixture, destination / fixture.name)
+            manifest = json.loads((FIXTURES / "manifest.json").read_text(encoding="utf-8"))
+            for name in ["manifest.json", *(sample["file"] for sample in manifest["samples"])]:
+                shutil.copy2(FIXTURES / name, destination / name)
             august = destination / "water-2026-08.json"
             data = json.loads(august.read_text(encoding="utf-8"))
             data["services"][0]["charge_amount"] = "201.00"

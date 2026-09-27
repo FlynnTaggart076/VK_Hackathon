@@ -3,13 +3,15 @@ import { readFileSync } from 'node:fs';
 import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
 import { setupServer } from 'msw/node';
-import { api, ApiRequestError, request, setSessionToken } from './client';
-import { handlers } from '../mock/handlers';
+import { api, ApiRequestError, hasSessionToken, request, setSessionToken } from './client';
+import { demoAuth } from './devAuth';
+import { handlers, resetMockState } from '../mock/handlers';
 import type { AnswerContext, BillData } from './types';
+import { canUpload } from '../ui/Onboarding';
 
 const server = setupServer(...handlers);
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
-afterEach(() => { server.resetHandlers(); setSessionToken(null); });
+afterEach(() => { server.resetHandlers(); resetMockState(); setSessionToken(null); });
 afterAll(() => server.close());
 
 const context: AnswerContext = {
@@ -22,14 +24,14 @@ describe('E0 API examples', () => {
     await expect(api.answer('Вода', context)).rejects.toMatchObject({
       status: 401, code: 'AUTH_REQUIRED', requestId: 'b1399c8c-d010-4e0c-b75f-bd312a647fea',
     });
-    const auth = await api.demoAuth('mock-only');
+    const auth = await demoAuth('mock-only');
     setSessionToken(auth.access_token);
     expect((await api.answer('неизвестный вопрос', context)).status).toBe('unsupported');
   });
 
   it('returns partial receipt without filling unknown tariff and a revision conflict', async () => {
-    setSessionToken((await api.demoAuth('mock-only')).access_token);
-    const receipt = await api.receipt('10000000-0000-4000-8000-000000000001');
+    setSessionToken((await demoAuth('mock-only')).access_token);
+    const receipt = await api.receipt('10000000-0000-4000-8000-000000000002');
     expect(receipt.extraction_outcome).toBe('partial');
     expect(receipt.bill_data.services[0].tariff).toBeNull();
     await expect(request('/receipts/10000000-0000-4000-8000-000000000001/draft', {
@@ -53,5 +55,31 @@ describe('E0 API examples', () => {
     expect('$defs' in bill).toBe(false);
     const code: BillData['services'][number]['service_code'] = bill.services[0].service_code;
     expect(code).toBe('cold_water');
+  });
+});
+
+describe('E1 first run', () => {
+  it('requires server profile consent before upload and reads the queued job', async () => {
+    const meta = await api.meta();
+    setSessionToken((await demoAuth('mock-only')).access_token);
+    const initial = await api.me();
+    const catalog = await api.catalog();
+    expect(catalog.territories.map((item) => item.id)).toContain('demo-territory');
+    expect(canUpload(initial.profile, meta)).toBe(false);
+    await expect(api.updateProfile({ role: 'tenant', territory_id: 'demo-territory',
+      privacy_notice_version: 'old', privacy_acknowledged: true })).rejects.toMatchObject({ status: 422, code: 'PRIVACY_NOTICE_REQUIRED' });
+    const profile = await api.updateProfile({ role: 'tenant', territory_id: 'demo-territory',
+      privacy_notice_version: meta.privacy_notice.version, privacy_acknowledged: true });
+    expect(canUpload(profile, meta)).toBe(true);
+    const upload = await api.upload(new File(['synthetic'], 'bill.png', { type: 'image/png' }),
+      'b1399c8c-d010-4e0c-b75f-bd312a647fea');
+    expect(upload.receipt.status).toBe('queued');
+    expect((await api.job(upload.job_id)).state).toBe('queued');
+  });
+
+  it('drops an expired session token and requires a new sign-in', async () => {
+    setSessionToken('expired-session');
+    await expect(api.me()).rejects.toMatchObject({ status: 401, code: 'SESSION_EXPIRED' });
+    expect(hasSessionToken()).toBe(false);
   });
 });

@@ -1,4 +1,4 @@
-# Отчёт агента B — E0-B-01
+# Отчёт агента B — E0-B-01 и E1-B-01
 
 - Ветка: `agent-b/e0`; BASE_SHA: `522757f58ad61951c7d66c4e97f2d5e65a433624`.
 - Принятый для формы DTO integration SHA C: `89df7e39a165902bf19308cd6512b4a19eb6205b` (позднейший doc-only integration SHA координатора: `edb784f9797f8b95f132f2d90ffe1eaa79f85a18`).
@@ -29,3 +29,38 @@
 ## Блокеры и следующий шаг
 
 Для будущего E4 operator-доступ к VM отсутствует на уровне SSH publickey; нужен корректный ключ/зарегистрированный пользователь. MAX credentials недоступны из текущего checkout/окружения; наличие у владельца не установлено. Эти блокеры не мешали E0 контракту. Координатор проверяет OpenAPI и examples против C, интегрирует совместимый commit, сообщает дефекты либо принимает E0-B-01; только после нового задания B начинает E1. При E1 потребуется подтвердить event-specific MAX update schema и реализовать безопасный adapter/runtime.
+
+---
+
+## E1-B-01: dev backend, PostgreSQL и первый Compose
+
+- Ветка: `agent-b/e1`; BASE_SHA `feb1fc7ab12201e6d5a93989d64a8374fe44a139`; TASK_COMMIT `4449864e24686472130b2569be04b349ed862834`.
+- Ранний принятый A dev API checkpoint: `1d99a19502df2b536248daad224b0f0af5e96d5a`.
+- Pushed основной E1 code SHA: `aafa3348450af3a005e9a30b92411779cac8e9dc`.
+- Pushed merge принятого C checkpoint и первая правка PostgreSQL теста: `a2afba39ce197ca7cd11014defaec69f3c158a78` (второй parent integration SHA `4f653165ed97bea21572231a9f623607f16e89c5`).
+- Pushed итоговая правка изоляции PostgreSQL теста: `d1798ccd1f064fcd40581679a9b283e85ba0c339`.
+- Pushed runtime исправления после GitHub Actions smoke: `599c9f68f20767d5b3edff24549f0f4b4ecef0ac` (worker fixture path и local edge), `5f1e0b3aeb507775c39fee26992a995507255d62` (Nginx static root); documentation SHA `fecf01c791370c57039d4d876efd3c0f6a4fab35`.
+- Статус: B E1 код принят в `integration/e1` и прошёл изолированный Compose runtime smoke; общий E1 и продукт объявляет принятыми только координатор после A/C и остальных критериев.
+
+### Реализовано
+
+- `apps/backend/app/db` и Alembic `e1_initial`: users, profiles, sessions, documents, receipts, receipt_revisions, jobs, idempotency_keys, worker_heartbeats. PostgreSQL использует JSONB. Token хранится только SHA-256. Два demo identity имеют отдельные UUID и owner-scoped чтение; чужие UUID возвращают 404.
+- Загрузка PDF/JPEG/PNG проверяет фактический MIME, размер 10 MiB, страницы PDF и пиксели; исходники хранятся по случайному ключу в закрытом томе. Транзакция создаёт document, receipt, job и idempotency result. Повтор ключа в течение 24 часов возвращает тот же результат, конфликт даёт 409, после истечения ключ используется заново.
+- Worker выбирает persisted jobs с lease 180 секунд, retry до 3 попыток, heartbeat и fencing token. В E1 он только dev stub: пользовательский файл получает `manual_required` и пустые поля; явный импорт двух синтетических fixtures получает маркировку `SYNTHETIC_DEMO`. OCR/расчёты C ещё не подключены к backend.
+- `compose.yaml`, `compose.local.yaml`, `compose.vm.yaml`: отдельный PostgreSQL 17, migrate, API, worker, web, закрытая сеть/тома, локальный loopback web и VM edge alias. `infra/nginx/app-local.conf` снимает префикс `/team/zhkh/`; `app-vm.conf` принимает путь после внешнего Nginx. `infra/web.Dockerfile` находится в разрешённом B infra пути и не меняет файлы A. Режимы `demo`/`production` на E1 явно отклоняются при старте.
+- Реальные HTTP JSON для meta/auth/me/catalog/receipt/job и ErrorEnvelope проверяются по принятому E0 OpenAPI с внешними engine `$ref` (включая ответы SqlStore/PostgreSQL).
+
+### Доказательства и уровень проверки
+
+| Уровень | Команда / факт | Результат |
+|---|---|---|
+| Backend API + SQLite | `PYTHONPATH=<isolated Python deps>;apps/backend python -m pytest apps/backend/tests -q` | После runtime fix `8 passed, 1 skipped, 1 warning`; PG тест без URL skipped. Формы JSON и SQLite persistence проверены. |
+| Реальный PostgreSQL | Изолированный PG16.2 cluster в уникальном `%TEMP%` каталоге, loopback `127.0.0.1:55439`, отдельная `zhkh_e1_test` БД. `TEST_POSTGRES_URL=postgresql+psycopg://zhkh@127.0.0.1:55439/zhkh_e1_test`, `PYTHONPATH=%TEMP%/vk_zhkh_b_e1_python;apps/backend`, `python -m pytest apps/backend/tests -q` | Три последовательных прогона до runtime fix: каждый `8 passed, 1 warning`; после fix `9 passed, 1 warning`. Каждый PG прогон создаёт уникальный test schema; проверены Alembic, JSONB собственной receipt, persistence после restart клиента, own job/worker, idempotency и readiness. Warning из Starlette/anyio deprecation. |
+| HTTP контракт после C merge | `python scripts/check_http_contract.py` с `scripts/requirements-contracts.lock` | `OK: OpenAPI 3.1; 28 operations; 24 JSON examples; engine fields linked` |
+| Compose parser | Docker Compose CLI v5.5.1 `--env-file .env.example -f compose.yaml -f compose.local.yaml config -q` и тот же VM override | Оба exit 0 с placeholder значениями; секретный config output не сохранялся. |
+| Docker build/up и PostgreSQL 17 | [GitHub Actions run #6](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36318770691), integration SHA `0b0daaf994315c63de8f0db7d458de6411a31d81` | **Success** на изолированном Linux runner: Compose `config --quiet`, `up --build --detach`, PostgreSQL major 17, API `/health/ready` и meta HTTP 200, worker running, `nginx -t`, web HTTP 200, JS asset HTTP 200, deep SPA link HTTP 200. Meta подтвердил `engine_stub=true`, `receipt_ocr=false`. Локальная Windows среда по-прежнему не имеет Docker daemon. |
+| VM / MAX | E0 SSH дал `Permission denied (publickey)`; текущих VM/MAX credentials не получено | VM приложение, публичный `/team/zhkh/`, bot auth/webhook и mini-app не проверены. Общий Nginx/VM не изменялись. |
+
+### Открыто и следующий шаг
+
+Первые runtime прогоны [#3](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36318022335) и [#5](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36318607065) выявили, соответственно, eager вычисление несуществующего `parents[4]` в worker и HTTP 500 у web при отсутствии явного Nginx static root. Оба дефекта устранены указанными code SHA; run #6 прошёл. Далее координатор проверяет совместимость с A/C и решает приёмку общего E1. VM/MAX остаются внешними блокерами; CI не доказывает доставку в VM или реальный клиент MAX. B не начинает E2 и не разворачивает VM до нового задания и принятого release SHA.

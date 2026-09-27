@@ -18,7 +18,11 @@ a:focus-visible, button:focus-visible, textarea:focus-visible { outline: 3px sol
 .error { border-left: 4px solid #b93434; padding: 8px; background: #fff0f0; }
 .error small { display: block; }
 label { display: block; font-weight: 600; margin-bottom: 6px; }
-textarea { width: 100%; border: 1px solid #6d8291; border-radius: 8px; padding: 8px; font: inherit; }
+textarea, select, input[type="password"], input[type="file"] { width: 100%; border: 1px solid #6d8291; border-radius: 8px; padding: 8px; font: inherit; margin-bottom: 12px; }
+.check { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; }
+.check input { margin-top: 4px; }
+.notice-box { padding: 12px; margin-top: 8px; border: 1px solid #c9d8e1; border-radius: 8px; }
+.notice-box h3 { margin-top: 0; }
 form button { margin-top: 8px; }
 .answer { border-top: 1px solid #d6e0e6; margin-top: 16px; }
 .skip { position: absolute; left: -9999px; }

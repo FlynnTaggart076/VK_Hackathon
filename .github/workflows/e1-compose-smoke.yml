@@ -1,0 +1,72 @@
+name: E1 Compose smoke
+
+on:
+  push:
+    branches: [integration/e1]
+    paths:
+      - .github/workflows/e1-compose-smoke.yml
+      - apps/**
+      - infra/**
+      - compose.yaml
+      - compose.local.yaml
+      - fixtures/**
+
+jobs:
+  compose-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start isolated dev stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          export POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+          export DEMO_ACCESS_CODE="$(openssl rand -hex 24)"
+          export APP_MODE=dev ENGINE_MODE=stub DEMO_AUTH_ENABLED=true LOCAL_WEB_PORT=18080
+          project="zhkh-e1-ci-${GITHUB_RUN_ID}"
+          compose=(docker compose -p "$project" -f compose.yaml -f compose.local.yaml)
+          on_exit() {
+            status=$?
+            if (( status != 0 )); then "${compose[@]}" logs --no-color --tail=120 || true; fi
+          }
+          trap on_exit EXIT
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up --build --detach
+          ready_code=000
+          for attempt in $(seq 1 40); do
+            ready_code="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/team/zhkh/health/ready || true)"
+            if [[ "$ready_code" == 200 ]]; then break; fi
+            sleep 3
+          done
+          if [[ "$ready_code" != 200 ]]; then
+            web_code="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/team/zhkh/ || true)"
+            running="$("${compose[@]}" ps --status running --services | paste -sd, -)"
+            echo "::error title=E1 readiness timeout::ready HTTP $ready_code; web HTTP $web_code; running services $running"
+            worker_log="$("${compose[@]}" logs --no-color --tail=12 worker 2>&1 | tail -c 2400 | tr '\r\n' '  ' | sed -E 's#(postgresql\+psycopg://zhkh:)[^@ ]+#\1***#g')"
+            echo "::error title=E1 worker diagnostic::$worker_log"
+            exit 1
+          fi
+          "${compose[@]}" exec -T web nginx -t
+          web_code="$(curl --silent --output /tmp/zhkh-e1-index.html --write-out '%{http_code}' http://127.0.0.1:18080/team/zhkh/ || true)"
+          meta_code="$(curl --silent --output /tmp/zhkh-e1-meta.json --write-out '%{http_code}' http://127.0.0.1:18080/team/zhkh/api/v1/meta || true)"
+          if [[ "$web_code" != 200 || "$meta_code" != 200 ]]; then
+            echo "::error title=E1 route smoke::web HTTP $web_code; meta HTTP $meta_code"
+            exit 1
+          fi
+          running="$("${compose[@]}" ps --status running --services | paste -sd, -)"
+          if [[ ",$running," != *,worker,* ]]; then
+            echo "::error title=E1 worker smoke::worker is not running; running services $running"
+            exit 1
+          fi
+          asset_path="$(python3 -c 'import re; page=open("/tmp/zhkh-e1-index.html").read(); match=re.search(r"/team/zhkh/assets/[^\" ]+\.js", page); print(match.group(0) if match else "")')"
+          asset_code="$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:18080$asset_path" || true)"
+          deep_code="$(curl --silent --output /dev/null --write-out '%{http_code}' 'http://127.0.0.1:18080/team/zhkh/processing?job=synthetic' || true)"
+          if [[ -z "$asset_path" || "$asset_code" != 200 || "$deep_code" != 200 ]]; then
+            echo "::error title=E1 SPA routes::asset HTTP $asset_code; deep link HTTP $deep_code; asset path present $([[ -n "$asset_path" ]] && echo yes || echo no)"
+            exit 1
+          fi
+          python3 -c 'import json; data=json.load(open("/tmp/zhkh-e1-meta.json")); assert data["features"]["engine_stub"] is True and data["features"]["receipt_ocr"] is False'
+          version="$("${compose[@]}" exec -T db psql -U zhkh -d zhkh -Atqc 'SHOW server_version_num')"
+          test "$version" -ge 170000
+          echo 'Compose build/up, PostgreSQL 17, API ready and web prefix: OK'

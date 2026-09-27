@@ -10,6 +10,9 @@ export type ApiErrorBody = Schema['ErrorEnvelope'];
 export type Profile = Schema['Profile'];
 export type AuthResponse = Schema['AuthResponse'];
 export type MetaResponse = Schema['Meta'];
+export type Catalog = Schema['Catalog'];
+export type MeResponse = Schema['UserAndProfile'];
+export type UpdateProfileRequest = Schema['UpdateProfileRequest'];
 export type ReceiptRef = Schema['ReceiptRef'];
 export type SourceRef = Schema['SourceRef'];
 export type NextAction = Schema['NextAction'];
@@ -20,6 +23,8 @@ export type Issue = Schema['Issue.schema'];
 // for B's external BillData schema; JSON payloads intentionally omit it.
 export type BillData = Omit<Schema['BillData.schema'], '$defs'>;
 export type ReceiptView = Omit<Schema['ReceiptView'], 'bill_data'> & { bill_data: BillData };
+export type ReceiptQueued = Omit<Schema['ReceiptQueued'], 'receipt'> & { receipt: ReceiptView };
+export type Job = Schema['Job'];
 
 export interface UnexpectedErrorBody {
   error: { code: 'UNEXPECTED_RESPONSE'; message: string; retryable: boolean; fields: []; details: {} };
