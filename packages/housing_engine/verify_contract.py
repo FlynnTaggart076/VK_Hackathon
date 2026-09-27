@@ -119,7 +119,7 @@ def verify() -> None:
     bundle = load_knowledge(str(KNOWLEDGE), datetime.now(timezone.utc))
     assert len(bundle.topics) == 15
     print("Engine v1 schemas and synthetic 200 -> 270 fixtures: OK")
-    print("Knowledge catalog: 15 schema-valid topics, local allowlist and references OK; real pilot territory and verified sources pending")
+    print("Knowledge catalog: 15 schema-valid topics, source allowlist and references OK; regional pilot mapping and local sources pending")
 
 
 if __name__ == "__main__":
