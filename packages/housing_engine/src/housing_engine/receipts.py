@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, localcontext
 
 from .dto import BillData, Issue, ValidationResult
 
@@ -114,7 +114,9 @@ def validate_bill(bill: BillData) -> ValidationResult:
             if line.quantity is None or line.tariff is None:
                 warning("LINE_FORMULA_INCOMPLETE", path, "Объём или тариф неизвестен; формулу строки проверить нельзя.")
             elif line.charge_amount is not None:
-                computed = rounded(Decimal(line.quantity) * Decimal(line.tariff))
+                with localcontext() as context:
+                    context.prec = 50
+                    computed = rounded(Decimal(line.quantity) * Decimal(line.tariff))
                 difference = Decimal(line.charge_amount) - computed
                 if abs(difference) > LINE_TOLERANCE:
                     warning("LINE_AMOUNT_MISMATCH", path + "/charge_amount", "Напечатанная сумма отличается от произведения объёма и тарифа.")
