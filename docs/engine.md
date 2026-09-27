@@ -1,6 +1,8 @@
-# Housing engine: contract v1 (E1)
+# Housing engine: contract v1 (E2 public checkpoint)
 
-The v1 DTO and JSON Schema remain unchanged. `validate_bill` and `extract_receipt` now run locally. `explain_receipt`, `compare_receipts`, `answer_question`, `compose_draft`, and `load_knowledge` still raise `NotImplementedError`; B must keep an explicit dev stub for those calls until an integrated engine release is accepted.
+The v1 DTO and JSON Schema remain unchanged. `validate_bill`, `extract_receipt` and `explain_receipt` run locally. `compare_receipts`, `answer_question`, `compose_draft`, and `load_knowledge` still raise `NotImplementedError`; B must keep an explicit dev stub for those calls until an integrated engine release is accepted.
+
+`explain_receipt(ExplainRequest, KnowledgeBundle) -> ReceiptExplanation` accepts a confirmed `BillData` after B checks ownership/revision and user confirmation. It raises `EngineError(INVALID_BILL)` when required fields are absent. It uses the same Decimal reconciliation as `validate_bill`, with printed current charges distinct from the calculated balance and total due. Per-line `difference` is printed charge minus rounded quantity × tariff; `unexplained_difference` is printed total due minus calculated total due when both exist. The E2 checkpoint emits no source refs or links because this catalog has no verified source content. `ARITHMETIC_ONLY` marks this limitation. A runnable bytes-based example is in `tests/test_e2_engine.py`: two synthetic text PDFs produce 200.00 and 270.00 explanations through the public calls. The September fixture is generated alongside August and listed with SHA-256 in the manifest.
 
 ## Reproducible local check
 
