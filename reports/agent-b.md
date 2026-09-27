@@ -162,3 +162,12 @@ E3-B-01 передан на review по code SHA `362985a`; отдельный r
 ### Следующий шаг
 
 После успешного CI нужен новый принятый координатором release SHA, приватные MAX bot token/webhook secret, привязанный mini-app target и рабочий SSH-доступ для B. Затем проверить эти prerequisites вне Git, добавить только свой edge route/network в существующий team-web по §12.8, развернуть точный SHA и отдельно проверить internal VM, external HTTPS и реальный MAX Web/mobile. До этого production не запускать.
+
+## E4-B deploy follow-up: prerequisite gate, 2026-09-27
+
+- Задание: `tasks/e4/agent-b-deploy-followup.md` из `b09d930eb767c5cf64348b5d193c9880c0e24c72`; отдельная ветка `agent-b/e4b`, checkout чистый до этого отчёта. Единственный разрешённый кандидат развёртывания `01a271a506db1e65aedd68efc7101c761827d89a` существует локально как commit. Никакой branch HEAD или task/report commit вместо него на VM не отправлялся.
+- Проверка только наличия: в процессе B отсутствуют `MAX_BOT_TOKEN`, `MAX_WEBHOOK_SECRET`, `MAX_WEB_APP`; в checkout нет `.env` и `runtime/app.env`. Значения не читались и не выводились. Приватные реальные значения, привязка мини-приложения и права регистрации webhook оператору B не предоставлены/не подтверждены. Это решающий блокер production deploy; синтетические переменные CI не применимы.
+- Координатор ранее успешно вошёл на VM интерактивным SSH и выполнил read-only инвентаризацию, описанную выше. В текущем процессе B `ssh-add -l` сообщает об отсутствии agent, а `ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=10 hackathon hostname` завершился `Permission denied (publickey)`. Это отсутствие разблокированного ключа в данном процессе, а не доказательство недоступности VM.
+- **Not deployed:** VM, общий Nginx, Compose, соседние проекты и секреты не менялись. Внутренний VM health, внешний `/team/zhkh/`, webhook registration и реальный MAX Web/mobile после развёртывания отсутствуют, потому что развёртывания не было.
+
+Следующий шаг: передать B реальные MAX prerequisites защищённым каналом и подтвердить привязку mini-app/право регистрации; обеспечить интерактивный SSH или разблокированный agent. Затем B повторит read-only preflight непосредственно перед записью и выполнит §12.8 из чистого checkout **только** `01a271a506db1e65aedd68efc7101c761827d89a`, с раздельной фиксацией internal VM, external HTTPS и MAX результатов.
