@@ -33,7 +33,18 @@ jobs:
           trap on_exit EXIT
           "${compose[@]}" config --quiet
           "${compose[@]}" up --build --detach
-          timeout 180 bash -c 'until curl --fail --silent http://127.0.0.1:18080/team/zhkh/health/ready >/dev/null; do sleep 3; done'
+          ready_code=000
+          for attempt in $(seq 1 40); do
+            ready_code="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/team/zhkh/health/ready || true)"
+            if [[ "$ready_code" == 200 ]]; then break; fi
+            sleep 3
+          done
+          if [[ "$ready_code" != 200 ]]; then
+            web_code="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/team/zhkh/ || true)"
+            running="$("${compose[@]}" ps --status running --services | paste -sd, -)"
+            echo "::error title=E1 readiness timeout::ready HTTP $ready_code; web HTTP $web_code; running services $running"
+            exit 1
+          fi
           curl --fail --silent http://127.0.0.1:18080/team/zhkh/ >/dev/null
           curl --fail --silent http://127.0.0.1:18080/team/zhkh/api/v1/meta | python3 -c 'import json,sys; data=json.load(sys.stdin); assert data["features"]["engine_stub"] is True and data["features"]["receipt_ocr"] is False'
           version="$("${compose[@]}" exec -T db psql -U zhkh -d zhkh -Atqc 'SHOW server_version_num')"
