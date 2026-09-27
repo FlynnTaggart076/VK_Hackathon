@@ -5,7 +5,7 @@
 ## Актуальное состояние E3
 
 - E0–E2 приняты; текущий этап E3 по task commit `c11b5235319c12ecb18a6c4ca05c35a54f5c0560`, база `b33ed1e0493d76dfd7051a141e2075c698f8e967`. A/B/C работают в отдельных ветках и checkout. E3 целиком не принят; release SHA не назначен.
-- `integration/e3` checkpoint `59d1c71` содержит C compare/15 тем/черновик и два проверенных общих маршрута ГИС ЖКХ, B compare/MAX webhook и явную пометку синтетического PDF, A mock UI сравнения/FAQ/черновика/истории и реальные compare/history/demo API. B ещё завершает persisted FAQ/draft; A готовит полный браузерный E3 сценарий. Проверка image path в PG17 CI повторяется после fix `02f6377`. E3 без mocks/stubs пока не доказан.
+- `integration/e3` runtime checkpoint `e0aad750e589e6475aba7e43ead7c70eeb1f9981` содержит сравнение, 15 тем, черновики, историю, MAX webhook/outbox и реальный UI. [PG17 CI 36329625261](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36329625261) и [36330295351](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36330295351) прошли HTTP, OCR/restart, offline webhook и Chrome 360 px на синтетике. A/B завершили E3 подпакеты; C продолжает исправлять поиск тем. Последний независимый набор дал S 50/60, A 4/5, U 10/10 при цели §15.4 не менее 54/60; E3 не принят. Следующая версия C и отдельный контрольный прогон ожидаются.
 - Владелец выбрал Москву и Московскую область; `moscow`/`moscow-oblast` добавлены в каталог как названия регионов, без подтверждённой УК, региональных процедур и реальных квитанций. `pilot_territory_id=null`; шесть местных тем возвращают `unsupported`, пока нет регионального первоисточника.
 - SSH alias `hackathon` проверен интерактивно, VM инвентаризирована без изменений. MAX bot credentials/регистрация mini-app пока не подтверждены. VM deploy только B из принятого release SHA в E4.
 - Папка коллеги переименована в локальную `colleague_anton/` и исключена из Git из-за `.env`, заметки SSH и кэшей. Её HouseScore/Dominfo прототип не является OCR квитанций и не включён в P0: адресный lookup требует отдельной проверки источников и не должен использовать недокументированный Dominfo API.
@@ -43,9 +43,12 @@
 | E1-A-01 | A / `agent-a/e1` | accepted | `tasks/e1/agent-a.md` | `1a9e30c`, `503cee0`, `0ca5aa7` code; `3895c6e` report; 5 тестов/build, mock и B dev API в Chrome 360 px |
 | E1-B-01 | B / `agent-b/e1` | accepted | `tasks/e1/agent-b.md` | `aafa334`, `d1798cc`, `599c9f6`, `5f1e0b3` code; `e9de94d` report; PG тесты и Compose CI PG17 зелёные |
 | E1-C-01 | C / `agent-c/e1` | accepted | `tasks/e1/agent-c.md` | code `e58a28a` + `d1d6426`, docs `ed649aa`, report `bcac7f2`; verifier/17 тестов, реальный OCR синтетических PNG и PDF-скана |
-| E2-A-01 | A / `agent-a/e2` | in_progress; mock checkpoint accepted | `tasks/e2/agent-a.md` | `3033a2a` → `c14bc7a`: 6 tests/build, 360 px mock; read-only формула и живой E2 API ещё в работе |
-| E2-B-01 | B / `agent-b/e2` | in_progress; runtime checkpoint review | `tasks/e2/agent-b.md` | `f508d9a` → `0ebed8b`; real adapter `5694604` → `8d1a2a4`; PG17 Compose up, полный HTTP/restart smoke и negative cases ещё в работе |
+| E2-A-01 | A / `agent-a/e2` | accepted | `tasks/e2/agent-a.md` | Сквозной UI OCR→правка→подтверждение→объяснение; итоговая E2 приёмка `b33ed1e` |
+| E2-B-01 | B / `agent-b/e2` | accepted | `tasks/e2/agent-b.md` | PG17, HTTP/restart, OCR worker; итоговая E2 приёмка `b33ed1e` |
 | E2-C-01 | C / `agent-c/e2` | accepted | `tasks/e2/agent-c.md` | `7242082` + `6b251b0` code, `056ea2e` report; verifier/25 tests/21 hashes/7 synthetic OCR cases |
+| E3-A-01 | A / `agent-a/e3` | accepted subtask | `tasks/e3/agent-a.md` | code `9a1ecf9`, report `7e34ddd`; 13 tests/build, PG17 Chrome 360 px CI success |
+| E3-B-01 | B / `agent-b/e3` | accepted subtask | `tasks/e3/agent-b.md` | code `362985a`, report `4db1f8f`; 26 tests/3 skipped, PG17 HTTP/webhook offline CI success; MAX live pending E4 |
+| E3-C-01 | C / `agent-c/e3` | in_progress; quality gate open | `tasks/e3/agent-c.md`, `tasks/e3/agent-c-qa-followup-3.md` | C compare/knowledge/draft integrated; fourth independent FAQ S50/60 below 90%, new ranking + fifth sealed holdout pending |
 
 ## Принятая интеграция E0
 
