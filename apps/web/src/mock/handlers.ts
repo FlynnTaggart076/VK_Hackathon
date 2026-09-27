@@ -1,13 +1,13 @@
 import { http, HttpResponse } from 'msw';
 import { API_BASE } from '../api/client';
-import type { AnswerView, ApiErrorBody, BillData, ReceiptView } from '../api/types';
+import type { AnswerView, ApiErrorBody, BillData, MetaResponse, ReceiptView } from '../api/types';
 
 const requestId = 'b1399c8c-d010-4e0c-b75f-bd312a647fea';
 const receiptId = '10000000-0000-4000-8000-000000000001';
 const answerId = '30000000-0000-4000-8000-000000000001';
 const now = '2026-09-27T10:00:00Z';
 
-function error(status: number, code: string, message: string): HttpResponse<ApiErrorBody> {
+function error(status: number, code: ApiErrorBody['error']['code'], message: string): HttpResponse<ApiErrorBody> {
   return HttpResponse.json({
     error: { code, message, retryable: false, fields: [], details: code === 'REVISION_CONFLICT' ? { current_revision: 4 } : {} },
     request_id: requestId,
@@ -40,12 +40,15 @@ const partialReceipt: ReceiptView = {
   job: { id: '40000000-0000-4000-8000-000000000001', state: 'succeeded', stage: 'completed' },
   confirmed_at: null, engine_version: 'mock-engine-1',
 };
+const meta: MetaResponse = {
+  api_version: '1.0', engine_version: 'mock-engine-1', knowledge_version: 'mock-knowledge-1', mode: 'dev',
+  limits: { upload_max_bytes: 10485760, pdf_max_pages: 3, receipt_retention_days: 30, source_retention_days: 7 },
+  features: { voice: false, external_submission: false, receipt_ocr: false, comparison: false, engine_stub: true, demo_auth: true },
+  privacy_notice: { version: 'mock-1', text: 'Учебные данные. Не загружайте настоящие документы.' },
+};
 
 export const handlers = [
-  http.get(`*${API_BASE}/meta`, () => HttpResponse.json({
-    api_version: '1.0', engine_version: 'mock-engine-1', knowledge_version: 'mock-knowledge-1', mode: 'dev',
-    limits: {}, features: { demo_auth: true }, privacy_notice: { version: 'mock-1', text: 'Учебные данные. Не загружайте настоящие документы.' },
-  }, { headers: { 'X-Request-ID': requestId } })),
+  http.get(`*${API_BASE}/meta`, () => HttpResponse.json(meta, { headers: { 'X-Request-ID': requestId } })),
   http.post(`*${API_BASE}/auth/demo`, async ({ request }) => {
     const input = await request.json() as { access_code?: string; identity?: string };
     if (input.access_code !== 'mock-only' || input.identity !== 'reviewer_a') return error(401, 'AUTH_REQUIRED', 'Нужен учебный вход.');
