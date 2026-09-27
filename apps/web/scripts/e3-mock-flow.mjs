@@ -1,0 +1,43 @@
+import { chromium } from 'playwright-core';
+
+if (!process.env.CHROME_PATH) throw new Error('Set CHROME_PATH');
+const base = process.env.E3_MOCK_URL ?? 'http://127.0.0.1:5173/team/zhkh/';
+const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true });
+try {
+  const page = await browser.newPage({ viewport: { width: 360, height: 800 } });
+  await page.goto(base, { waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: 'Войти в учебный mock' }).click();
+  await page.getByRole('link', { name: 'Первый запуск' }).click();
+  await page.getByLabel('Ваша роль').selectOption('tenant');
+  await page.getByLabel('Территория').selectOption('demo-territory');
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Сохранить' }).click();
+  await page.getByRole('status').filter({ hasText: 'Профиль сохранён' }).waitFor();
+  await page.getByRole('link', { name: 'История' }).click();
+  await page.getByRole('heading', { name: 'История документов' }).waitFor();
+  await page.getByRole('link', { name: 'Сравнить квитанции' }).click();
+  await page.getByLabel('Ранний документ').selectOption('10000000-0000-4000-8000-000000000003');
+  await page.getByLabel('Поздний документ').selectOption('10000000-0000-4000-8000-000000000004');
+  await page.getByRole('button', { name: 'Сравнить', exact: true }).click();
+  await page.getByRole('heading', { name: 'Сравнение готово' }).waitFor();
+  const comparison = await page.locator('.answer').innerText();
+  for (const value of ['70.00', '40.00', '30.00', 'Синтетический пример']) if (!comparison.includes(value)) throw new Error(`Missing comparison value: ${value}`);
+  await page.getByRole('link', { name: 'Подготовить черновик' }).click();
+  await page.getByLabel('Тема').selectOption('request_breakdown');
+  await page.getByRole('button', { name: 'Подготовить черновик' }).click();
+  await page.getByRole('heading', { name: 'Проверьте текст' }).waitFor();
+  await page.getByLabel('Текст черновика').fill('Прошу пояснить начисление.');
+  await page.getByRole('button', { name: 'Сохранить изменения' }).click();
+  await page.getByRole('status').filter({ hasText: 'Изменения сохранены' }).waitFor();
+  await page.getByRole('link', { name: 'Помощник' }).click();
+  await page.getByLabel('Тема').selectOption('housing_document');
+  await page.getByLabel('Ваш вопрос').fill('Нужна справка');
+  await page.getByRole('button', { name: 'Спросить' }).click();
+  await page.getByRole('heading', { name: 'Нужно уточнение' }).waitFor();
+  await page.getByLabel('Ваш вопрос').fill('неизвестный вопрос');
+  await page.getByRole('button', { name: 'Спросить' }).click();
+  await page.getByRole('heading', { name: 'Пока нет проверенного ответа' }).waitFor();
+  const layout = await page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth }));
+  if (layout.scrollWidth > layout.width) throw new Error(`Horizontal overflow: ${JSON.stringify(layout)}`);
+  process.stdout.write(JSON.stringify({ flow: 'history-compare-70-40-30-draft-faq-clarification-unknown', layout }) + '\n');
+} finally { await browser.close(); }

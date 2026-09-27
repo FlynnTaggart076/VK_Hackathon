@@ -29,6 +29,13 @@ export type Job = Schema['Job'];
 export type EditReceiptRequest = Omit<Schema['EditReceiptRequest'], 'bill_data'> & { bill_data: BillData };
 export type ConfirmReceiptRequest = Schema['ConfirmReceiptRequest'];
 export type ReceiptExplanation = Omit<Schema['ReceiptExplanation.schema'], '$defs'>;
+export type ReceiptSummary = Schema['ReceiptSummary'];
+export type ReceiptList = Schema['ReceiptList'];
+export type CompareRequest = Schema['CompareRequest'];
+export type ComparisonView = Schema['ComparisonView'];
+export type CreateDraftRequest = Schema['CreateDraftRequest'];
+export type EditDraftRequest = Schema['EditDraftRequest'];
+export type DraftView = Schema['DraftView'];
 
 export interface UnexpectedErrorBody {
   error: { code: 'UNEXPECTED_RESPONSE'; message: string; retryable: boolean; fields: []; details: {} };
