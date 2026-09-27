@@ -27,7 +27,7 @@ export async function loadMaxBridge(): Promise<void> {
     script.src = 'https://st.max.ru/js/max-web-app.js';
     script.async = true;
     const timeout = window.setTimeout(resolve, 5000);
-    const done = () => { window.clearTimeout(timeout); resolve(); };
+    const done = () => { window.clearTimeout(timeout); window.dispatchEvent(new Event('zhkh:max-bridge-ready')); resolve(); };
     script.onload = done;
     script.onerror = done;
     document.head.append(script);

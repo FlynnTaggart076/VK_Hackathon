@@ -50,8 +50,9 @@ export function History() {
     <p>В истории доступны ваши документы. Сравнить можно только две подтверждённые квитанции.</p>
     <div className="actions"><Link to="/comparison">Сравнить квитанции</Link><Link to="/upload">Загрузить документ</Link></div>
     <ErrorMessage error={error} />
+    {error !== null && <button type="button" disabled={busy} onClick={() => void load(cursor)}>Повторить загрузку истории</button>}
     {busy && <p role="status">Загружаем историю…</p>}
-    {!busy && items.length === 0 && <p>Документов пока нет.</p>}
+    {!busy && !error && items.length === 0 && <p>Документов пока нет.</p>}
     <ul className="history-list">{items.map((item) => <li key={item.id} className="notice-box">
       <strong>{item.period ?? 'Период не указан'} · {item.issuer_name ?? 'Организация не определена'}</strong>
       <p>{item.status === 'confirmed' ? 'Подтверждена' : item.status === 'needs_review' ? 'Требует проверки' : item.status === 'queued' || item.status === 'processing' ? 'Обрабатывается' : 'Ошибка обработки'} · ревизия {item.revision}</p>

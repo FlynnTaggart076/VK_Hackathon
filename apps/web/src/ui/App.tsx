@@ -23,7 +23,13 @@ function Entry({ meta, sessionExpired, onAuth }: { meta: MetaResponse | null; se
   const [error, setError] = useState<unknown>(null);
   const [accessCode, setAccessCode] = useState('');
   const [identity, setIdentity] = useState<'reviewer_a' | 'reviewer_b' | ''>('');
+  const [bridgeVersion, setBridgeVersion] = useState(0);
   const initData = !import.meta.env.DEV && !sessionExpired ? maxInitData() : null;
+  useEffect(() => {
+    const ready = () => setBridgeVersion((value) => value + 1);
+    window.addEventListener('zhkh:max-bridge-ready', ready);
+    return () => window.removeEventListener('zhkh:max-bridge-ready', ready);
+  }, []);
   async function enterMax() {
     if (!initData) return;
     setBusy(true); setError(null);
@@ -34,7 +40,7 @@ function Entry({ meta, sessionExpired, onAuth }: { meta: MetaResponse | null; se
     } catch (cause) { setError(cause); }
     finally { setBusy(false); }
   }
-  useEffect(() => { if (initData) void enterMax(); }, []);
+  useEffect(() => { if (initData) void enterMax(); }, [bridgeVersion]);
   async function enterDemo(event?: React.FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     setBusy(true); setError(null);

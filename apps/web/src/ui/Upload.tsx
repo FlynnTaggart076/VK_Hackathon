@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { api } from '../api/client';
+import { api, ApiRequestError } from '../api/client';
 import type { Catalog, Job, MetaResponse, Profile, ReceiptQueued } from '../api/types';
 import { canUpload } from './Onboarding';
 import { ErrorMessage } from './errors';
@@ -50,7 +50,11 @@ export function Upload({ meta, profile, catalog, onQueued }: {
       <button type="submit" disabled={busy || !file}>{busy ? 'Загружаем…' : 'Загрузить'}</button>
       {file && <p>Выбран файл: {file.name}</p>}
       <ErrorMessage error={error} />
-      {error !== null && <p className="notice">После сетевого сбоя можно повторить тот же файл. При конфликте выберите файл заново.</p>}
+      {error !== null && <p className="notice">{error instanceof ApiRequestError && error.status === 413
+        ? 'Выберите файл меньшего размера в пределах указанного лимита.'
+        : error instanceof ApiRequestError && error.status === 409
+          ? 'Выберите файл заново, чтобы начать новую загрузку.'
+          : 'После сетевого сбоя можно повторить тот же файл.'}</p>}
     </form>}
     {canUpload(profile, meta) && !!catalog?.demo_receipts.length && <div className="notice-box"><h3>Учебные образцы</h3><p>Синтетические документы выдаются после входа и обрабатываются сервером. Проверьте цифры перед подтверждением.</p><div className="actions">{catalog.demo_receipts.map((sample) => <button key={sample.fixture_id} type="button" disabled={busy} onClick={() => void uploadDemo(sample.fixture_id)}>Загрузить образец · {sample.label}</button>)}</div></div>}
   </section>;
