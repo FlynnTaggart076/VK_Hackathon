@@ -301,8 +301,7 @@ def test_evidence_follows_stable_line_id_after_reorder():
 
 
 def test_outer_engine_budget_kills_child():
-    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(5)"],
-                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    child = spawn_child([sys.executable, "-c", "import time; time.sleep(5)"])
     started = time.monotonic()
     with pytest.raises(EngineError) as error:
         communicate_bounded(child, b"", 0.2, lambda: True)
