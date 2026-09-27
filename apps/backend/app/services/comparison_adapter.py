@@ -25,6 +25,6 @@ def compare_json(snapshots: list[dict], territory_id: str | None,
         left=bills[0], right=bills[1], identity_acknowledged=identity_acknowledged,
         territory_id=territory_id, now=datetime.now(timezone.utc),
     ), knowledge).model_dump(mode="json")
-    result["dataset_kind"] = "synthetic" if all(
+    result["dataset_kind"] = "synthetic" if any(
         item["dataset_kind"] == "synthetic" for item in snapshots) else "user_provided"
     return result
