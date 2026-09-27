@@ -103,10 +103,15 @@ describe('E2 synthetic receipt flow', () => {
     expect(billErrors(bill)).toEqual([]);
     await expect(api.editReceipt(receipt.id, { expected_revision: 20, bill_data: bill })).rejects.toMatchObject({ status: 409, code: 'REVISION_CONFLICT' });
     const edited = await api.editReceipt(receipt.id, { expected_revision: receipt.revision,
-      bill_data: { ...bill, settlement: { ...bill.settlement, formula_kind: 'unsupported' } } });
+      bill_data: { ...bill, template_id: 'client-forged', template_version: '999',
+        services: [{ ...bill.services[0], calculation_kind: 'simple_product' }],
+        settlement: { ...bill.settlement, formula_kind: 'unsupported' } } });
     expect(edited.revision).toBe(receipt.revision + 1);
     expect((await api.receipt(edited.id)).bill_data.services[0].tariff).toBe('40.00');
     expect(edited.bill_data.settlement.formula_kind).toBe('signed_balance_v1');
+    expect(edited.bill_data.template_id).toBe(receipt.bill_data.template_id);
+    expect(edited.bill_data.template_version).toBe(receipt.bill_data.template_version);
+    expect(edited.bill_data.services[0].calculation_kind).toBe('document_amount');
     expect(edited.field_evidence[0].source).toBe('manual');
     await expect(api.confirmReceipt(edited.id, { expected_revision: edited.revision, acknowledged_warning_codes: [] }, crypto.randomUUID()))
       .rejects.toMatchObject({ status: 422, code: 'WARNINGS_NOT_ACKNOWLEDGED' });
@@ -116,5 +121,12 @@ describe('E2 synthetic receipt flow', () => {
     const explanation = await api.explanation(confirmed.id, confirmed.revision);
     expect(explanation.receipt_ref.revision).toBe(confirmed.revision);
     expect(explanation.lines[0].title).toBe(bill.services[0].raw_name);
+  });
+
+  it('allows unknown issuer but requires every adjustment amount before submission', () => {
+    const sample = JSON.parse(readFileSync(new URL('../../../../contracts/http/examples/receipt-confirmed.json', import.meta.url), 'utf8')) as { bill_data: BillData };
+    expect(billErrors({ ...sample.bill_data, issuer_name: null })).toEqual([]);
+    expect(billErrors({ ...sample.bill_data, adjustments: [{ adjustment_id: crypto.randomUUID(), label: 'Перерасчёт', amount: null,
+      service_line_id: null, related_period: null }] })).toContain('Перерасчёт 1: укажите сумму с двумя цифрами после точки.');
   });
 });
