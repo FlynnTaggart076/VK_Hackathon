@@ -61,7 +61,8 @@ def request(base: str, method: str, path: str, *, token: str | None = None,
         raise SmokeError(f"{method} {path}: HTTP {exc.code} {code}") from None
     except (URLError, TimeoutError) as exc:
         raise SmokeError(f"{method} {path}: network {type(exc).__name__}") from None
-    expected = 202 if path == "/api/v1/receipts" and method == "POST" else 200
+    expected = (202 if path == "/api/v1/receipts" and method == "POST" else
+                201 if path == "/api/v1/drafts" and method == "POST" else 200)
     if status != expected:
         raise SmokeError(f"{method} {path}: HTTP {status}, expected {expected}")
     return value
