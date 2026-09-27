@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Public Ministry root CA, pinned to the reviewed PEM bytes. Keep TLS validation on.
 COPY infra/certs/russian-trusted-root-ca.crt /usr/local/share/ca-certificates/russian-trusted-root-ca.crt
-RUN echo '936a43fea6e8e525bcc0f81acd9c3d21b4fc4b9b68acea7906d698005afc6504  /usr/local/share/ca-certificates/russian-trusted-root-ca.crt' \
+RUN echo '0819977502d9aed2234830f6ffb91f82f401d3674c6e51dd19e16d8b3dbf0eb4  /usr/local/share/ca-certificates/russian-trusted-root-ca.crt' \
       | sha256sum -c - \
     && update-ca-certificates
 
