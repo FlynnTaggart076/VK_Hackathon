@@ -29,6 +29,15 @@ def error_code(base: str, path: str, token: str, body: dict) -> tuple[int, str]:
         return exc.code, result["error"]["code"]
 
 
+def get_error_code(base: str, path: str, token: str) -> tuple[int, str]:
+    try:
+        with urlopen(Request(base + path, headers={"Authorization": f"Bearer {token}"}), timeout=15):
+            raise SmokeError(f"{path}: expected owner rejection")
+    except HTTPError as exc:
+        result = json.loads(exc.read())
+        return exc.code, result["error"]["code"]
+
+
 def run(base: str, token: str, access_code: str) -> None:
     meta = request(base, "GET", "/api/v1/meta")
     if meta["features"]["engine_stub"] or not meta["features"]["comparison"]:
@@ -69,16 +78,43 @@ def run(base: str, token: str, access_code: str) -> None:
     if len(matched) != 1 or (matched[0]["quantity_effect"], matched[0]["tariff_effect"]) != \
             ("40.00", "30.00"):
         raise SmokeError("comparison quantity/tariff decomposition mismatch")
+    newer = request(base, "GET", f"/api/v1/receipts/{refs[1]['id']}", token=token)
+    context = {"territory_id": "demo-territory", "role": "tenant", "topic_id": "bill_change",
+               "organization_id": None, "service_code": None, "document_kind": None,
+               "receipt_id": refs[1]["id"], "receipt_revision": refs[1]["revision"]}
+    answer = request(base, "POST", "/api/v1/assistant/answers", token=token,
+                     body={"question": "Почему изменилась сумма?", "context": context})
+    if answer["status"] != "answered" or answer["dataset_kind"] != "synthetic" or \
+            answer["knowledge_version"] != meta["knowledge_version"]:
+        raise SmokeError("persisted FAQ answer/provenance mismatch")
+    reread = request(base, "GET", f"/api/v1/assistant/answers/{answer['id']}", token=token)
+    if reread["text"] != answer["text"] or reread["stale"]:
+        raise SmokeError("FAQ answer was not persisted")
+    draft = request(base, "POST", "/api/v1/drafts", token=token, idempotency=True,
+                    body={"topic_id": "request_breakdown", "organization_id": None,
+                          "receipt_refs": [refs[1]],
+                          "line_id": newer["bill_data"]["services"][0]["line_id"],
+                          "user_question": "Поясните начисление"})
+    if "270.00" not in draft["text"] or draft["recipient"] is not None or draft["stale"]:
+        raise SmokeError("verified-facts draft mismatch")
+    if request(base, "GET", f"/api/v1/drafts/{draft['id']}", token=token)["text"] != draft["text"]:
+        raise SmokeError("draft was not persisted")
     other = request(base, "POST", "/api/v1/auth/demo", body={
         "identity": "reviewer_b", "access_code": access_code,
     })["access_token"]
     if error_code(base, "/api/v1/comparisons", other, comparison) != (404, "NOT_FOUND"):
         raise SmokeError("comparison owner isolation failed")
-    newer = request(base, "GET", f"/api/v1/receipts/{refs[1]['id']}", token=token)
+    if get_error_code(base, f"/api/v1/assistant/answers/{answer['id']}", other) != (404, "NOT_FOUND") or \
+            get_error_code(base, f"/api/v1/drafts/{draft['id']}", other) != (404, "NOT_FOUND"):
+        raise SmokeError("FAQ/draft owner isolation failed")
     request(base, "PUT", f"/api/v1/receipts/{refs[1]['id']}/draft", token=token,
             body={"expected_revision": newer["revision"], "bill_data": newer["bill_data"]})
     if error_code(base, "/api/v1/comparisons", token, comparison) != (409, "REVISION_CONFLICT"):
         raise SmokeError("stale revision was accepted")
+    if "receipt_changed" not in request(base, "GET", f"/api/v1/assistant/answers/{answer['id']}",
+                                        token=token)["stale_reasons"] or \
+            not request(base, "GET", f"/api/v1/drafts/{draft['id']}", token=token)["stale"]:
+        raise SmokeError("FAQ/draft did not become stale after receipt edit")
 
 
 def main() -> int:
