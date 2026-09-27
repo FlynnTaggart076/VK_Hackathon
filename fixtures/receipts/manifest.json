@@ -30,6 +30,132 @@
       "is_synthetic": true
     },
     {
+      "file": "demo-bill-2026-09.jpg",
+      "sha256": "a73ebc7615265f3c6c760f8800095e9127e26f30537477aca7414dcb879d3ecd",
+      "bytes": 140432,
+      "media_type": "image/jpeg",
+      "representation": "raster_of_text_pdf",
+      "template_id": "demo-bill-v1",
+      "expected_fields": {
+        "period": "2026-09",
+        "charge_amount": "270.00"
+      },
+      "origin": "Rendered from synthetic September text PDF by pypdfium2",
+      "is_synthetic": true
+    },
+    {
+      "file": "demo-bill-2026-09-adjustment.pdf",
+      "sha256": "73363e75acc91a651671b8120d063b37f479e0886c83388a7be623a6a6bc53ee",
+      "bytes": 2340,
+      "media_type": "application/pdf",
+      "representation": "text_pdf",
+      "template_id": "demo-bill-v1",
+      "expected_fields": {
+        "period": "2026-09",
+        "charge_amount": "220.00"
+      },
+      "origin": "Generated synthetic adjustment DEMO-BILL-V1 layout",
+      "is_synthetic": true
+    },
+    {
+      "file": "demo-bill-2026-09-adjustment.png",
+      "sha256": "ada43ff3252762839fa2fea68ecef88c11da361e30b54fc66e02c23ca587857d",
+      "bytes": 105697,
+      "media_type": "image/png",
+      "representation": "raster_of_text_pdf",
+      "template_id": "demo-bill-v1",
+      "expected_fields": {
+        "period": "2026-09",
+        "charge_amount": "220.00"
+      },
+      "origin": "Rendered synthetic adjustment text PDF by pypdfium2",
+      "is_synthetic": true
+    },
+    {
+      "file": "demo-bill-2026-09-debt-payment.pdf",
+      "sha256": "c96897a3338c404c7bfee0ce38ceb666c72a5f61a3bc38e3cda1df0c00a630d6",
+      "bytes": 2281,
+      "media_type": "application/pdf",
+      "representation": "text_pdf",
+      "template_id": "demo-bill-v1",
+      "expected_fields": {
+        "period": "2026-09",
+        "charge_amount": "290.00"
+      },
+      "origin": "Generated synthetic debt-payment DEMO-BILL-V1 layout",
+      "is_synthetic": true
+    },
+    {
+      "file": "demo-bill-2026-09-debt-payment.jpg",
+      "sha256": "990f33a2b29e0d0ffd8ba5cd4d507c0080f47fbeb517af72c44506d39de8d044",
+      "bytes": 141142,
+      "media_type": "image/jpeg",
+      "representation": "raster_of_text_pdf",
+      "template_id": "demo-bill-v1",
+      "expected_fields": {
+        "period": "2026-09",
+        "charge_amount": "290.00"
+      },
+      "origin": "Rendered synthetic debt-payment text PDF by pypdfium2",
+      "is_synthetic": true
+    },
+    {
+      "file": "demo-bill-2026-09-credit.pdf",
+      "sha256": "1446b60bdc2e0f99eccc4636f7ce14d693bbf7b3cbaad1c1c303ae5effd6dfff",
+      "bytes": 2279,
+      "media_type": "application/pdf",
+      "representation": "text_pdf",
+      "template_id": "demo-bill-v1",
+      "expected_fields": {
+        "period": "2026-09",
+        "charge_amount": "0.00"
+      },
+      "origin": "Generated synthetic credit DEMO-BILL-V1 layout",
+      "is_synthetic": true
+    },
+    {
+      "file": "demo-bill-2026-09-credit.png",
+      "sha256": "3d0905fce474f5ff17ff156785b38343e55c69be177f1b8763016fd54265f338",
+      "bytes": 97782,
+      "media_type": "image/png",
+      "representation": "raster_of_text_pdf",
+      "template_id": "demo-bill-v1",
+      "expected_fields": {
+        "period": "2026-09",
+        "charge_amount": "0.00"
+      },
+      "origin": "Rendered synthetic credit text PDF by pypdfium2",
+      "is_synthetic": true
+    },
+    {
+      "file": "demo-bill-2026-09-unknown-service.pdf",
+      "sha256": "9b3939418ff002ea50d8137370b9d8a0d139791d2b465bc58ab3e4f7afc649df",
+      "bytes": 2283,
+      "media_type": "application/pdf",
+      "representation": "text_pdf",
+      "template_id": "demo-bill-v1",
+      "expected_fields": {
+        "period": "2026-09",
+        "charge_amount": "270.00"
+      },
+      "origin": "Generated synthetic unknown-service DEMO-BILL-V1 layout",
+      "is_synthetic": true
+    },
+    {
+      "file": "demo-bill-2026-09-unknown-service.jpg",
+      "sha256": "eb374fbafcb021988c3c21406510c70a87d02b79e88a5f06d92dfac8bb67a06c",
+      "bytes": 141193,
+      "media_type": "image/jpeg",
+      "representation": "raster_of_text_pdf",
+      "template_id": "demo-bill-v1",
+      "expected_fields": {
+        "period": "2026-09",
+        "charge_amount": "270.00"
+      },
+      "origin": "Rendered synthetic unknown-service text PDF by pypdfium2",
+      "is_synthetic": true
+    },
+    {
       "file": "demo-bill-2026-08.png",
       "sha256": "5d1c0904398857a9941afed423bdd6b0c6667873a06ac6d7ce2ec26eb50bcc53",
       "bytes": 97728,
@@ -55,6 +181,66 @@
         "charge_amount": "200.00"
       },
       "origin": "Image-only PDF made from the synthetic raster; no text layer",
+      "is_synthetic": true
+    },
+    {
+      "file": "demo-bill-unreadable.png",
+      "sha256": "939a5e926ee5c5776c4b899883703bb43a0c4993462be73f88f7c950ed841bca",
+      "bytes": 7264,
+      "media_type": "image/png",
+      "representation": "unreadable_raster",
+      "template_id": null,
+      "expected_fields": {},
+      "origin": "Generated blank synthetic page for manual_required control",
+      "is_synthetic": true
+    },
+    {
+      "file": "demo-bill-cropped.pdf",
+      "sha256": "2bc8c3a7dd3e6af1a01b41bc1fc71288c7b58a87597959213a1cdc9697588f45",
+      "bytes": 1898,
+      "media_type": "application/pdf",
+      "representation": "cropped_text_pdf",
+      "template_id": "demo-bill-v1",
+      "expected_fields": {
+        "period": "2026-09"
+      },
+      "origin": "Generated synthetic template header and service without totals",
+      "is_synthetic": true
+    },
+    {
+      "file": "demo-bill-2026-09-mismatch.pdf",
+      "sha256": "438bf70af4853009283d1cbb082480a9af149c1437957c36597c843ecc042275",
+      "bytes": 2278,
+      "media_type": "application/pdf",
+      "representation": "text_pdf",
+      "template_id": "demo-bill-v1",
+      "expected_fields": {
+        "period": "2026-09",
+        "charge_amount": "270.00"
+      },
+      "origin": "Generated synthetic September document with printed total 271.00 versus calculated 270.00",
+      "is_synthetic": true
+    },
+    {
+      "file": "unknown-layout.pdf",
+      "sha256": "5f6a2a45a583ba0333438333631c87b989d380f9a1c29d8f6a1b9f637c7d79d7",
+      "bytes": 1655,
+      "media_type": "application/pdf",
+      "representation": "unknown_layout",
+      "template_id": null,
+      "expected_fields": {},
+      "origin": "Generated synthetic unrelated text document",
+      "is_synthetic": true
+    },
+    {
+      "file": "corrupt.pdf",
+      "sha256": "72db2793b64340f3a3530b0579d6e2673374ac1e51d9d909ab017307a069b66c",
+      "bytes": 19,
+      "media_type": "application/pdf",
+      "representation": "corrupt_pdf",
+      "template_id": null,
+      "expected_fields": {},
+      "origin": "Generated invalid PDF signature for error control",
       "is_synthetic": true
     },
     {
