@@ -1,4 +1,4 @@
-# Data provenance (E2)
+# Data provenance (E3)
 
 | Artifact | Origin | Status |
 |---|---|---|
@@ -15,6 +15,10 @@
 | `fixtures/receipts/manifest.json` | Generator-produced SHA-256, byte lengths, type, representation, layout and expected fields for every sample | Local integrity/provenance record, not a quality measurement |
 | `knowledge/territories.yaml` | Explicit demo territory from §7.7 and §10.2 | Synthetic; only `demo-territory` |
 | `knowledge/manifest.yaml` | E0 structure from §10.2 | Contract-only; `pilot_territory_id: null` |
-| `knowledge/sources.yaml`, `organizations.yaml`, `glossary.yaml`, `aliases.yaml` | Empty E0 structure from §10.2 | No factual content, links, review dates, deadlines or organizations claimed |
+| `knowledge/sources.yaml`, `organizations.yaml` | Empty E0 structure from §10.2 | No verified external sources, links, deadlines or organizations claimed |
+| `fixtures/receipts/e3-settlement-comparison.json` | Independently stated §9.8 values for 200.00 → 190.00 when adjustment -50.00 and payment 30.00 apply | Synthetic expected result; no real debt or payment |
+| `knowledge/topics/*.yaml` | Fifteen generic topic IDs and questions from §10.1, editorial text written for E3 | No pilot-specific instructions or verified source claims; `review_after` is an editorial reminder |
+| `knowledge/aliases.yaml`, `glossary.yaml` | Controlled synonyms and definitions of this application's own bill fields from §§9.4 and 10.2 | No external legal or tariff claims |
+| `knowledge/source-host-allowlist.yaml` | Empty explicit allowlist pending source review | No external source URL is approved |
 
-The address, account and organization in the receipt fixtures are obvious educational placeholders. Fixture values are not legal tariffs or evidence that an invoice is correct. The generated PDF/PNG/JPEG set does not establish recognition quality on real bills or phone photos. E2's opt-in smoke actually exercised seven synthetic raster/scan paths on local Tesseract `v5.5.3.20260724` with `eng+rus`; OCR evidence remains `needs_review`. Real source URLs, verified dates, contacts, service instructions and pilot territory require separate review before publication; no verification timestamp is inferred from file creation time. No real person or external organization is represented by the synthetic records.
+The address, account and organization in the receipt fixtures are obvious educational placeholders. Fixture values are not legal tariffs or evidence that an invoice is correct. The generated PDF/PNG/JPEG set does not establish recognition quality on real bills or phone photos. E2's opt-in smoke actually exercised seven synthetic raster/scan paths on local Tesseract `v5.5.3.20260724` with `eng+rus`; OCR evidence remains `needs_review`. Real source URLs, verified dates, contacts, service instructions and pilot territory require separate review before publication; no verification timestamp is inferred from file creation time. No real person or external organization is represented by the synthetic records. The E3 catalog `knowledge_version` hashes local content; its generic card review dates do not imply external source verification. No network lookup runs while answering a user question.

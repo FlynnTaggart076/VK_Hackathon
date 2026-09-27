@@ -1,0 +1,16 @@
+id: adjustment
+title: "Перерасчёт"
+utterances: ["что такое перерасчет", "почему корректировка"]
+keywords: ["перерасчет", "корректировка"]
+required_context: []
+applicability:
+  territory_ids: []
+  roles: []
+  service_codes: []
+  document_kinds: []
+answer_template: "Отдельный перерасчёт входит в начисления указанной квитанции один раз. Причину конкретной корректировки нужно уточнить у организации."
+steps: ["Проверьте сумму и период строки перерасчёта."]
+source_ids: []
+action_templates: []
+review_after: "2026-12-31T00:00:00Z"
+content_version: "1.0"

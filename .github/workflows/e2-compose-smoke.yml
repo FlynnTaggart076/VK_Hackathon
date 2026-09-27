@@ -2,7 +2,7 @@ name: E2 Compose smoke
 
 on:
   push:
-    branches: [integration/e2]
+    branches: [integration/e2, integration/e3]
     paths:
       - .github/workflows/e2-compose-smoke.yml
       - apps/**
@@ -97,6 +97,12 @@ jobs:
           if ! python3 scripts/smoke_e2_http.py verify --state /tmp/zhkh-e2-state.json > /tmp/zhkh-e2-verify.log 2>&1; then
             echo "::error title=E2 HTTP persistence::$(tail -n 15 /tmp/zhkh-e2-verify.log | tr '\r\n' '  ' | tail -c 1800)"
             exit 1
+          fi
+          if [[ "$GITHUB_REF_NAME" == integration/e3 ]]; then
+            if ! python3 scripts/smoke_e3_http.py > /tmp/zhkh-e3-http.log 2>&1; then
+              echo "::error title=E3 HTTP comparison::$(tail -n 20 /tmp/zhkh-e3-http.log | tr '\r\n' '  ' | tail -c 1800)"
+              exit 1
+            fi
           fi
           if ! "${compose[@]}" run --rm --no-deps -v "$GITHUB_WORKSPACE:/repo:ro" \
               -e PYTHONPATH=/workspace worker python /repo/scripts/verify_e2_process_tree.py \

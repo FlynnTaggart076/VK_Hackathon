@@ -140,6 +140,21 @@ class CompareCheckpointTests(unittest.TestCase):
         self.assertIsNone(partial.unexplained_delta)
         self.assertIsNone({item.code: item.contribution for item in partial.settlement_deltas}["payments_credited"])
 
+    def test_printed_total_mismatch_is_partial_with_visible_residual(self):
+        old, new = from_json("2026-08", 1), from_json("2026-09", 2)
+        adjustment = Adjustment(adjustment_id=UUID("50000000-0000-4000-8000-000000000005"), label="Учебный перерасчёт", amount="-50.00", service_line_id=None, related_period="2026-08")
+        bill = new.bill_data.model_copy(update={
+            "adjustments": [adjustment], "document_current_charges": "230.00",
+            "document_total_due": "230.00",
+            "settlement": new.bill_data.settlement.model_copy(update={"document_closing_balance": "230.00"}),
+        })
+        result = compare_receipts(request(old, new.model_copy(update={"bill_data": bill}), True), KNOWLEDGE)
+        self.assertEqual(result.status, "partial")
+        self.assertEqual(result.delta_current_charges, "20.00")
+        self.assertEqual(result.delta_total_due, "30.00")
+        self.assertEqual(result.unexplained_delta, "10.00")
+        self.assertIn("RECONCILIATION_INCOMPLETE", [item.code for item in result.issues])
+
     def test_other_unit_mismatch_and_ambiguous_lines(self):
         old, new = from_json("2026-08", 1), from_json("2026-09", 2)
         line = new.bill_data.services[0]
@@ -159,6 +174,42 @@ class CompareCheckpointTests(unittest.TestCase):
         self.assertEqual(ambiguous.status, "partial")
         self.assertTrue(all(item.match_status == "ambiguous" for item in ambiguous.lines))
         self.assertIn("AMBIGUOUS_SERVICE_LINES", [item.code for item in ambiguous.issues])
+
+    def test_rounding_residual_and_segments_remain_exact(self):
+        old, new = from_json("2026-08", 1), from_json("2026-09", 2)
+        old_line = old.bill_data.services[0].model_copy(update={"quantity": "1.000000", "tariff": "0.005000", "charge_amount": "0.01"})
+        new_line = new.bill_data.services[0].model_copy(update={"quantity": "2.000000", "tariff": "0.005000", "charge_amount": "0.01"})
+        old_bill = old.bill_data.model_copy(update={"services": [old_line], "document_current_charges": "0.01", "document_total_due": "0.01", "settlement": old.bill_data.settlement.model_copy(update={"document_closing_balance": "0.01"})})
+        new_bill = new.bill_data.model_copy(update={"services": [new_line], "document_current_charges": "0.01", "document_total_due": "0.01", "settlement": new.bill_data.settlement.model_copy(update={"document_closing_balance": "0.01"})})
+        result = compare_receipts(request(old.model_copy(update={"bill_data": old_bill}), new.model_copy(update={"bill_data": new_bill}), True), KNOWLEDGE)
+        self.assertEqual((result.lines[0].delta, result.lines[0].quantity_effect, result.lines[0].tariff_effect, result.lines[0].rounding_effect),
+                         ("0.00", "0.01", "0.00", "-0.01"))
+
+        old_day = old.bill_data.services[0].model_copy(update={"segment_key": "day"})
+        old_night = old.bill_data.services[0].model_copy(update={"line_id": UUID("50000000-0000-4000-8000-000000000003"), "segment_key": "night", "charge_amount": "50.00", "quantity": "1.000000", "tariff": "50.000000"})
+        new_day = new.bill_data.services[0].model_copy(update={"segment_key": "day"})
+        new_night = new.bill_data.services[0].model_copy(update={"line_id": UUID("50000000-0000-4000-8000-000000000004"), "segment_key": "night", "charge_amount": "60.00", "quantity": "1.000000", "tariff": "60.000000"})
+        old_zones = old.bill_data.model_copy(update={"services": [old_day, old_night], "document_current_charges": "250.00", "document_total_due": "250.00", "settlement": old.bill_data.settlement.model_copy(update={"document_closing_balance": "250.00"})})
+        new_zones = new.bill_data.model_copy(update={"services": [new_day, new_night], "document_current_charges": "330.00", "document_total_due": "330.00", "settlement": new.bill_data.settlement.model_copy(update={"document_closing_balance": "330.00"})})
+        zones = compare_receipts(request(old.model_copy(update={"bill_data": old_zones}), new.model_copy(update={"bill_data": new_zones}), True), KNOWLEDGE)
+        self.assertEqual(len(zones.lines), 2)
+        self.assertEqual({item.delta for item in zones.lines}, {"70.00", "10.00"})
+        self.assertTrue(all(item.match_status == "matched" for item in zones.lines))
+
+    def test_identity_normalization_and_explicit_contradictions(self):
+        old, new = from_json("2026-08", 1), from_json("2026-09", 2)
+        normalized = new.bill_data.model_copy(update={
+            "account_number": "000-123",
+            "address_text": "Учебный город, Примерная ул., д. 1, кв. 1",
+        })
+        self.assertEqual(compare_receipts(request(old, new.model_copy(update={"bill_data": normalized}), True), KNOWLEDGE).status, "complete")
+        for field, value in (("account_number", "00123"), ("provider_id", "other-provider"),
+                             ("address_text", "Учебный город, Примерная улица, дом 1, квартира 2")):
+            with self.subTest(field=field):
+                bill = new.bill_data.model_copy(update={field: value})
+                with self.assertRaises(EngineError) as raised:
+                    compare_receipts(request(old, new.model_copy(update={"bill_data": bill}), True), KNOWLEDGE)
+                self.assertEqual(raised.exception.code, "INCOMPARABLE_RECEIPTS")
         with self.assertRaises(EngineError) as raised:
             compare_receipts(request(old, old, True), KNOWLEDGE)
         self.assertEqual(raised.exception.code, "INCOMPARABLE_RECEIPTS")

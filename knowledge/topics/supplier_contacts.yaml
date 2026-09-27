@@ -1,0 +1,16 @@
+id: supplier_contacts
+title: "Контакт поставщика"
+utterances: ["кому задать вопрос по воде", "контакты поставщика"]
+keywords: ["поставщик", "контакты", "вопрос"]
+required_context: [territory_id, service_code]
+applicability:
+  territory_ids: []
+  roles: []
+  service_codes: []
+  document_kinds: []
+answer_template: "Выберите услугу и организацию из квитанции. Проверенного канала поставщика для вашей территории пока нет."
+steps: ["Уточните услугу и поставщика."]
+source_ids: []
+action_templates: []
+review_after: "2026-12-31T00:00:00Z"
+content_version: "1.0"
