@@ -36,7 +36,7 @@ function Entry({ meta, onAuth }: { meta: MetaResponse | null; onAuth: (profile: 
   return <section className="panel">
     <h2>Вход</h2>
     <p>В рабочей версии вход происходит в MAX после проверки стартовых данных сервером.</p>
-    {meta && <p>API {meta.api_version} · База знаний {meta.knowledge_version}</p>}
+    {meta && <p>API {meta.api_version} · База знаний {meta.knowledge_version ?? 'ещё не подключена'}</p>}
     {mockEnabled ? <button type="button" onClick={() => void enterDemo()} disabled={busy}>{busy ? 'Входим…' : 'Войти в учебный mock'}</button> :
       import.meta.env.DEV && meta?.features.demo_auth ? <form onSubmit={(event) => void enterDemo(event)}>
         <p className="badge">Локальный dev вход. Код задаётся при запуске backend и не сохраняется в браузере.</p>
@@ -107,7 +107,7 @@ function Page({ path }: { path: typeof screens[number]['path'] }) {
       <p>Задайте вопрос, разберите платёжку или вернитесь к истории.</p>
       {mockEnabled && <p className="badge">Учебный mock · синтетические данные</p>}
       <div className="actions"><Link to="/assistant">Задать вопрос</Link><Link to="/upload">Разобрать платёжку</Link></div>
-    </> : <><p>{screen.text}</p><p className="notice">Экран E0: пользовательский путь будет реализован на следующих этапах.</p><p>Состояния для реализации: {screen.states}.</p></>}
+    </> : <><p>{screen.text}</p><p className="notice">Этот экран ожидает реализацию следующего этапа.</p><p>Состояния для реализации: {screen.states}.</p></>}
   </section>;
 }
 
@@ -146,7 +146,7 @@ export function App() {
       .finally(() => setLoadingSession(false));
     return () => controller.abort();
   }, [authenticated, reloadSession]);
-  const needsLogin = <section className="panel"><h2>Нужен вход</h2><p>Войдите на главной, чтобы продолжить.</p><Link to="/">На главную</Link></section>;
+  const needsLogin = <section className="panel"><h2>Нужен вход</h2><p>После входа можно продолжить на этом экране.</p></section>;
   const waiting = <section className="panel"><h2>Профиль</h2>{sessionError ? <>
     <p>Не удалось получить профиль и каталог.</p><button type="button" onClick={() => setReloadSession((value) => value + 1)}>Повторить</button>
   </> : <p role="status">Получаем данные первого запуска…</p>}</section>;
@@ -157,7 +157,7 @@ export function App() {
     <main id="content" tabIndex={-1}>
       {metaError !== null && <><ErrorMessage error={metaError} /><button type="button" onClick={() => setReloadMeta((value) => value + 1)}>Повторить загрузку API</button></>}
       {sessionError !== null && <ErrorMessage error={sessionError} />}
-      {location.pathname === '/' && !authenticated && <Entry meta={meta} onAuth={(value) => { setProfile(value); setAuthenticated(true); }} />}
+      {!authenticated && <Entry meta={meta} onAuth={(value) => { setProfile(value); setAuthenticated(true); }} />}
       {location.pathname === '/' && authenticated && meta && !canUpload(profile, meta) && <p className="notice">Перед загрузкой платёжки завершите <Link to="/onboarding">первый запуск</Link>.</p>}
       {loadingSession && waiting}
       <Routes>

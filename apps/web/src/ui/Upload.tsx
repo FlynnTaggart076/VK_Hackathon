@@ -30,7 +30,7 @@ export function Upload({ meta, profile, onQueued }: {
     <p>PDF, JPEG или PNG; до {Math.floor(meta.limits.upload_max_bytes / 1024 / 1024)} МБ и {meta.limits.pdf_max_pages} страниц PDF.</p>
     {meta.features.engine_stub && <p className="badge">Dev stub: файл будет поставлен в очередь, OCR пока не выполняется.</p>}
     {!canUpload(profile, meta) ? <>
-      <p role="status">Перед загрузкой заполните профиль и подтвердите актуальное уведомление. Общий вопрос доступен без этого шага.</p>
+      <p role="status">Перед загрузкой заполните профиль и подтвердите актуальное уведомление. {import.meta.env.VITE_ENABLE_MOCK === 'true' ? 'Общий вопрос доступен без этого шага в учебном mock.' : 'Справочные ответы в текущем dev API ещё не подключены.'}</p>
       <Link to="/onboarding">Перейти к первому запуску</Link>
     </> : <form onSubmit={(event) => void submit(event)}>
       <label htmlFor="receipt-file">Файл платёжки</label>
@@ -69,7 +69,7 @@ export function Processing({ stub }: { stub: boolean }) {
     {jobId && <>
       <p>Номер задания: {jobId}</p>
       {busy && <p role="status">Получаем состояние…</p>}
-      {job && <p role="status">Состояние: {job.state === 'queued' ? 'в очереди' : job.state === 'running' ? 'читаем документ' : job.state === 'failed' ? 'ошибка обработки' : 'готово'}.</p>}
+      {job && <p role="status">Состояние: {job.state === 'queued' ? 'в очереди' : job.state === 'running' ? 'обработка выполняется' : job.state === 'failed' ? 'ошибка обработки' : stub ? 'dev обработка завершена без распознавания; требуется ручной ввод' : 'обработка завершена'}.</p>}
       {stub && <p className="badge">Dev stub: задание завершится без OCR; для платёжки потребуется ручной ввод.</p>}
       <button type="button" onClick={() => void refresh(jobId)} disabled={busy}>Обновить состояние</button>
       <ErrorMessage error={error} />
