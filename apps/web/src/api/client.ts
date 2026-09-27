@@ -1,4 +1,4 @@
-import type { AnswerContext, AnswerView, ApiErrorBody, AuthResponse, MetaResponse, ReceiptView } from './types';
+import type { AnswerContext, AnswerView, ApiErrorBody, AuthResponse, MetaResponse, ReceiptView, UnexpectedErrorBody } from './types';
 
 export const API_BASE = '/team/zhkh/api/v1';
 let sessionToken: string | null = null;
@@ -7,7 +7,7 @@ export function setSessionToken(token: string | null): void { sessionToken = tok
 export function hasSessionToken(): boolean { return sessionToken !== null; }
 
 export class ApiRequestError extends Error {
-  constructor(public readonly status: number, public readonly body: ApiErrorBody) {
+  constructor(public readonly status: number, public readonly body: ApiErrorBody | UnexpectedErrorBody) {
     super(body.error.message);
     this.name = 'ApiRequestError';
   }
