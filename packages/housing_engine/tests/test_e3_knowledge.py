@@ -80,6 +80,15 @@ class KnowledgeTests(unittest.TestCase):
             ("В счёте есть долг, что он означает?", "arrears_or_credit", "answered"),
             ("После заселения впервые занялся коммуналкой", "new_resident", "answered"),
             ("Стал новым жильцом: первая квитанция и обслуживание дома", None, "needs_clarification"),
+            ("Начать сверку первого документа на оплату квартиры", "first_bill", "answered"),
+            ("Как передать данные счётчика поставщику?", "meter_readings", "unsupported"),
+            ("Какой день последний для значений прибора учёта?", "meter_deadline", "unsupported"),
+            ("Где в ГИС ЖКХ мои подключённые счета?", "account_number", "answered"),
+            ("Отразилось ли перечисление в истории платежей?", "payment_history", "answered"),
+            ("В счёте доначисление после исправления расчёта", "adjustment", "answered"),
+            ("Прерывается отопление дома, куда обратиться?", "service_issue", "unsupported"),
+            ("Я новый собственник жилья, с чего начать?", "new_resident", "answered"),
+            ("После въезда кто выставляет платёжные документы?", "new_resident", "answered"),
         )
         for text, topic_id, status in cases:
             with self.subTest(text=text):
@@ -88,7 +97,8 @@ class KnowledgeTests(unittest.TestCase):
                 if status == "unsupported":
                     self.assertEqual(result.sources, [])
                     self.assertEqual(result.actions, [])
-        for text in ("Хочу расшифровку ошибки принтера", "Перебои с Wi-Fi роутером"):
+        for text in ("Хочу расшифровку ошибки принтера", "Перебои с Wi-Fi роутером",
+                     "Ищу почту поставщика интернета"):
             with self.subTest(text=text):
                 result = answer_question(question(text, **context), self.knowledge)
                 self.assertEqual((result.topic_id, result.status), (None, "unsupported"))
