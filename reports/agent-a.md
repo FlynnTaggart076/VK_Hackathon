@@ -1,6 +1,6 @@
 ﻿# Отчёт агента A — E4-A-01
 
-Статус: независимый frontend код и локальные проверки завершены; реальный E4 Compose browser gate и MAX Web/mobile ожидают внешнего запуска. Ветка `agent-a/e4`, BASE_SHA `d223c4e49a12c4ebc5d98c3c8da8fc6c0202e16f`, TASK_COMMIT `40f0e8a1995f4a44f44f174cfa51f2f6acdae2c5`. Pushed code SHA: `3116955d4d7eceac08c08ba4ca8bd0a082c304ed`, `671c3513580c71efa47d4e36f47d03e74213fbe0`, `802f26d867179b6e221f79d8318e7dbdb00f8d56`, `2a9e7c43c791dbba3d78f2077d8f9f2513bf2854`.
+Статус: независимый frontend код, локальные проверки и E4 Compose browser gate завершены; MAX Web/mobile ожидают развёртывания и регистрации. Ветка `agent-a/e4`, BASE_SHA `d223c4e49a12c4ebc5d98c3c8da8fc6c0202e16f`, TASK_COMMIT `40f0e8a1995f4a44f44f174cfa51f2f6acdae2c5`. Pushed code SHA: `3116955d4d7eceac08c08ba4ca8bd0a082c304ed`, `671c3513580c71efa47d4e36f47d03e74213fbe0`, `802f26d867179b6e221f79d8318e7dbdb00f8d56`, `2a9e7c43c791dbba3d78f2077d8f9f2513bf2854`, `aae1e25c77cf423afd4e28f0b53e212214c4472b` (точный селектор browser test).
 
 ## Изменения
 
@@ -14,11 +14,11 @@
 
 Для браузерной симуляции: `npm exec vite preview -- --host 127.0.0.1 --port 5175 --strictPort`; затем `BASE_URL=http://127.0.0.1:5175/team/zhkh/`, `CHROME_PATH=<локальный Chrome>`, `npm run test:browser:e4:bridge-sim` — **SUCCESS**. Подставленная сырая строка ушла в тело `/auth/max`, не в URL; после подставленного 401 сохранился `/team/zhkh/review?id=...`, повторной авторизации не было, session token не появился в localStorage. Отдельная страница без Bridge показала вход только внутри MAX. Это не подписанный вход MAX и не реальный backend.
 
-[GitHub Actions E4 run 36332663523](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36332663523) на `integration/e4` SHA `71b7096f0289a6c561f3f0d0b0c18cf3ba55c64a` завершился Failure на проверке MAX egress (`urllib.error.URLError: CERTIFICATE_VERIFY_FAILED`). Результата `e4-real-resilience.mjs` из этого run нет; не считать E4 real API сценарий пройденным. Более ранний [E3 real Compose CI](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36329625261) прошёл stale draft/copy-only, FAQ unknown и 360 px на E3 SHA `065c8e0575a0ad97b83a6202c7a1988032816a6e`; это базовая проверка прошлого этапа, не повторный E4 результат.
+[GitHub Actions E4 run 36333584617](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36333584617) — **SUCCESS** на `integration/e4` SHA `2e357624e9f59287b09f2593e13dedf619d1e057`. Linux runner: Vite `dev:real` → Compose API/worker/PG17, Chrome 360 и 1280 px; `npm run test:browser:e4:real` прошёл сетевой обрыв и повтор истории, серверные 413/409/401, сохранение правок после конфликта и перезагрузки deep link, synthetic badge, unknown без источника, `manual_required` на синтетическом `unknown-layout.pdf`. Этот же CI выполнил E2/E3 регрессию и отдельные проверки VM topology/MAX egress и OCR/FAQ holdout по workflow координатора. Ранние CI прогоны останавливались на TLS CA и неоднозначном селекторе теста; оба исправлены до этого успешного run. Уровень доказательства — dev HTTP/worker/PG17 на синтетических данных в CI, не VM и не подписанный MAX.
 
 ## Ограничения и следующий шаг
 
-Реальные MAX Web/mobile, подписанный `initData`, VM URL и реальная пилотная квитанция ещё не проверены. На Windows нет локального Compose daemon. Нужен повтор CI после исправления TLS preflight и фактический запуск `npm run test:browser:e4:real` с внешним `BASE_URL`, `DEMO_ACCESS_CODE`, `CHROME_PATH`; затем тот же сценарий внутри зарегистрированного MAX Web и мобильного клиента по развёрнутому release SHA. `apps/web/public/mockServiceWorker.js` имеет только CRLF локальную разницу, не включён в commits. Старые worktrees не тронуты. Голос и отправка обращений не реализованы.
+Реальные MAX Web/mobile, подписанный `initData`, VM URL и реальная пилотная квитанция ещё не проверены. На Windows нет локального Compose daemon. Следующий шаг — тот же сценарий внутри зарегистрированного MAX Web и мобильного клиента по развёрнутому release SHA, с отдельной записью платформы и результата без персональных данных. `apps/web/public/mockServiceWorker.js` имеет только CRLF локальную разницу, не включён в commits. Старые worktrees не тронуты. Голос и отправка обращений не реализованы.
 
 ---
 
