@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import io
 import os
 import subprocess
 import sys
@@ -15,6 +16,7 @@ from urllib.parse import urlencode
 
 from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator, FormatChecker
+from PIL import Image
 import pytest
 from sqlalchemy import create_engine, select, text
 
@@ -23,9 +25,9 @@ from app.db.store import now
 from app.jobs.retention import run_retention_once
 from app.services.revision_logic import rebase_evidence
 from app.main import Settings, create_app
-from app.jobs.worker import communicate_bounded, run_once
+from app.jobs.worker import communicate_bounded, run_once, spawn_child
 from test_contract_responses import validate_response
-from test_dev_api import accept_privacy, headers, login, upload
+from test_dev_api import accept_privacy, headers, image_bytes, login, upload
 from test_sql_store import migrate
 from housing_engine import EngineError
 
@@ -307,3 +309,65 @@ def test_outer_engine_budget_kills_child():
     assert error.value.code == "OCR_TIMEOUT"
     assert child.poll() is not None
     assert time.monotonic() - started < 2
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Linux process group kill is the Compose runtime boundary")
+def test_outer_budget_kills_grandchild_tesseract_process(tmp_path):
+    pid_file = tmp_path / "grandchild.pid"
+    program = (
+        "import subprocess,sys,time,pathlib;"
+        "child=subprocess.Popen([sys.executable,'-c','import time;time.sleep(20)']);"
+        f"pathlib.Path({str(pid_file)!r}).write_text(str(child.pid));"
+        "time.sleep(20)"
+    )
+    parent = spawn_child([sys.executable, "-c", program])
+    try:
+        for _ in range(50):
+            if pid_file.exists():
+                break
+            time.sleep(0.02)
+        assert pid_file.exists()
+        with pytest.raises(EngineError) as error:
+            communicate_bounded(parent, b"", 0.2, lambda: True)
+        assert error.value.code == "OCR_TIMEOUT"
+        child_pid = int(pid_file.read_text())
+        for _ in range(50):
+            proc_stat = Path(f"/proc/{child_pid}/stat")
+            if not proc_stat.exists() or proc_stat.read_text().split()[2] == "Z":
+                break
+            time.sleep(0.02)
+        else:
+            pytest.fail("grandchild still running after process-group kill")
+    finally:
+        if parent.poll() is None:
+            parent.kill()
+            parent.communicate()
+
+
+def test_http_limits_and_failed_ocr_keep_safe_job_state(tmp_path, monkeypatch, caplog):
+    database_url = f"sqlite:///{(tmp_path / 'limits.sqlite').as_posix()}"
+    monkeypatch.setenv("APP_MODE", "dev")
+    migrate(database_url, monkeypatch)
+    settings = Settings(mode="dev", demo_auth_enabled=True, demo_access_code="test-secret",
+                        engine_mode="real", database_url=database_url, storage_path=tmp_path / "private")
+    with TestClient(create_app(settings)) as client:
+        token = login(client, "reviewer_a")["access_token"]
+        accept_privacy(client, token)
+        malformed = upload(client, token, str(uuid.uuid4()), data=b"%PDF-corrupt", mime="application/pdf")
+        assert malformed.status_code == 400 and malformed.json()["error"]["code"] == "INVALID_DOCUMENT"
+        output = io.BytesIO()
+        Image.new("RGB", (5001, 5001), "white").save(output, format="PNG")
+        oversized = upload(client, token, str(uuid.uuid4()), data=output.getvalue(), mime="image/png")
+        assert oversized.status_code == 413 and oversized.json()["error"]["code"] == "IMAGE_TOO_LARGE"
+        assert client.get("/api/v1/receipts", headers=headers(token)).json()["items"] == []
+
+        queued = upload(client, token, str(uuid.uuid4()), data=image_bytes())
+        assert queued.status_code == 202
+        monkeypatch.setenv("PATH", "")  # child still starts via absolute sys.executable; OCR binary is unavailable
+        assert run_once(client.app.state.store)
+        job_id = queued.json()["job_id"]
+        job = client.get(f"/api/v1/jobs/{job_id}", headers=headers(token)).json()
+        assert job["state"] == "failed" and job["error"]["code"] == "INTERNAL_ENGINE_ERROR"
+        receipt = client.get(f"/api/v1/receipts/{queued.json()['receipt']['id']}", headers=headers(token)).json()
+        assert receipt["status"] == "failed" and receipt["extraction_outcome"] is None
+        assert token not in caplog.text and "test-secret" not in caplog.text
