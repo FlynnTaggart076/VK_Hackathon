@@ -23,5 +23,6 @@ storage/
 *.db
 *.dump
 *.log
+.local-storage/
 *.pem
 *.key
