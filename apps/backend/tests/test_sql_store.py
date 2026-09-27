@@ -14,7 +14,7 @@ from urllib.parse import urlencode
 
 from app.db.models import IdempotencyKey
 from app.main import Settings, create_app
-from app.jobs.worker import run_once
+from app.jobs.worker import fixture_root, run_once
 from test_contract_responses import validate_response
 from test_dev_api import accept_privacy, headers, image_bytes, login, upload
 
@@ -130,3 +130,12 @@ def test_non_dev_modes_rejected_before_start(tmp_path):
                             engine_mode="real", storage_path=tmp_path / "private")
         with pytest.raises(ValueError, match="dev mode only"):
             create_app(settings)
+
+
+def test_worker_finds_fixture_directory_in_container_layout(tmp_path):
+    root = tmp_path / "workspace"
+    fixture_dir = root / "fixtures" / "receipts"
+    fixture_dir.mkdir(parents=True)
+    module_file = root / "app" / "jobs" / "worker.py"
+    assert fixture_root(module_file, str(fixture_dir)) == fixture_dir
+    assert fixture_root(module_file, None) == fixture_dir

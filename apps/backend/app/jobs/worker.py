@@ -21,8 +21,20 @@ from app.db.store import SqlStore, aware, now
 from app.main import Settings, empty_bill
 
 
-FIXTURE_ROOT = Path(os.environ.get(
-    "FIXTURE_ROOT", Path(__file__).resolve().parents[4] / "fixtures" / "receipts"))
+def fixture_root(module_file: Path, configured: str | None) -> Path:
+    if configured:
+        candidate = Path(configured)
+        if candidate.is_dir():
+            return candidate
+        raise RuntimeError("FIXTURE_ROOT does not name a readable fixture directory")
+    for parent in module_file.resolve().parents:
+        candidate = parent / "fixtures" / "receipts"
+        if candidate.is_dir():
+            return candidate
+    raise RuntimeError("Fixture directory not found; set FIXTURE_ROOT")
+
+
+FIXTURE_ROOT = fixture_root(Path(__file__), os.environ.get("FIXTURE_ROOT"))
 DEMO_FIXTURES = {"water-2026-08", "water-2026-09"}
 
 

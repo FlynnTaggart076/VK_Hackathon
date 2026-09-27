@@ -8,7 +8,9 @@
 
 `compose.yaml` задаёт PostgreSQL 17, отдельный `migrate`, API, worker и web без
 host ports. `compose.local.yaml` публикует только `web` на
-`127.0.0.1:${LOCAL_WEB_PORT:-8080}` и монтирует `infra/nginx/app-local.conf`.
+`127.0.0.1:${LOCAL_WEB_PORT:-8080}` через отдельную обычную сеть `local_edge`
+и монтирует `infra/nginx/app-local.conf`. Web также подключён к закрытой
+`private` сети для связи с API; БД, API и worker остаются только в ней.
 Приватные данные в именованных томах `postgres_data` и `source_documents`.
 Имя Compose проекта для проверки должно быть отдельным от `vk-zhkh`.
 
