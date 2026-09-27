@@ -130,4 +130,21 @@ jobs:
             echo "::error title=E2 real browser::$(tail -n 20 /tmp/zhkh-e2-browser.log | tr '\r\n' '  ' | tail -c 1800)"
             exit 1
           fi
-          echo 'E2 Compose PG17, real PDF/PNG OCR, edit/confirm/explain, restart persistence, Linux OCR tree kill and 360px real browser: OK'
+          browser_receipt="$(python3 -c 'import json; print(json.load(open("/tmp/zhkh-e2-browser.log"))["receiptId"])')"
+          "${compose[@]}" restart api worker
+          ui_restarted=000
+          for attempt in $(seq 1 30); do
+            ui_restarted="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18081/team/zhkh/health/ready || true)"
+            if [[ "$ui_restarted" == 200 ]]; then break; fi
+            sleep 2
+          done
+          if [[ "$ui_restarted" != 200 ]]; then
+            echo "::error title=E2 UI receipt restart::readiness HTTP $ui_restarted"
+            exit 1
+          fi
+          if ! python3 -c 'import os,sys; from scripts.smoke_e2_http import authenticate,request; base=os.environ["BASE_URL"]; token=authenticate(base,os.environ["DEMO_ACCESS_CODE"]); rid=sys.argv[1]; rec=request(base,"GET",f"/api/v1/receipts/{rid}",token=token); assert rec["status"]=="confirmed" and rec["revision"]==3 and rec["bill_data"]["issuer_name"].endswith(" (reviewed)"); explanation=request(base,"GET",f"/api/v1/receipts/{rid}/explanation?revision=3",token=token); assert explanation["calculated_total_due"]=="200.00"' "$browser_receipt" \
+              > /tmp/zhkh-e2-ui-restart.log 2>&1; then
+            echo "::error title=E2 UI receipt persistence::$(tail -n 15 /tmp/zhkh-e2-ui-restart.log | tr '\r\n' '  ' | tail -c 1800)"
+            exit 1
+          fi
+          echo 'E2 Compose PG17, real PDF/PNG OCR, 360px browser edit/confirm/explain, same receipt after restart, Linux OCR tree kill: OK'
