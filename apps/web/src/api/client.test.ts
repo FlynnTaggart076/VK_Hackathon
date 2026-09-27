@@ -203,4 +203,20 @@ describe('E3 comparison, FAQ, draft and history mock', () => {
     expect((await api.draft(draft.id)).stale).toBe(true);
     expect((await api.receipts()).items.some((item) => item.id === september)).toBe(false);
   });
+  it('marks a draft stale when its confirmed source revision changes', async () => {
+    setSessionToken((await demoAuth('mock-only')).access_token);
+    const meta = await api.meta();
+    await api.updateProfile({ role: 'tenant', territory_id: 'demo-territory',
+      privacy_notice_version: meta.privacy_notice.version, privacy_acknowledged: true });
+    const queued = await api.importDemo('water-2026-08', crypto.randomUUID());
+    await api.job(queued.job_id); await api.job(queued.job_id); await api.job(queued.job_id);
+    const reviewed = await api.receipt(queued.receipt.id);
+    const confirmed = await api.confirmReceipt(reviewed.id, { expected_revision: reviewed.revision, acknowledged_warning_codes: [] }, crypto.randomUUID());
+    const draft = await api.createDraft({ topic_id: 'request_breakdown', organization_id: null,
+      receipt_refs: [{ id: confirmed.id, revision: confirmed.revision }], line_id: confirmed.bill_data.services[0].line_id,
+      user_question: 'Поясните сумму' }, crypto.randomUUID());
+    expect((await api.draft(draft.id)).stale).toBe(false);
+    await api.editReceipt(confirmed.id, { expected_revision: confirmed.revision, bill_data: confirmed.bill_data });
+    expect((await api.draft(draft.id)).stale).toBe(true);
+  });
 });

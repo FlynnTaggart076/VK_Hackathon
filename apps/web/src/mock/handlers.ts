@@ -200,7 +200,12 @@ export const handlers = [
     const body = await request.json() as { topic_id: string; receipt_refs: { id: string; revision: number }[]; line_id: string | null; user_question: string };
     if (!topicLabels.some(([id]) => id === body.topic_id) || !body.user_question?.trim()) return error(422, 'VALIDATION_FAILED', 'Укажите тему и вопрос.');
     const ref = body.receipt_refs[0];
-    const source = samples.find((item) => item.id === ref?.id);
+    const source = samples.find((item) => item.id === ref?.id) ?? (ref?.id === receiptId && currentReceipt.status === 'confirmed' ? {
+      id: currentReceipt.id, status: currentReceipt.status, revision: currentReceipt.revision,
+      period: currentReceipt.bill_data.period, issuer_name: currentReceipt.bill_data.issuer_name,
+      document_total_due: currentReceipt.bill_data.document_total_due, dataset_kind: currentReceipt.dataset_kind,
+      created_at: currentReceipt.created_at, source_available: currentReceipt.document.available,
+    } satisfies ReceiptSummary : undefined);
     if (!source || removed.has(source.id)) return error(404, 'NOT_FOUND', 'Документ не найден.');
     if (ref.revision !== source.revision) return error(409, 'REVISION_CONFLICT', 'Ревизия документа изменилась.');
     mockDraft = { id: '60000000-0000-4000-8000-000000000001', revision: 1,
@@ -211,7 +216,8 @@ export const handlers = [
   http.get(`*${API_BASE}/drafts/:id`, ({ request, params }) => {
     const denied = authError(request); if (denied) return denied;
     if (!mockDraft || params.id !== mockDraft.id) return error(404, 'NOT_FOUND', 'Черновик не найден.');
-    return HttpResponse.json({ ...mockDraft, stale: mockDraft.receipt_refs.some((ref) => removed.has(ref.id)) });
+    return HttpResponse.json({ ...mockDraft, stale: mockDraft.receipt_refs.some((ref) => removed.has(ref.id) ||
+      (ref.id === receiptId && currentReceipt.revision !== ref.revision)) });
   }),
   http.put(`*${API_BASE}/drafts/:id`, async ({ request, params }) => {
     const denied = authError(request); if (denied) return denied;

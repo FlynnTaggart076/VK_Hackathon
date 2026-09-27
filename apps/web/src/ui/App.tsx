@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, hasSessionToken, setSessionToken } from '../api/client';
 import type { AnswerContext, AnswerView, Catalog, MetaResponse, Profile } from '../api/types';
 import { Onboarding, canUpload } from './Onboarding';
@@ -9,6 +9,7 @@ import { ReceiptExplanation } from './ReceiptExplanation';
 import { History } from './History';
 import { Comparison } from './Comparison';
 import { Draft } from './Draft';
+import { ActionList } from './ActionList';
 import { ErrorMessage } from './errors';
 
 const mockEnabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_MOCK === 'true';
@@ -53,9 +54,10 @@ function Entry({ meta, onAuth }: { meta: MetaResponse | null; onAuth: (profile: 
   </section>;
 }
 
-function Assistant({ enabled, profile, catalog }: { enabled: boolean; profile: Profile | null; catalog: Catalog | null }) {
+function Assistant({ profile, catalog }: { profile: Profile | null; catalog: Catalog | null }) {
+  const [params] = useSearchParams();
   const [question, setQuestion] = useState('Почему выросла сумма за воду?');
-  const [topicId, setTopicId] = useState('');
+  const [topicId, setTopicId] = useState(params.get('topic') ?? '');
   const [clarified, setClarified] = useState<Partial<AnswerContext>>({});
   const [answer, setAnswer] = useState<AnswerView | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -64,6 +66,7 @@ function Assistant({ enabled, profile, catalog }: { enabled: boolean; profile: P
   useEffect(() => {
     return () => pending.current?.abort();
   }, []);
+  useEffect(() => { setTopicId(params.get('topic') ?? ''); }, [params]);
   async function ask(event?: React.FormEvent<HTMLFormElement>, extra: Partial<AnswerContext> = {}) {
     event?.preventDefault();
     if (!question.trim()) return;
@@ -80,7 +83,6 @@ function Assistant({ enabled, profile, catalog }: { enabled: boolean; profile: P
     catch (cause) { if (!(cause instanceof DOMException && cause.name === 'AbortError')) setError(cause); }
     finally { if (pending.current === controller) { pending.current = null; setBusy(false); } }
   }
-  if (!enabled) return <section className="panel"><h2>Помощник</h2><p className="notice">Ответы пока не подключены в dev backend. Загрузка платёжки доступна после первого запуска.</p></section>;
   return <section className="panel">
     <h2>Помощник</h2>
     <form onSubmit={(event) => void ask(event)}>
@@ -99,7 +101,7 @@ function Assistant({ enabled, profile, catalog }: { enabled: boolean; profile: P
       {answer.stale && <p className="review-warning">Ответ устарел: проверьте сведения перед действием.</p>}
       <p>Территория: {catalog?.territories.find((item) => item.id === profile?.territory_id)?.label ?? 'не выбрана'} · версия знаний {answer.knowledge_version}</p>
       {answer.sources.map((source) => <p key={source.id}>Источник: {source.title} · {source.territory_id ? catalog?.territories.find((item) => item.id === source.territory_id)?.label ?? source.territory_id : 'общий'} · проверен {source.verified_at} · пересмотреть после {source.review_after}{source.is_synthetic && ' · учебный'}{source.url && <a href={source.url} target="_blank" rel="noopener noreferrer"> Открыть</a>}</p>)}
-      {answer.actions.map((action) => <p key={action.id}>{action.label}</p>)}
+      <ActionList actions={answer.actions} />
       {answer.limitations.map((item) => <p key={item}>{item}</p>)}
     </article>}
   </section>;
@@ -176,7 +178,7 @@ export function App() {
         <Route path="/history" element={!authenticated ? needsLogin : <History />} />
         <Route path="/comparison" element={!authenticated ? needsLogin : <Comparison />} />
         <Route path="/draft" element={!authenticated ? needsLogin : <Draft catalog={catalog} />} />
-        <Route path="/assistant" element={<Assistant enabled={mockEnabled} profile={profile} catalog={catalog} />} />
+        <Route path="/assistant" element={!authenticated ? needsLogin : <Assistant profile={profile} catalog={catalog} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </main>
