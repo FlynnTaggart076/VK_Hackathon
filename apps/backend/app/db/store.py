@@ -206,10 +206,11 @@ class SqlStore:
                 return deepcopy(record.response_body)
             return None
 
-    def upload(self, user_id: str, key: str, content: bytes, mime: str, pages: int) -> dict:
+    def upload(self, user_id: str, key: str, content: bytes, mime: str, pages: int,
+               dataset_kind: str = "user_provided") -> dict:
         uid, key_id = uuid.UUID(user_id), uuid.UUID(key)
         digest = hashlib.sha256(content).hexdigest()
-        fingerprint = hashlib.sha256(f"{mime}:{digest}".encode()).hexdigest()
+        fingerprint = hashlib.sha256(f"{mime}:{digest}:{dataset_kind}".encode()).hexdigest()
         prior = self._existing_idempotency(uid, key_id, fingerprint)
         if prior is not None:
             return prior
@@ -250,7 +251,7 @@ class SqlStore:
                                      mime_type=mime, size_bytes=len(content), page_count=pages,
                                      expires_at=created + timedelta(days=7), created_at=created))
                 session.add(Receipt(id=receipt_id, user_id=uid, document_id=document_id,
-                                    status="queued", current_revision=1, dataset_kind="user_provided",
+                                    status="queued", current_revision=1, dataset_kind=dataset_kind,
                                     created_at=created, updated_at=created))
                 session.add(Job(id=job_id, user_id=uid, kind="receipt_ocr", resource_id=receipt_id,
                                 operation_key=f"receipt-ocr:{receipt_id}", state="queued", stage=None,
@@ -258,7 +259,7 @@ class SqlStore:
                 result = {"receipt": {
                     "id": str(receipt_id), "status": "queued", "revision": 1,
                     "created_at": stamp(created), "updated_at": stamp(created),
-                    "dataset_kind": "user_provided", "extraction_outcome": None,
+                    "dataset_kind": dataset_kind, "extraction_outcome": None,
                     "bill_data": empty_bill(), "field_evidence": [], "issues": [],
                     "document": {"available": True, "mime_type": mime, "page_count": pages,
                                  "expires_at": stamp(created + timedelta(days=7))},

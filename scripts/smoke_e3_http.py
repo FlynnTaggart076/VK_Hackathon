@@ -43,6 +43,7 @@ def run(base: str, token: str, access_code: str) -> None:
     for period, total in (("08", "200.00"), ("09", "270.00")):
         queued = request(base, "POST", "/api/v1/receipts", token=token,
                          upload=(root / f"demo-bill-2026-{period}.pdf").read_bytes(),
+                         demo_sample_id=f"demo-bill-2026-{period}.pdf",
                          idempotency=True)
         rid = queued["receipt"]["id"]
         wait_for_job(base, token, queued["job_id"])
@@ -62,7 +63,7 @@ def run(base: str, token: str, access_code: str) -> None:
     comparison = {"left": refs[1], "right": refs[0], "identity_acknowledged": False}
     result = request(base, "POST", "/api/v1/comparisons", token=token, body=comparison)
     if (result["status"], result["delta_total_due"], result["dataset_kind"]) != \
-            ("complete", "70.00", "user_provided"):
+            ("complete", "70.00", "synthetic"):
         raise SmokeError("comparison status/amount/dataset mismatch")
     matched = [line for line in result["lines"] if line["match_status"] == "matched"]
     if len(matched) != 1 or (matched[0]["quantity_effect"], matched[0]["tariff_effect"]) != \
