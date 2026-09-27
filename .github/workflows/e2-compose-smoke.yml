@@ -137,6 +137,18 @@ jobs:
             fi
             docker rm -f "$nginx_dummy" >/dev/null
             nginx_dummy=''
+            if ! "${compose[@]}" run --rm --no-deps -v "$GITHUB_WORKSPACE:/repo:ro" \
+                worker python /repo/packages/housing_engine/eval_ocr_e4.py \
+                > /tmp/zhkh-e4-ocr.log 2>&1; then
+              echo "::error title=E4 synthetic OCR holdout::$(tail -n 20 /tmp/zhkh-e4-ocr.log | tr '\r\n' '  ' | tail -c 1800)"
+              exit 1
+            fi
+            if ! "${compose[@]}" run --rm --no-deps -v "$GITHUB_WORKSPACE:/repo:ro" \
+                worker python /repo/packages/housing_engine/eval_questions_e4.py \
+                > /tmp/zhkh-e4-faq.log 2>&1; then
+              echo "::error title=E4 FAQ holdout::$(tail -n 20 /tmp/zhkh-e4-faq.log | tr '\r\n' '  ' | tail -c 1800)"
+              exit 1
+            fi
             export MAX_BOT_TOKEN='ci-synthetic-token'
             export MAX_WEB_APP='ci-synthetic-bot'
             vm_compose=(docker compose -p "$project" -f compose.yaml -f compose.vm.yaml)
