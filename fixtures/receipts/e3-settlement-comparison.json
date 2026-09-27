@@ -1,0 +1,6 @@
+{
+  "kind": "synthetic_expected_comparison",
+  "older": {"services": "200.00", "adjustment": "0.00", "payments": "0.00", "opening_balance": "0.00", "total_due": "200.00"},
+  "newer": {"services": "270.00", "adjustment": "-50.00", "payments": "30.00", "opening_balance": "0.00", "total_due": "190.00"},
+  "expected": {"delta_current_charges": "20.00", "delta_adjustments": "-50.00", "payments_contribution": "-30.00", "delta_total_due": "-10.00", "unexplained_delta": "0.00"}
+}
