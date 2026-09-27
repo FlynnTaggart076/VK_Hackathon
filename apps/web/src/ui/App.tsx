@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, hasSessionToken, setSessionToken } from '../api/client';
-import type { AnswerContext, AnswerView, Catalog, MetaResponse, Profile } from '../api/types';
+import type { AnswerContext, AnswerView, Catalog, MetaResponse, Profile, ReceiptView } from '../api/types';
 import { Onboarding, canUpload } from './Onboarding';
 import { Processing, Upload } from './Upload';
 import { ReceiptReview } from './ReceiptReview';
@@ -54,11 +54,14 @@ function Entry({ meta, onAuth }: { meta: MetaResponse | null; onAuth: (profile: 
   </section>;
 }
 
-function Assistant({ profile, catalog }: { profile: Profile | null; catalog: Catalog | null }) {
+function Assistant({ profile, catalog }: { profile: Profile; catalog: Catalog }) {
   const [params] = useSearchParams();
+  const receiptId = params.get('receipt');
   const [question, setQuestion] = useState('Почему выросла сумма за воду?');
   const [topicId, setTopicId] = useState(params.get('topic') ?? '');
   const [clarified, setClarified] = useState<Partial<AnswerContext>>({});
+  const [receipt, setReceipt] = useState<ReceiptView | null>(null);
+  const [serviceCode, setServiceCode] = useState('');
   const [answer, setAnswer] = useState<AnswerView | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -67,13 +70,20 @@ function Assistant({ profile, catalog }: { profile: Profile | null; catalog: Cat
     return () => pending.current?.abort();
   }, []);
   useEffect(() => { setTopicId(params.get('topic') ?? ''); }, [params]);
+  useEffect(() => {
+    let active = true; setReceipt(null); setServiceCode('');
+    if (receiptId) api.receipt(receiptId).then((value) => { if (active) setReceipt(value); })
+      .catch((cause) => { if (active) setError(cause); });
+    return () => { active = false; };
+  }, [receiptId]);
   async function ask(event?: React.FormEvent<HTMLFormElement>, extra: Partial<AnswerContext> = {}) {
     event?.preventDefault();
     if (!question.trim()) return;
     const context: AnswerContext = {
-      territory_id: profile?.territory_id ?? null, role: profile?.role ?? null, topic_id: topicId || null,
-      organization_id: null, service_code: null, document_kind: null,
-      receipt_id: null, receipt_revision: null, ...clarified, ...extra,
+      territory_id: profile.territory_id, role: profile.role, topic_id: topicId || null,
+      organization_id: null, service_code: serviceCode || null, document_kind: null,
+      receipt_id: receipt?.status === 'confirmed' ? receipt.id : null,
+      receipt_revision: receipt?.status === 'confirmed' ? receipt.revision : null, ...clarified, ...extra,
     };
     setBusy(true); setError(null); setAnswer(null);
     pending.current?.abort();
@@ -86,10 +96,11 @@ function Assistant({ profile, catalog }: { profile: Profile | null; catalog: Cat
   return <section className="panel">
     <h2>Помощник</h2>
     <form onSubmit={(event) => void ask(event)}>
+      {receiptId && <div className="notice-box"><p>Документ: {receipt ? `${receipt.bill_data.period ?? 'без периода'} · ревизия ${receipt.revision}` : 'загружаем…'}</p>{receipt && receipt.status !== 'confirmed' && <p className="review-warning">Для вопроса по документу сначала подтвердите его данные.</p>}{receipt?.dataset_kind === 'synthetic' && <p className="badge">Синтетический пример</p>}{receipt?.status === 'confirmed' && <><label htmlFor="answer-service">Услуга</label><select id="answer-service" value={serviceCode} onChange={(event) => setServiceCode(event.target.value)}><option value="">Без выбора услуги</option>{receipt.bill_data.services.map((line) => <option key={line.line_id} value={line.service_code}>{line.raw_name}</option>)}</select></>}</div>}
       <label htmlFor="answer-topic">Тема</label><select id="answer-topic" value={topicId} onChange={(event) => { setTopicId(event.target.value); setClarified({}); }}><option value="">Определить по вопросу</option>{catalog?.topics.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
       <label htmlFor="question">Ваш вопрос</label>
       <textarea id="question" value={question} onChange={(event) => setQuestion(event.target.value)} maxLength={2000} rows={3} />
-      <button disabled={busy || !hasSessionToken()}>{busy ? 'Ищем ответ…' : 'Спросить'}</button>
+      <button disabled={busy || !hasSessionToken() || (!!receiptId && receipt?.status !== 'confirmed')}>{busy ? 'Ищем ответ…' : 'Спросить'}</button>
     </form>
     {!hasSessionToken() && <p>Войдите на главной, чтобы задать общий вопрос.</p>}
     <ErrorMessage error={error} />
@@ -99,8 +110,8 @@ function Assistant({ profile, catalog }: { profile: Profile | null; catalog: Cat
       <p>{answer.text}</p>
       {answer.clarification && <div className="notice-box"><p>{answer.clarification.prompt}</p>{answer.clarification.options.map((option) => <button key={option.value} type="button" onClick={() => { const extra = { [answer.clarification!.field]: option.value }; setClarified((value) => ({ ...value, ...extra })); void ask(undefined, extra); }}>{option.label}</button>)}</div>}
       {answer.stale && <p className="review-warning">Ответ устарел: проверьте сведения перед действием.</p>}
-      <p>Территория: {catalog?.territories.find((item) => item.id === profile?.territory_id)?.label ?? 'не выбрана'} · версия знаний {answer.knowledge_version}</p>
-      {answer.sources.map((source) => <p key={source.id}>Источник: {source.title} · {source.territory_id ? catalog?.territories.find((item) => item.id === source.territory_id)?.label ?? source.territory_id : 'общий'} · проверен {source.verified_at} · пересмотреть после {source.review_after}{source.is_synthetic && ' · учебный'}{source.url && <a href={source.url} target="_blank" rel="noopener noreferrer"> Открыть</a>}</p>)}
+      <p>Территория: {catalog.territories.find((item) => item.id === profile.territory_id)?.label ?? 'не выбрана'} · версия знаний {answer.knowledge_version}</p>
+      {answer.sources.map((source) => <p key={source.id}>Источник: {source.title} · {source.territory_id ? catalog.territories.find((item) => item.id === source.territory_id)?.label ?? source.territory_id : 'общий'} · проверен {source.verified_at} · пересмотреть после {source.review_after}{source.is_synthetic && ' · учебный'}{source.url && <a href={source.url} target="_blank" rel="noopener noreferrer"> Открыть</a>}</p>)}
       <ActionList actions={answer.actions} />
       {answer.limitations.map((item) => <p key={item}>{item}</p>)}
     </article>}
@@ -178,7 +189,7 @@ export function App() {
         <Route path="/history" element={!authenticated ? needsLogin : <History />} />
         <Route path="/comparison" element={!authenticated ? needsLogin : <Comparison />} />
         <Route path="/draft" element={!authenticated ? needsLogin : <Draft catalog={catalog} />} />
-        <Route path="/assistant" element={!authenticated ? needsLogin : <Assistant profile={profile} catalog={catalog} />} />
+        <Route path="/assistant" element={!authenticated ? needsLogin : profile && catalog ? <Assistant profile={profile} catalog={catalog} /> : waiting} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </main>
