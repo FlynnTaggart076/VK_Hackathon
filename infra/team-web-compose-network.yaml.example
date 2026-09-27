@@ -1,0 +1,12 @@
+# Merge these keys into the EXISTING /srv/team/web/compose.yaml after preflight.
+# Do not replace its services, ports, volumes, healthcheck or default network.
+services:
+  nginx:
+    networks:
+      default: {}
+      vk_zhkh_edge: {}
+
+networks:
+  vk_zhkh_edge:
+    external: true
+    name: vk-zhkh-edge
