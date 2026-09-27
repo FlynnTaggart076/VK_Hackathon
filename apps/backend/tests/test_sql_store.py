@@ -88,13 +88,22 @@ def test_postgresql_migration_persistence_and_worker(tmp_path, monkeypatch):
     with TestClient(create_app(settings)) as restarted:
         token = login(restarted, "reviewer_a")["access_token"]
         assert restarted.get(f"/api/v1/receipts/{queued['receipt']['id']}", headers=headers(token)).status_code == 200
-        assert run_once(restarted.app.state.store)
+        job_url = f"/api/v1/jobs/{queued['job_id']}"
+        assert restarted.get(job_url, headers=headers(token)).json()["state"] == "queued"
+        for _ in range(100):
+            assert run_once(restarted.app.state.store), "worker had no claimable job before target finished"
+            if restarted.get(job_url, headers=headers(token)).json()["state"] == "succeeded":
+                break
+        else:
+            pytest.fail("target persisted job did not finish after draining earlier test jobs")
         after = restarted.get(f"/api/v1/receipts/{queued['receipt']['id']}", headers=headers(token)).json()
         assert after["extraction_outcome"] == "manual_required"
         assert after["bill_data"]["services"] == []
         assert restarted.get("/health/ready").status_code == 200
         with restarted.app.state.store.engine.connect() as connection:
-            assert connection.exec_driver_sql("SELECT pg_typeof(bill_data)::text FROM receipt_revisions LIMIT 1").scalar_one() == "jsonb"
+            assert connection.exec_driver_sql(
+                "SELECT pg_typeof(bill_data)::text FROM receipt_revisions WHERE receipt_id = %s",
+                (uuid.UUID(queued["receipt"]["id"]),)).scalar_one() == "jsonb"
         with restarted.app.state.store.Session.begin() as session:
             row = session.scalar(select(IdempotencyKey).where(IdempotencyKey.key == uuid.UUID(key)))
             row.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)

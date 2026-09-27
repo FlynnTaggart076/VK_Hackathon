@@ -7,7 +7,13 @@ name = "housing-engine"
 version = "0.1.0"
 description = "DTO contract for the MAX housing assistant"
 requires-python = ">=3.12"
-dependencies = ["pydantic==2.13.5", "PyYAML==6.0.3"]
+dependencies = [
+  "pydantic==2.13.5",
+  "PyYAML==6.0.3",
+  "pypdf==6.19.0",
+  "pypdfium2==5.13.0",
+  "Pillow==12.3.0",
+]
 
 [project.optional-dependencies]
 contract = ["jsonschema==4.26.0"]
