@@ -11,6 +11,7 @@ import base64
 import json
 import logging
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -35,11 +36,28 @@ class JobCancelled(Exception):
 
 def kill_child(process: subprocess.Popen) -> None:
     if process.poll() is None:
-        try:
-            process.kill()
-        except OSError:
-            pass  # child may have exited between poll and kill
+        if os.name == "posix":
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        elif os.name == "nt":
+            subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                           stdin=subprocess.DEVNULL, capture_output=True, timeout=5,
+                           shell=False, check=False)
+        if process.poll() is None:
+            try:
+                process.kill()
+            except OSError:
+                pass  # child may have exited between poll and kill
     process.communicate()
+
+
+def spawn_child(argv: list[str]) -> subprocess.Popen:
+    return subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, shell=False,
+                            start_new_session=os.name == "posix",
+                            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0)
 
 
 def fixture_root(module_file: Path, configured: str | None) -> Path:
@@ -273,14 +291,17 @@ def bounded_extract(store: SqlStore, job_id: uuid.UUID, token: uuid.UUID,
         "mime_type": mime_type, "workspace": str(store.settings.storage_path),
     }).encode("utf-8")
     try:
-        process = subprocess.Popen([sys.executable, "-m", "app.jobs.engine_child"],
-                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE, shell=False)
+        process = spawn_child([sys.executable, "-m", "app.jobs.engine_child"])
     except OSError:
         raise EngineError("INTERNAL_ENGINE_ERROR", "Не удалось запустить обработку документа.", retryable=True) from None
 
     def tick() -> bool:
         heartbeat(store)
+        from app.jobs.retention import run_retention_once
+        try:
+            run_retention_once(store)
+        except Exception:
+            logger.exception("Retention sweep failed during OCR")
         return job_active(store, job_id, token)
 
     try:
