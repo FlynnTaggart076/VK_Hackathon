@@ -2,7 +2,7 @@
 
 - Ветка `agent-c/e3`; BASE_SHA `b33ed1e0493d76dfd7051a141e2075c698f8e967`; TASK_COMMIT `c11b5235319c12ecb18a6c4ca05c35a54f5c0560`.
 - Статус: E3-C-01 передан координатору на review. Контракт engine/HTTP 1.0, DTO и JSON Schema v1 не изменены.
-- Pushed code SHA: ранний compare checkpoint `5c1adc523d19f4e5c9ea3fabb1f27c71bfb1cd73`; исправление §7.5 и математические tests `b2cdf1b41ed50319e5e91a451fdcfc2511a4160d`; основной E3 код/каталог `8d4cd0cd49134735b05c6957c98c6ac5525cdbba`; проверенные generic sources `f43df01518b3aa717bea8725b71d82e5f76511a3`. Предыдущий report SHA `acd69f933482c5e9c51bf43e16e62ebe89a558c6`; новый report SHA сообщу после push.
+- Pushed code SHA: ранний compare checkpoint `5c1adc523d19f4e5c9ea3fabb1f27c71bfb1cd73`; исправление §7.5 и математические tests `b2cdf1b41ed50319e5e91a451fdcfc2511a4160d`; основной E3 код/каталог `8d4cd0cd49134735b05c6957c98c6ac5525cdbba`; проверенные generic sources `f43df01518b3aa717bea8725b71d82e5f76511a3`; названия пилотных регионов и проверка местного ограничения `13952b704986f37777bbe01be96332b0bdd71979`. Предыдущий source report SHA `68de83b617ed8f182f598083e774019ef5e97a0c`; новый report SHA сообщу после push.
 - Изменены только разрешённые C пути. Main, backend/web, Dockerfile B и VM не менялись. E4 не начат.
 
 ## Публичный compare checkpoint
@@ -28,6 +28,8 @@
 
 Для обоих `territory_id=null`, `is_synthetic=false`, `verified_at=2026-09-27T14:46:15Z`, `review_after=2026-12-27T14:46:15Z`. `knowledge/sources.yaml`, URL allowlist и provenance зафиксированы в Git. Вопросы `account_number`/`payment_history` возвращают актуальный SourceRef и `open_link` только пока источник действует; после expiry ответ `unsupported` без ссылки. Тесты показывают generic ссылку при контексте Москва и Московская область и `unsupported` для местной передачи показаний. Эти источники не подтверждают местную УК, срок показаний, тариф, порядок выдачи документов или канал получателя.
 
+После ответа владельца в `knowledge/territories.yaml` и manifest добавлены `moscow` («Москва») и `moscow-oblast` («Московская область») как названия выбранных регионов: `is_synthetic=false`, `source_id=null`. `demo-territory` сохранён; `pilot_territory_id=null` до конкретного дома/УК. Это область пилота от владельца, а не проверка местного порядка действий. Для всех шести LOCAL_TOPICS теперь требуется актуальный региональный source_id: при его отсутствии Москва и МО возвращают `unsupported` без ссылки и действий. Оба generic источника ГИС ЖКХ доступны для этих регионов с `territory_id=null`. Тесты проверяют оба региона и все шесть местных тем.
+
 `compose_draft` берёт только подтверждённые поля текущих receipt refs и `line_id`. Пользовательский вопрос показан как отдельная неподтверждённая формулировка и не управляет алгоритмом. Неизвестные поля не подставляются. Без проверенного канала `recipient=null`, `actions=[]`, `RECIPIENT_UNVERIFIED`; отправки нет. B остаётся владельцем проверки актуальности ревизий, сохранения/stale черновика, UI копирования и внешних переходов.
 
 ## Проверки
@@ -41,10 +43,10 @@
 git diff --cached --check
 ```
 
-Результат после source code SHA: verifier 0 (`15 schema-valid topics`, DTO/schema/fixtures/manifest и source allowlist OK), unittest 0 (`Ran 43 tests ... OK`), pip check 0 (`No broken requirements found`), staged diff check 0. `EOF marker not found` дважды выводится существующими негативными PDF fixtures при общем unittest, но suite завершается успешно. Проверка synthetic OCR на Tesseract выполнена и задокументирована в принятом E2 отчёте; E3 сравнение использовало PDF text bytes. Не проверялись реальная квитанция, фото, Python 3.12/Linux, Docker, VM или MAX.
+Результат после region code SHA: verifier 0 (`15 schema-valid topics`, DTO/schema/fixtures/manifest и source allowlist OK; точные названия двух регионов, `source_id=null`, `pilot_territory_id=null` проверены), unittest 0 (`Ran 43 tests ... OK`), pip check 0 (`No broken requirements found`), staged diff check 0. `EOF marker not found` дважды выводится существующими негативными PDF fixtures при общем unittest, но suite завершается успешно. Проверка synthetic OCR на Tesseract выполнена и задокументирована в принятом E2 отчёте; E3 сравнение использовало PDF text bytes. Не проверялись реальная квитанция, фото, Python 3.12/Linux, Docker, VM или MAX.
 
 ## Ограничения и передача B
 
-Владелец назвал пилотные регионы Москва и Московская область, но точные ID/представление двух регионов в одиночном `pilot_territory_id`, конкретная УК и локальные первоисточники ещё не согласованы координатором. `pilot_territory_id=null`, в каталоге пока только `demo-territory`; `sources` содержит две проверенные общие страницы, `organizations=[]`, host allowlist ограничена одним официальным доменом. Срок карточки — редакционный, не подмена фактического `verified_at` страницы. Два точно названных вида жилищных справок для пилотных регионов (§10.1) остаются заблокированы без локального первоисточника; местные сроки/каналы и получатель черновика не объявляются готовыми.
+Владелец назвал пилотные регионы Москва и Московская область, их ID теперь `moscow` и `moscow-oblast`. Конкретный дом/УК и локальные первоисточники не предоставлены. `pilot_territory_id=null`, каталог включает также `demo-territory`; `sources` содержит две проверенные общие страницы, `organizations=[]`, host allowlist ограничена одним официальным доменом. Срок карточки — редакционный, не подмена фактического `verified_at` страницы. Два точно названных вида жилищных справок для пилотных регионов (§10.1) остаются заблокированы без локального первоисточника; местные сроки/каналы и получатель черновика не объявляются готовыми.
 
 B может принимать engine SHA после ревью, вызывать публичные функции без dev stub и проверять владельца/актуальность ревизий перед каждым запросом. Для source/knowledge deployment нужно включить каталог `knowledge/` рядом с пакетом и передать локальный путь в `load_knowledge`; runtime сеть не нужна. Готовность E3 в интеграции и E4 выдаёт только координатор после проверки B/A. Следующий шаг C — устранить конкретные замечания ревью E3 или принять новое задание E4 после общей приёмки.
