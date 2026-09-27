@@ -42,6 +42,7 @@ class Settings:
     demo_access_code: str | None = None
     max_bot_token: str | None = None
     max_webhook_secret: str | None = None
+    max_web_app: str | None = None
     max_api_base_url: str = "https://platform-api2.max.ru"
     engine_mode: str = "stub"
     database_url: str | None = None
@@ -59,6 +60,7 @@ class Settings:
             demo_access_code=os.getenv("DEMO_ACCESS_CODE"),
             max_bot_token=os.getenv("MAX_BOT_TOKEN"),
             max_webhook_secret=os.getenv("MAX_WEBHOOK_SECRET"),
+            max_web_app=os.getenv("MAX_WEB_APP"),
             max_api_base_url=os.getenv("MAX_API_BASE_URL", "https://platform-api2.max.ru"),
             engine_mode=os.getenv("ENGINE_MODE", "stub"),
             database_url=os.getenv("DATABASE_URL"),
@@ -78,6 +80,10 @@ class Settings:
             raise ValueError("Production requires MAX bot token and webhook secret")
         if self.max_webhook_secret and not re.fullmatch(r"[A-Za-z0-9_-]{5,256}", self.max_webhook_secret):
             raise ValueError("MAX_WEBHOOK_SECRET must match MAX subscription format")
+        if self.max_web_app and not re.fullmatch(
+                r"(?:[A-Za-z][A-Za-z0-9_]{2,63}|https://max\.ru/[A-Za-z][A-Za-z0-9_]{2,63})",
+                self.max_web_app):
+            raise ValueError("MAX_WEB_APP must be a MAX bot username or max.ru bot link")
         api_url = urlsplit(self.max_api_base_url)
         if api_url.scheme != "https" or not api_url.hostname or api_url.username or api_url.password or \
                 api_url.query or api_url.fragment or api_url.path not in {"", "/"}:

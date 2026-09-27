@@ -143,6 +143,7 @@ class Outbox(Base):
     business_key: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
     max_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     text: Mapped[str] = mapped_column(String(4000), nullable=False)
+    attachments: Mapped[list] = mapped_column(JSONValue, nullable=False, default=list)
     state: Mapped[str] = mapped_column(String(24), nullable=False)
     attempt: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     run_after: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)

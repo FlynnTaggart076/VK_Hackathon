@@ -66,6 +66,9 @@ def main() -> None:
                     raise AssertionError("offline outbox was sent or mutated")
                 if outbox[0].max_user_id != 123 or not outbox[0].text:
                     raise AssertionError("outbox recipient or reply is missing")
+                buttons = outbox[0].attachments[0]["payload"]["buttons"]
+                if buttons[0][0]["type"] != "message" or buttons[1][0]["type"] != "open_app":
+                    raise AssertionError("start keyboard was not persisted")
                 print("E3 webhook PG inbox dedup and offline outbox: OK")
                 return
             if len(inbox) > 1 or len(outbox) > 1:

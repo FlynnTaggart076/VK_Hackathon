@@ -110,6 +110,11 @@ knowledge function and persist an owner-scoped answer. Group content is not stor
 answered. The outbox marks unknown network outcomes `uncertain` and does not
 automatically resend them. All inbox and outbox records expire within 24 hours.
 
+`/start` persists a MAX inline keyboard with a `message` button to prompt a
+question and an `open_app` button for receipt upload. `MAX_WEB_APP`, if set to
+the registered bot username or its `max.ru` link, is sent as `web_app`; linking
+and opening the real mini-app still require a live MAX client check.
+
 Outbound messages use the [official MAX POST /messages](https://dev.max.ru/docs-api/methods/POST/messages)
 with `Authorization` header and `user_id` query parameter; redirects are
 rejected to avoid forwarding credentials. The [Update object](https://dev.max.ru/docs-api/objects/Update)
