@@ -29,7 +29,7 @@ describe('E0 API examples', () => {
 
   it('returns partial receipt without filling unknown tariff and a revision conflict', async () => {
     setSessionToken((await api.demoAuth('mock-only')).access_token);
-    const receipt = await api.receipt('10000000-0000-4000-8000-000000000001');
+    const receipt = await api.receipt('10000000-0000-4000-8000-000000000002');
     expect(receipt.extraction_outcome).toBe('partial');
     expect(receipt.bill_data.services[0].tariff).toBeNull();
     await expect(request('/receipts/10000000-0000-4000-8000-000000000001/draft', {
