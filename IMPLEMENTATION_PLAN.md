@@ -4,7 +4,7 @@
 
 ## Состояние
 
-- Текущий этап: **E1 — каркасы**, задания готовятся после приёмки E0.
+- Текущий этап: **E1 — каркасы**, задания выданы A/B/C из `4449864e24686472130b2569be04b349ed862834`; отдельные checkout/ветки созданы от принятой базы `feb1fc7ab12201e6d5a93989d64a8374fe44a139`.
 - Последний принятый кодовый SHA: `3908481355f670d16b02cca530058213091af614` (`integration/e0`; отчёты/план добавляются отдельными doc-only commits).
 - Release SHA: отсутствует; развёртывания нет.
 - Git remote: `https://github.com/FlynnTaggart076/VK_Hackathon.git`; push `main` и веток A/B/C проверен.
@@ -29,9 +29,9 @@
 | E0-C-01 | C / `agent-c/e0` | accepted | `tasks/e0/agent-c.md` | `8114fd6` code, `09a20b1` report; schemas/fixtures/knowledge checks прошли |
 | E0-B-01 | B / `agent-b/e0` | accepted | `tasks/e0/agent-b.md` | `910e141` code, `4b467d5` report; 28 операций/24 примера прошли |
 | E0-A-01 | A / `agent-a/e0` | accepted | `tasks/e0/agent-a.md` | `66b155d` code, `4674d4e` report; 3 теста/build прошли |
-| E1-A-01 | A / `agent-a/e1` | todo | `tasks/e1/agent-a.md` после task commit | Onboarding, навигация, состояния, dev API |
-| E1-B-01 | B / `agent-b/e1` | todo | `tasks/e1/agent-b.md` после task commit | API/auth/DB/upload/worker skeleton/Compose |
-| E1-C-01 | C / `agent-c/e1` | todo | `tasks/e1/agent-c.md` после task commit | Пакет, математика/валидация, PDF-text и OCR первого макета |
+| E1-A-01 | A / `agent-a/e1` | in_progress | `tasks/e1/agent-a.md` | Onboarding, навигация, состояния, dev API после B checkpoint |
+| E1-B-01 | B / `agent-b/e1` | in_progress | `tasks/e1/agent-b.md` | API/auth/DB/upload/worker skeleton/Compose |
+| E1-C-01 | C / `agent-c/e1` | in_progress | `tasks/e1/agent-c.md` | Пакет, математика/валидация, PDF-text и OCR первого макета |
 
 ## Принятая интеграция E0
 
@@ -50,4 +50,4 @@
 
 ## Следующий шаг
 
-Опубликовать финальный E0 commit в `main`, записать точный `BASE_SHA` в E1 задания, создать отдельные checkout/ветки A/B/C и продолжить цикл приёмки E1 по §14.
+Получить pushed E1 checkpoints и отчёты. Сначала проверить C engine, затем B runtime/adapter и A реальный dev API; независимый UI и backend каркас принимать отдельно. Принять E1 только после PostgreSQL/Compose и связанных контрактов, затем выдать E2.
