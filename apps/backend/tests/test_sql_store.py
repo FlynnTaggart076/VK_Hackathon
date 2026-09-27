@@ -135,6 +135,11 @@ def test_non_dev_modes_require_postgres_and_production_requires_max(tmp_path):
     with pytest.raises(ValueError, match="PostgreSQL psycopg URL"):
         create_app(Settings(mode="production", database_url=sqlite_url, engine_mode="real",
                             max_bot_token="synthetic-token", max_webhook_secret="synthetic_secret",
+                            max_web_app="fixture_bot",
+                            storage_path=tmp_path / "private"))
+    with pytest.raises(ValueError, match="MAX_WEB_APP"):
+        create_app(Settings(mode="production", database_url=sqlite_url, engine_mode="real",
+                            max_bot_token="synthetic-token", max_webhook_secret="synthetic_secret",
                             storage_path=tmp_path / "private"))
 
 

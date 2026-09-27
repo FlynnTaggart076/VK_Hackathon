@@ -78,6 +78,8 @@ class Settings:
             raise ValueError("Engine stub is dev-only")
         if self.mode == "production" and (not self.max_bot_token or not self.max_webhook_secret):
             raise ValueError("Production requires MAX bot token and webhook secret")
+        if self.mode == "production" and not self.max_web_app:
+            raise ValueError("Production requires MAX_WEB_APP for the mini-app button")
         if self.max_webhook_secret and not re.fullmatch(r"[A-Za-z0-9_-]{5,256}", self.max_webhook_secret):
             raise ValueError("MAX_WEBHOOK_SECRET must match MAX subscription format")
         if self.max_web_app and not re.fullmatch(
