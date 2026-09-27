@@ -45,6 +45,8 @@ try {
   if (saved.bill_data.services[0].tariff !== '41.00' || saved.bill_data.settlement.formula_kind !== 'signed_balance_v1')
     throw new Error('Saved values differ from review form or server formula');
   if (await page.getByRole('combobox', { name: 'Формула остатка' }).count()) throw new Error('Server formula is editable');
+  if (await page.getByRole('combobox', { name: 'Основание суммы' }).count()) throw new Error('Server calculation kind is editable');
+  if (await page.getByRole('textbox', { name: 'Код макета' }).count()) throw new Error('Server template is editable');
   await page.getByLabel(/Принимаю предупреждение/).check();
   await page.getByRole('button', { name: 'Подтвердить проверенные данные' }).click();
   await page.waitForURL(/\/explanation\?id=/);

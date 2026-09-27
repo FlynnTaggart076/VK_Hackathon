@@ -46,7 +46,6 @@ export function normalizeBill(input: BillData): BillData {
 export function billErrors(bill: BillData): string[] {
   const result: string[] = [];
   if (!bill.period || !/^\d{4}-(?:0[1-9]|1[0-2])$/.test(bill.period)) result.push('Укажите период в формате ГГГГ-ММ.');
-  if (!bill.issuer_name) result.push('Укажите организацию из документа или обозначьте её как неизвестную.');
   if (!bill.services.length) result.push('Добавьте хотя бы одну строку начисления.');
   bill.services.forEach((line, index) => {
     if (!line.raw_name) result.push(`Строка ${index + 1}: нужно название.`);
@@ -56,7 +55,7 @@ export function billErrors(bill: BillData): string[] {
   });
   bill.adjustments.forEach((item, index) => {
     if (!item.label) result.push(`Перерасчёт ${index + 1}: нужно название.`);
-    if (item.amount !== null && !money.test(item.amount)) result.push(`Перерасчёт ${index + 1}: проверьте сумму.`);
+    if (item.amount === null || !money.test(item.amount)) result.push(`Перерасчёт ${index + 1}: укажите сумму с двумя цифрами после точки.`);
     if (item.related_period && !/^\d{4}-(?:0[1-9]|1[0-2])$/.test(item.related_period)) result.push(`Перерасчёт ${index + 1}: проверьте период.`);
     if (item.service_line_id && !bill.services.some((line) => line.line_id === item.service_line_id)) result.push(`Перерасчёт ${index + 1}: связанная строка удалена.`);
   });

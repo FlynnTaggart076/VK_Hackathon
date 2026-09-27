@@ -162,15 +162,14 @@ export function ReceiptReview() {
         <button type="button" onClick={() => { setReceipt(conflict); setConflict(null); setError(null); setAcknowledged([]); confirmKey.current = crypto.randomUUID(); }}>Применить мои правки к актуальной ревизии</button>
         <button type="button" onClick={() => { setReceipt(conflict); setDraft(conflict.bill_data); setConflict(null); setError(null); setAcknowledged([]); }}>Использовать серверную версию</button></div>}
       <form onSubmit={(event) => void save(event)}><h3>Данные для проверки</h3>
-        <p>Поля без значения остаются неизвестными. Сверьте каждое число с исходником. Сохранение не подтверждает юридическую правильность начисления.</p>
+        <p>Поля без значения остаются неизвестными. Организация может быть неизвестна; сервер предупредит об этом. Сверьте каждое число с исходником. Сохранение не подтверждает юридическую правильность начисления.</p>
         <Field label="Период (ГГГГ-ММ)" value={draft.period} onChange={(value) => update('period', value)} hint={<Evidence path="/period" evidence={receipt.field_evidence} issues={receipt.issues} />} />
         <Field label="Организация" value={draft.issuer_name} onChange={(value) => update('issuer_name', value)} hint={<Evidence path="/issuer_name" evidence={receipt.field_evidence} issues={receipt.issues} />} />
         <Field label="Номер лицевого счёта" value={draft.account_number} onChange={(value) => update('account_number', value)} hint={<Evidence path="/account_number" evidence={receipt.field_evidence} issues={receipt.issues} />} />
         <Field label="Адрес" value={draft.address_text} onChange={(value) => update('address_text', value)} hint={<Evidence path="/address_text" evidence={receipt.field_evidence} issues={receipt.issues} />} />
         <details><summary>Дополнительные реквизиты</summary>
           <Field label="Код поставщика (если известен)" value={draft.provider_id} onChange={(value) => update('provider_id', value)} hint={<Evidence path="/provider_id" evidence={receipt.field_evidence} issues={receipt.issues} />} />
-          <Field label="Код макета" value={draft.template_id} onChange={(value) => update('template_id', value)} />
-          <Field label="Версия макета" value={draft.template_version} onChange={(value) => update('template_version', value)} />
+          <p>Макет: {draft.template_id ?? 'не определён'}; версия: {draft.template_version ?? 'не определена'}. Эти значения определяет сервер.</p>
         </details>
         <h3>Строки начислений</h3>
         {draft.services.length === 0 && <p>Строки не найдены. Добавьте их по исходнику.</p>}
@@ -183,7 +182,7 @@ export function ReceiptReview() {
           <Field label="Объём" value={line.quantity} inputMode="decimal" onChange={(value) => updateLine(index, { quantity: value })} hint={<Evidence path={`/services/${index}/quantity`} evidence={receipt.field_evidence} issues={receipt.issues} />} />
           <Field label="Тариф" value={line.tariff} inputMode="decimal" onChange={(value) => updateLine(index, { tariff: value })} hint={<Evidence path={`/services/${index}/tariff`} evidence={receipt.field_evidence} issues={receipt.issues} />} />
           <Field label="Начислено за период, ₽" value={line.charge_amount} inputMode="decimal" onChange={(value) => updateLine(index, { charge_amount: value })} hint={<Evidence path={`/services/${index}/charge_amount`} evidence={receipt.field_evidence} issues={receipt.issues} />} />
-          <label htmlFor={`calc-${line.line_id}`}>Основание суммы</label><select id={`calc-${line.line_id}`} value={line.calculation_kind} onChange={(event) => updateLine(index, { calculation_kind: event.target.value as Service['calculation_kind'] })}><option value="simple_product">Объём × тариф</option><option value="document_amount">Сумма из документа</option></select>
+          <p>Основание суммы: {line.calculation_kind === 'simple_product' ? 'объём × тариф' : 'сумма из документа'}. Его определяет сервер; новая строка сохраняется как сумма из документа.</p>
           <details><summary>Служебные признаки строки</summary>
             <Field label="Ключ поставщика" value={line.supplier_key} onChange={(value) => updateLine(index, { supplier_key: value })} />
             <Field label="Ключ сегмента" value={line.segment_key} onChange={(value) => updateLine(index, { segment_key: value })} />

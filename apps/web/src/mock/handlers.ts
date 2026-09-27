@@ -164,10 +164,13 @@ export const handlers = [
     const body = await request.json() as { expected_revision: number; bill_data: BillData };
     if (currentReceipt.status === 'queued' || body.expected_revision !== currentReceipt.revision)
       return error(409, 'REVISION_CONFLICT', 'Ревизия изменилась или обработка ещё идёт.');
-    if (!body.bill_data.period || !body.bill_data.issuer_name || body.bill_data.services.length === 0 || body.bill_data.services.some((line) => !line.raw_name || !line.charge_amount))
-      return error(422, 'VALIDATION_FAILED', 'Заполните период, организацию и строки начислений.');
+    if (!body.bill_data.period || body.bill_data.services.length === 0 || body.bill_data.services.some((line) => !line.raw_name || !line.charge_amount) || body.bill_data.adjustments.some((item) => item.amount === null))
+      return error(422, 'VALIDATION_FAILED', 'Заполните период, строки начислений и суммы перерасчётов.');
     currentReceipt = { ...currentReceipt, status: 'needs_review', revision: currentReceipt.revision + 1,
-      bill_data: { ...body.bill_data, settlement: { ...body.bill_data.settlement, formula_kind: currentReceipt.bill_data.settlement.formula_kind } },
+      bill_data: { ...body.bill_data,
+        template_id: currentReceipt.bill_data.template_id, template_version: currentReceipt.bill_data.template_version,
+        services: body.bill_data.services.map((line) => ({ ...line, calculation_kind: currentReceipt.bill_data.services.find((old) => old.line_id === line.line_id)?.calculation_kind ?? 'document_amount' })),
+        settlement: { ...body.bill_data.settlement, formula_kind: currentReceipt.bill_data.settlement.formula_kind } },
       field_evidence: [{ path: '/services/0/charge_amount', source: 'manual', page_number: null, bbox: null,
         source_text: null, needs_review: false, reason: null }] };
     return HttpResponse.json(currentReceipt);
