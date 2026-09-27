@@ -34,7 +34,9 @@ class KnowledgeTests(unittest.TestCase):
     def test_all_fifteen_cards_have_distinct_public_answers(self):
         self.assertEqual(len(self.knowledge.topics), 15)
         self.assertEqual(len({item["id"] for item in self.knowledge.topics}), 15)
-        self.assertTrue(self.knowledge.version.startswith("1.0.1-e3-generic-sources+"))
+        self.assertTrue(self.knowledge.version.startswith("1.0.2-e3-regions+"))
+        self.assertEqual({item["id"] for item in self.knowledge.territories}, {"demo-territory", "moscow", "moscow-oblast"})
+        self.assertIsNone(self.knowledge.manifest["pilot_territory_id"])
         for card in self.knowledge.topics:
             with self.subTest(topic=card["id"]):
                 fields = {"topic_id": card["id"], "territory_id": "demo-territory", "role": "owner",
@@ -60,6 +62,7 @@ class KnowledgeTests(unittest.TestCase):
         self.assertEqual(ambiguous.clarification.field, "document_kind")
         next_step = answer_question(question("справка", topic_id="housing_document", document_kind="выписка"), self.knowledge)
         self.assertEqual(next_step.clarification.field, "territory_id")
+        self.assertEqual({item.value for item in next_step.clarification.options}, {"moscow", "moscow-oblast"})
         unknown = answer_question(question("xyzzy случайные слова"), self.knowledge)
         self.assertEqual(unknown.status, "unsupported")
         self.assertEqual(unknown.sources, [])
@@ -71,10 +74,14 @@ class KnowledgeTests(unittest.TestCase):
                 self.assertEqual(generic.status, "answered")
                 self.assertEqual(generic.sources[0].id, "gis-zhkh-payment-history")
                 self.assertEqual(generic.actions[0].url, generic.sources[0].url)
-                local = answer_question(question("как передать показания", territory_id=region, topic_id="meter_readings"), self.knowledge)
-                self.assertEqual(local.status, "unsupported")
-                self.assertEqual(local.sources, [])
-                self.assertEqual(local.actions, [])
+                for topic_id in ("meter_readings", "meter_deadline", "management_contacts", "supplier_contacts", "service_issue", "housing_document"):
+                    with self.subTest(region=region, topic=topic_id):
+                        local = answer_question(question("локальный вопрос", territory_id=region, topic_id=topic_id,
+                            role="owner", service_code="cold_water", document_kind="named document"), self.knowledge)
+                        self.assertEqual(local.status, "unsupported")
+                        self.assertEqual(local.sources, [])
+                        self.assertEqual(local.actions, [])
+                        self.assertIn("местный порядок", local.limitations[0])
         late = question("где история оплат", topic_id="payment_history").model_copy(update={"now": datetime(2026, 12, 28, tzinfo=timezone.utc)})
         expired = answer_question(late, self.knowledge)
         self.assertEqual(expired.status, "unsupported")

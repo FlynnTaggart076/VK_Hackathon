@@ -1,5 +1,7 @@
-version: "1.0.1-e3-generic-sources"
-built_at: "2026-09-27T14:46:15Z"
+version: "1.0.2-e3-regions"
+built_at: "2026-09-27T14:53:26Z"
 territory_ids:
   - demo-territory
+  - moscow
+  - moscow-oblast
 pilot_territory_id: null
