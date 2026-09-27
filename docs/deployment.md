@@ -23,7 +23,9 @@ curl -f http://127.0.0.1:8080/team/zhkh/health/ready
 
 Локальный Nginx удаляет `/team/zhkh/`, затем проксирует `/api/`,
 `/integrations/` и `/health/` в API. `/assets/` имеет строгий 404 для
-отсутствующих файлов; SPA fallback действует только для UI. Multipart лимит
+отсутствующих файлов; SPA fallback действует только для UI. Оба server config
+явно задают `root /usr/share/nginx/html` для собранного Vite `dist`.
+Multipart лимит
 Nginx 12 MiB допускает файл 10 MiB с обрамлением, окончательный лимит проверяет
 backend. Внутренний `app-vm.conf` получает уже очищенный от внешнего префикса
 путь. Он сохраняет `X-Forwarded-Proto`, если тот передан доверенным внешним
