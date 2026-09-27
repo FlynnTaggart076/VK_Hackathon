@@ -130,3 +130,35 @@ PG17 PDF и PNG HTTP smoke/restart и оба Linux сценария заверш
 ### Статус и следующий шаг
 
 E3-B-01 передан на review по code SHA `362985a`; отдельный report SHA — данный commit. Координатор интегрирует production gate, проверяет PG17 шаги и возвращает конкретные B дефекты, если они появятся. Общая E3 browser-приёмка пока блокируется ошибкой A на run 36329206031, а реальный MAX/VM остаётся E4 внешней проверкой. B не начинает E4 без задания и release SHA.
+
+---
+
+## E4-B-01: подготовка VM и безопасного исходящего MAX
+
+- Ветка `agent-b/e4`, BASE_SHA/E3 accepted release `d223c4e49a12c4ebc5d98c3c8da8fc6c0202e16f`, TASK_COMMIT `40f0e8a1995f4a44f44f174cfa51f2f6acdae2c5`; follow-up по outbound worker `5591daef865502be5acc13ee8c410e0f99722b7a`.
+- Pushed code/docs `961cd9d50eba825e8335f3f76ad67dd2e3ae1c38`; private backup и production doc refinement `e389cfa4d30a0c3230110a4b31dd37860ecc511b`; CA trust `0734dba7dd3319f505d7e69aa12de284f06c6759` и canonical LF pin `455804e7463508d169987e7846c0c6d6b56b7a5c`. Старый d223 не разворачивался: worker был только в `private: internal`, поэтому не мог отправлять ответы MAX. Координатор проверил E4 в integration SHA `2e357624e9f59287b09f2593e13dedf619d1e057`; новый accepted release SHA для VM пока не назначен.
+
+### Изменение
+
+- `compose.vm.yaml` даёт **только worker** отдельную обычную сеть `max_egress` для DNS/HTTPS, оставляя db/migrate/api в закрытой `private`, web — `private` и `vk-zhkh-edge` с alias `vk-zhkh-web`. У приложения нет опубликованных host ports. VM override принудительно включает production/real и выключает demo; отсутствие MAX bot token/webhook secret/mini-app target теперь отклоняет `compose config` до запуска. Общий `compose.yaml` больше не требует фиктивный `DEMO_ACCESS_CODE` при выключенном demo.
+- Добавлены только фрагменты маршрута/сети общего веб-входа в `infra/`; текущие файлы VM не редактировались. `docs/deployment.md` задаёт read-only preflight, границы `/srv/team/vk-hackathon/{deploy,runtime}`, изолированный запуск, сохранение чужих маршрутов, проверку внутреннего/внешнего пути, MAX и DB dump/restore в отдельной БД.
+- Backend image устанавливает публичный корневой сертификат Минцифры в собственный CA store через `update-ca-certificates`; Dockerfile сверяет SHA-256 файла. TLS verification и проверка имени хоста не отключались. Источник, DER/PEM fingerprint и обновление описаны в `infra/certs/README.md`.
+
+### Фактические проверки
+
+| Уровень | Команда/факт | Результат |
+|---|---|---|
+| Git/checkout | `agent-b/e4` от d223, clean; push origin | Code/doc SHAs выше опубликованы; чужие файлы сохранены. |
+| Compose parser и топология | Portable Docker Compose v5.5.1 `-p vk-zhkh -f compose.yaml -f compose.vm.yaml config --quiet` с синтетическими env; JSON config разобран без вывода значений | Exit 0; modes production/real/no demo; сети db/api/migrate=`private`, worker=`private,max_egress`, web=`private,edge`; private internal, edge external/alias; ни у одного сервиса нет host ports. Local override config тоже exit 0. Это parser, не работающая Docker сеть. |
+| Негативный config | По одному удалены синтетические `MAX_BOT_TOKEN`, `MAX_WEBHOOK_SECRET`, `MAX_WEB_APP`, затем VM `config --quiet` | Все три отсутствия отклонены с ненулевым кодом до запуска. Секреты не использовались/не выводились. |
+| Backend/HTTP | `%TEMP%/vk_zhkh_b_e2_python/Scripts/python.exe -m pytest apps/backend/tests -q --tb=short`; `scripts/check_http_contract.py` | 26 passed, 3 skipped (PG tests без URL), 1 Starlette warning; OpenAPI 3.1, 28 операций/25 примеров. |
+| Отдельный PG16.2 и backup/restore | Новый `%TEMP%/vk_zhkh_e4_pg_20260927_01`, loopback 55443, отдельные `zhkh_e4_source`/`zhkh_e4_restore`; Alembic head; synthetic user; `pg_dump -Fc`, `pg_restore --list`, restore в другую БД | Оба DB имеют `e3_max_keyboard` и 1 synthetic user; dump 28717 bytes. Кластер остановлен, TEMP данные/dump сохранены. Служба Kompas и её данные не затронуты. Это PG16, не PG17/VM. |
+| Внешний baseline до deploy | `curl.exe` с TLS verify на developer machine к существующим `/team/`, `/healthz`, `/team/zhkh/` | HTTPS `/team/` 200, `/healthz` 404, `/team/zhkh/` 404; `tls_verify_result=0` для всех. 404 внешнего `/healthz` не является внутренним healthcheck VM. |
+| MAX TLS CA provenance | Официальный [MAX changelog](https://dev.max.ru/docs-api/changelog-api) требует `platform-api2.max.ru` и сертификат Минцифры; PEM получен из `http://nuc-cdp.digital.gov.ru/cdp/rootca_ssl_rsa2022.crt` 2026-09-27. DER SHA-256 `D26D2D0231B7C39F92CC738512BA54103519E4405D68B5BD703E9788CA8ECF31` совпал с корнем доверенной Windows цепочки живого MAX. Git LF PEM SHA-256 `0819977502D9AED2234830F6FFB91F82F401D3674C6E51DD19E16D8B3DBF0EB4`; `git ls-files --eol` = i/lf w/lf. OpenSSL `s_client -verify_hostname platform-api2.max.ru -CAfile infra/certs/russian-trusted-root-ca.crt` | `Verification: OK`, `Verified peername: *.max.ru`, `Verify return code: 0`; без CA — код 20. Stdlib Python `ssl.create_default_context(cafile=...)` и tokenless GET `/me` получили HTTP 401 после успешного TLS. Это локальная проверка, не контейнер/VM. |
+| VM read-only | B BatchMode получил `Permission denied (publickey)`; PTY дошёл до запроса passphrase и был отменён без ввода секрета. Координатор затем выполнил свежую интерактивную read-only инвентаризацию `ssh hackathon` 2026-09-27. | `/srv/team`: README.md, VK-bot/, web/; только healthy `team-web-nginx-1`, адрес 10.203.77.10:8080, `docker compose ls` только team-web. В текущем web Compose нет shared edge network; nginx.conf имеет /healthz, /team/, /. Свободно 74G диска и 14Gi RAM; внутри VM /team/ и /healthz HTTP 200, снаружи HTTPS /team/ HTTP 200 с TLS verify 0. Это свидетельство координатора, без изменения VM; B сам не вошёл. |
+| Изолированный Linux CI | [GitHub Actions run 36333584617](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36333584617), integration SHA `2e357624e9f59287b09f2593e13dedf619d1e057` | **Success**: VM Compose config/topology, сборка образа с pinned CA, worker DNS и tokenless HTTPS к MAX, shared Nginx snippet syntax, PG17/E2–E3 и E4 browser. Это CI, не проверка конфигурации общего Nginx на живой VM, не MAX auth/POST. Текущий локальный Windows без Docker daemon. |
+| MAX/VM deploy | Действующие MAX credentials, привязка mini-app и права регистрации пока не подтверждены; `/srv/team/vk-hackathon` и приватного app runtime на VM нет; новый accepted release SHA после egress fix не выдан | **Not deployed.** Никаких VM/Nginx/сетевых изменений, реального MAX POST, webhook registration, MAX Web/mobile проверки не было. |
+
+### Следующий шаг
+
+После успешного CI нужен новый принятый координатором release SHA, приватные MAX bot token/webhook secret, привязанный mini-app target и рабочий SSH-доступ для B. Затем проверить эти prerequisites вне Git, добавить только свой edge route/network в существующий team-web по §12.8, развернуть точный SHA и отдельно проверить internal VM, external HTTPS и реальный MAX Web/mobile. До этого production не запускать.
