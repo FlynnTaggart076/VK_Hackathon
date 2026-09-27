@@ -11,6 +11,7 @@
 | B | code `910e141ee170bf8eb740d4a63f0b38d9f6c41212`, report `4b467d549faf3b5c94c9b1a5247a3f78da268c0a` | HTTP OpenAPI/examples accepted |
 | A | code `66b155d84291a3f6543f0806c00864bfeecf7397`, report `4674d4e1eab607141f5e290e7cb28135c296c15e` | UI shell/generated types/mock accepted |
 | Проверенный integration candidate | `3908481355f670d16b02cca530058213091af614` | Код после C→B→A, перед doc-only отчётом `effbccc923acb36a7ee3bb91c10bfb43348883d3` |
+| E1 dev API checkpoint B | code `1d99a19502df2b536248daad224b0f0af5e96d5a`, integration `28192753c516d3b3738ea4ac36e8af84475b309a` | Только dev endpoints для A; полный E1 не принят |
 | Release/VM | нет | Развёртывание не выполнялось |
 
 ## Проверки и решение
@@ -22,10 +23,11 @@
 - A отдельно проверил локальный Chrome mock flow при 360×800: вход, вопрос, unsupported и синтетическая метка. Это не реальный MAX, VM, backend или OCR.
 - B проверил существующий внешний `/team/`: HTTP 200/TLS verify 0; SSH VM дошёл до auth и получил `Permission denied (publickey)`. Приложение `/team/zhkh/` не публиковалось. MAX credentials и реальный клиент не проверены.
 - E0 принят как контрактный этап. Семь engine-функций пока `NotImplementedError`, HTTP пока спецификация, UI остальные экраны заглушки; E1–E5 не приняты.
+- На `integration/e1` координатор повторил `python -m pytest apps/backend/tests -q` с locked зависимостями из изолированного каталога: 4 passed, одно стороннее deprecation warning. Реально работают meta, demo auth, me/profile, catalog, upload, receipt и queued job; `MemoryStore` не сохраняется после рестарта, `receipt_ocr=false`, `engine_stub=true`, readiness 503. При `DATABASE_URL` этот checkpoint отказывается стартовать вместо молчаливого перехода на память.
 
 ## Текущие задачи и блокеры
 
-Текущие задачи: `E1-A-01`, `E1-B-01`, `E1-C-01` запущены в отдельных checkout/ветках от `feb1fc7ab12201e6d5a93989d64a8374fe44a139`; task commit `4449864e24686472130b2569be04b349ed862834`. E1 результаты пока не приняты. Блокеры будущей VM/MAX приёмки и реальных источников указаны в `IMPLEMENTATION_PLAN.md`.
+Текущие задачи: `E1-A-01`, `E1-B-01`, `E1-C-01` запущены в отдельных checkout/ветках от `feb1fc7ab12201e6d5a93989d64a8374fe44a139`; task commit `4449864e24686472130b2569be04b349ed862834`. A получил интеграционный dev SHA B; C и B продолжают E1. Общий E1 ещё не принят. На Windows отсутствуют Docker CLI/WSL-дистрибутив и Tesseract; реальный PostgreSQL/Compose и image OCR пока не проверены. VM SSH отвергает ключ (`Permission denied (publickey)`), MAX credentials не доступны. Владелец доступа запрошен без передачи секретов в Git.
 
 ## Следующий шаг
 
