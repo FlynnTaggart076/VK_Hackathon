@@ -5,4 +5,3 @@
 - Verify real MAX bot token, webhook secret, connected mini-app and registration rights through a private channel. Do not print values. Until those prerequisites exist, keep VM unchanged and document `not deployed`; synthetic production variables are CI-only.
 - Once prerequisites exist, follow `TECHNICAL_SPEC.md` §12.8, local VM owner instruction and `docs/deployment.md`: private runtime/env outside Git, backup current shared files, Compose config, Nginx syntax, own network/route only, preserve other services and `/team/`/`/healthz`; then verify internal and external HTTPS, webhook, signed MAX Web/mobile with A. Record deployed SHA, health, migration, backup/restore and limitations in a separate report commit. Do not enable voice/transcription/real complaint sending.
 - Push any corrective code separately for coordinator review before a new deploy SHA. Never deploy branch HEAD or a task/report commit in place of the accepted SHA.
-
