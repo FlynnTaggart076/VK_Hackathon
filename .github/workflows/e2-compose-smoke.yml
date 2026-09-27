@@ -27,6 +27,8 @@ jobs:
           set -euo pipefail
           export POSTGRES_PASSWORD="$(openssl rand -hex 24)"
           export DEMO_ACCESS_CODE="$(openssl rand -hex 24)"
+          export MAX_WEBHOOK_SECRET="$(openssl rand -hex 24)"
+          export MAX_BOT_TOKEN=''
           export APP_MODE=dev ENGINE_MODE=real DEMO_AUTH_ENABLED=true LOCAL_WEB_PORT=18081
           project="zhkh-e2-ci-${GITHUB_RUN_ID}"
           compose=(docker compose -p "$project" -f compose.yaml -f compose.local.yaml)
@@ -109,6 +111,14 @@ jobs:
               > /tmp/zhkh-e2-tree-test.log 2>&1; then
             echo "::error title=E2 OCR process tree::$(tail -n 20 /tmp/zhkh-e2-tree-test.log | tr '\r\n' '  ' | tail -c 1800)"
             exit 1
+          fi
+          if [[ "$GITHUB_REF_NAME" == integration/e3 ]]; then
+            if ! "${compose[@]}" run --rm --no-deps -v "$GITHUB_WORKSPACE:/repo:ro" \
+                -e PYTHONPATH=/workspace worker python /repo/scripts/verify_e3_webhook.py \
+                > /tmp/zhkh-e3-webhook.log 2>&1; then
+              echo "::error title=E3 webhook PG replay::$(tail -n 20 /tmp/zhkh-e3-webhook.log | tr '\r\n' '  ' | tail -c 1800)"
+              exit 1
+            fi
           fi
           if ! (cd apps/web && npm ci --no-audit --no-fund) > /tmp/zhkh-e2-npm.log 2>&1; then
             echo "::error title=E2 frontend dependencies::$(tail -n 20 /tmp/zhkh-e2-npm.log | tr '\r\n' '  ' | tail -c 1800)"
