@@ -70,7 +70,7 @@ export function Processing({ stub }: { stub: boolean }) {
       <p>Номер задания: {jobId}</p>
       {busy && <p role="status">Получаем состояние…</p>}
       {job && <p role="status">Состояние: {job.state === 'queued' ? 'в очереди' : job.state === 'running' ? 'читаем документ' : job.state === 'failed' ? 'ошибка обработки' : 'готово'}.</p>}
-      {stub && <p className="badge">Dev stub: очередь не обрабатывается. Возвращайтесь после подключения worker.</p>}
+      {stub && <p className="badge">Dev stub: задание завершится без OCR; для платёжки потребуется ручной ввод.</p>}
       <button type="button" onClick={() => void refresh(jobId)} disabled={busy}>Обновить состояние</button>
       <ErrorMessage error={error} />
     </>}

@@ -1,4 +1,4 @@
-import type { AnswerContext, AnswerView, ApiErrorBody, AuthResponse, Catalog, Job, MeResponse, MetaResponse, Profile, ReceiptQueued, ReceiptView, UnexpectedErrorBody, UpdateProfileRequest } from './types';
+import type { AnswerContext, AnswerView, ApiErrorBody, Catalog, Job, MeResponse, MetaResponse, Profile, ReceiptQueued, ReceiptView, UnexpectedErrorBody, UpdateProfileRequest } from './types';
 
 export const API_BASE = '/team/zhkh/api/v1';
 let sessionToken: string | null = null;
@@ -46,9 +46,6 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
 
 export const api = {
   meta: (signal?: AbortSignal) => request<MetaResponse>('/meta', { signal }),
-  demoAuth: (accessCode: string, signal?: AbortSignal) => request<AuthResponse>('/auth/demo', {
-    method: 'POST', body: JSON.stringify({ access_code: accessCode, identity: 'reviewer_a' }), signal,
-  }),
   me: (signal?: AbortSignal) => request<MeResponse>('/me', { signal }),
   catalog: (signal?: AbortSignal) => request<Catalog>('/catalog', { signal }),
   updateProfile: (body: UpdateProfileRequest, signal?: AbortSignal) => request<Profile>('/me/profile', {
