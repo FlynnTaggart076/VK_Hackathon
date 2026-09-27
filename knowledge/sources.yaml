@@ -1,1 +1,17 @@
-sources: []
+sources:
+  - id: gis-zhkh-account-list
+    title: "ГИС ЖКХ: Как перейти к списку лицевых счетов"
+    url: https://cdn.dom.gosuslugi.ru/webhelp/topics/accounts/cit/t_navigate-grazhd.html
+    territory_id: null
+    verified_at: "2026-09-27T14:46:15Z"
+    review_after: "2026-12-27T14:46:15Z"
+    content_version: "1.0"
+    is_synthetic: false
+  - id: gis-zhkh-payment-history
+    title: "ГИС ЖКХ: История платежей"
+    url: https://cdn.dom.gosuslugi.ru/webhelp/topics/_citizen/payment/payment_history-grazhd.html
+    territory_id: null
+    verified_at: "2026-09-27T14:46:15Z"
+    review_after: "2026-12-27T14:46:15Z"
+    content_version: "1.0"
+    is_synthetic: false

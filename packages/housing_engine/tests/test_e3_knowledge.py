@@ -15,7 +15,7 @@ from housing_engine.dto import (
 
 
 ROOT = Path(__file__).resolve().parents[3]
-NOW = datetime(2026, 9, 27, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 27, 14, 47, tzinfo=timezone.utc)
 REF = ReceiptRef(id=UUID("60000000-0000-4000-8000-000000000001"), revision=1)
 
 
@@ -31,10 +31,10 @@ class KnowledgeTests(unittest.TestCase):
     def setUpClass(cls):
         cls.knowledge = load_knowledge(str(ROOT / "knowledge"), NOW)
 
-    def test_all_fifteen_cards_have_distinct_public_answers_without_sources(self):
+    def test_all_fifteen_cards_have_distinct_public_answers(self):
         self.assertEqual(len(self.knowledge.topics), 15)
         self.assertEqual(len({item["id"] for item in self.knowledge.topics}), 15)
-        self.assertTrue(self.knowledge.version.startswith("1.0.0-e3-generic+"))
+        self.assertTrue(self.knowledge.version.startswith("1.0.1-e3-generic-sources+"))
         for card in self.knowledge.topics:
             with self.subTest(topic=card["id"]):
                 fields = {"topic_id": card["id"], "territory_id": "demo-territory", "role": "owner",
@@ -42,8 +42,14 @@ class KnowledgeTests(unittest.TestCase):
                 result = answer_question(question(card["utterances"][0], **fields), self.knowledge)
                 self.assertEqual(result.status, "answered")
                 self.assertEqual(result.topic_id, card["id"])
-                self.assertEqual(result.sources, [])
-                self.assertFalse(any(action.type == "open_link" for action in result.actions))
+                if card["id"] in ("account_number", "payment_history"):
+                    self.assertEqual(len(result.sources), 1)
+                    self.assertFalse(result.sources[0].is_synthetic)
+                    self.assertEqual(result.sources[0].territory_id, None)
+                    self.assertEqual(len([action for action in result.actions if action.type == "open_link"]), 1)
+                else:
+                    self.assertEqual(result.sources, [])
+                    self.assertFalse(any(action.type == "open_link" for action in result.actions))
 
     def test_document_clarifies_one_field_and_unknown_is_unsupported(self):
         alias = answer_question(question("жировка"), self.knowledge)
@@ -57,6 +63,23 @@ class KnowledgeTests(unittest.TestCase):
         unknown = answer_question(question("xyzzy случайные слова"), self.knowledge)
         self.assertEqual(unknown.status, "unsupported")
         self.assertEqual(unknown.sources, [])
+
+    def test_verified_generic_source_and_local_region_boundary(self):
+        for region in ("moscow", "moscow-oblast"):
+            with self.subTest(region=region):
+                generic = answer_question(question("где история оплат", territory_id=region, topic_id="payment_history"), self.knowledge)
+                self.assertEqual(generic.status, "answered")
+                self.assertEqual(generic.sources[0].id, "gis-zhkh-payment-history")
+                self.assertEqual(generic.actions[0].url, generic.sources[0].url)
+                local = answer_question(question("как передать показания", territory_id=region, topic_id="meter_readings"), self.knowledge)
+                self.assertEqual(local.status, "unsupported")
+                self.assertEqual(local.sources, [])
+                self.assertEqual(local.actions, [])
+        late = question("где история оплат", topic_id="payment_history").model_copy(update={"now": datetime(2026, 12, 28, tzinfo=timezone.utc)})
+        expired = answer_question(late, self.knowledge)
+        self.assertEqual(expired.status, "unsupported")
+        self.assertEqual(expired.sources, [])
+        self.assertEqual(expired.actions, [])
 
     def test_foreign_and_stale_sources_never_become_instruction(self):
         card = next(item for item in self.knowledge.topics if item["id"] == "meter_readings")

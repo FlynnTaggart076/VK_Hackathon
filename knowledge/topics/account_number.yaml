@@ -8,9 +8,9 @@ applicability:
   roles: []
   service_codes: []
   document_kinds: []
-answer_template: "Ищите реквизит «лицевой счёт» в своей квитанции. Если поле не распознано, проверьте оригинал вручную."
-steps: ["Откройте реквизиты своей квитанции."]
-source_ids: []
-action_templates: []
+answer_template: "Ищите реквизит «лицевой счёт» в своей квитанции. В личном кабинете гражданина ГИС ЖКХ можно открыть список подключённых лицевых счетов; если счёт не подключён, он может там не отображаться."
+steps: ["Проверьте реквизит в оригинале квитанции.", "При наличии доступа откройте в ГИС ЖКХ раздел «Подключенные ЛС к Личному кабинету»."]
+source_ids: [gis-zhkh-account-list]
+action_templates: [{id: "open-gis-account-guide", type: open_link, label: "Открыть инструкцию ГИС ЖКХ", source_id: gis-zhkh-account-list, target: null, requires: []}]
 review_after: "2026-12-31T00:00:00Z"
-content_version: "1.0"
+content_version: "1.1"
