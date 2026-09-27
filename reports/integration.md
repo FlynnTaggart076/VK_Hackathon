@@ -12,6 +12,7 @@
 | A | code `66b155d84291a3f6543f0806c00864bfeecf7397`, report `4674d4e1eab607141f5e290e7cb28135c296c15e` | UI shell/generated types/mock accepted |
 | Проверенный integration candidate | `3908481355f670d16b02cca530058213091af614` | Код после C→B→A, перед doc-only отчётом `effbccc923acb36a7ee3bb91c10bfb43348883d3` |
 | E1 dev API checkpoint B | code `1d99a19502df2b536248daad224b0f0af5e96d5a`, integration `28192753c516d3b3738ea4ac36e8af84475b309a` | Только dev endpoints для A; полный E1 не принят |
+| E1 C | code `e58a28aedddad3a8433368f19f3db45c299cd0da`, Decimal fix `d1d6426502a5ddbc0591302903b0e311036fc3d3`, docs `ed649aa3c3d4f2850f67ff3b84b5161351c72a3d`, report `bcac7f2430e04201475a94a4c4730380c126b10e` | Принят в `integration/e1` `4f653165ed97bea21572231a9f623607f16e89c5` |
 | Release/VM | нет | Развёртывание не выполнялось |
 
 ## Проверки и решение
@@ -24,10 +25,12 @@
 - B проверил существующий внешний `/team/`: HTTP 200/TLS verify 0; SSH VM дошёл до auth и получил `Permission denied (publickey)`. Приложение `/team/zhkh/` не публиковалось. MAX credentials и реальный клиент не проверены.
 - E0 принят как контрактный этап. Семь engine-функций пока `NotImplementedError`, HTTP пока спецификация, UI остальные экраны заглушки; E1–E5 не приняты.
 - На `integration/e1` координатор повторил `python -m pytest apps/backend/tests -q` с locked зависимостями из изолированного каталога: 4 passed, одно стороннее deprecation warning. Реально работают meta, demo auth, me/profile, catalog, upload, receipt и queued job; `MemoryStore` не сохраняется после рестарта, `receipt_ocr=false`, `engine_stub=true`, readiness 503. При `DATABASE_URL` этот checkpoint отказывается стартовать вместо молчаливого перехода на память.
+- E1 C: на `integration/e1` `verify_contract.py` OK, 17 unittest OK, `pip check` OK. Tesseract `v5.5.3.20260724` с `eng/rus` из отдельного `%TEMP%` каталога фактически дал `recognized`, период `2026-08`, объём `5.000000`, тариф `40.000000`, итог `200.00` на синтетических PNG и PDF без текстового слоя. Для PNG: 25 evidence, 18 `needs_review`, issue `OCR_REVIEW_REQUIRED`. Реальные квитанции и контейнерный runtime этим не проверялись.
+- B code `aafa3348450af3a005e9a30b92411779cac8e9dc` прошёл PostgreSQL 16/Alembic в первом прогоне, HTTP contract 28 операций/24 примера и `Compose v5.5.1 config -q` local/VM. Независимый повтор на непустой test DB обнаружил две зависимости теста от старого состояния: worker брал старую job, затем upload упирался в `RATE_LIMITED`. B исправляет тест изоляцией schema; код B пока не принят в интеграцию.
 
 ## Текущие задачи и блокеры
 
-Текущие задачи: `E1-A-01`, `E1-B-01`, `E1-C-01` запущены в отдельных checkout/ветках от `feb1fc7ab12201e6d5a93989d64a8374fe44a139`; task commit `4449864e24686472130b2569be04b349ed862834`. A получил интеграционный dev SHA B; C и B продолжают E1. Общий E1 ещё не принят. На Windows отсутствуют Docker CLI/WSL-дистрибутив и Tesseract; реальный PostgreSQL/Compose и image OCR пока не проверены. VM SSH отвергает ключ (`Permission denied (publickey)`), MAX credentials не доступны. Владелец доступа запрошен без передачи секретов в Git.
+Текущие задачи: `E1-A-01`, `E1-B-01` в работе; `E1-C-01` принят. A переносит сохранённые E1 изменения из старого `agent-a/e0` checkout в `agent-a/e1`; B устраняет неповторяемость PG теста. Общий E1 ещё не принят. PostgreSQL 16 и синтетический OCR локально проверены, Compose `config` проверен без daemon; VM SSH отвергает ключ (`Permission denied (publickey)`), MAX credentials не доступны. Владелец доступа запрошен без передачи секретов в Git.
 
 ## Следующий шаг
 

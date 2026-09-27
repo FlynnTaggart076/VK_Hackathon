@@ -32,7 +32,7 @@
 | E0-A-01 | A / `agent-a/e0` | accepted | `tasks/e0/agent-a.md` | `66b155d` code, `4674d4e` report; 3 теста/build прошли |
 | E1-A-01 | A / `agent-a/e1` | in_progress | `tasks/e1/agent-a.md` | Onboarding, навигация, состояния, dev API после B checkpoint |
 | E1-B-01 | B / `agent-b/e1` | in_progress; dev checkpoint accepted | `tasks/e1/agent-b.md` | `1d99a19` → `2819275`: API/auth/upload в MemoryStore, 4 теста; DB/worker/Compose ещё в работе |
-| E1-C-01 | C / `agent-c/e1` | in_progress | `tasks/e1/agent-c.md` | Пакет, математика/валидация, PDF-text и OCR первого макета |
+| E1-C-01 | C / `agent-c/e1` | accepted | `tasks/e1/agent-c.md` | code `e58a28a` + `d1d6426`, docs `ed649aa`, report `bcac7f2`; verifier/17 тестов, реальный OCR синтетических PNG и PDF-скана |
 
 ## Принятая интеграция E0
 
@@ -48,7 +48,8 @@
 - Выбор реальной пилотной территории и права на реальные обезличенные квитанции ещё не подтверждены. Для E0 используются явно синтетические данные.
 - `openapi-typescript` трактует `$defs` C как поле экземпляра BillData; A использует узкий `Omit<'$defs'>` и тест канонического fixture. При обновлении схем повторять generate/test.
 - E1 запускается локально с явными dev mock/stub; VM/MAX и реальные документы не подменяются этими проверками.
-- На координаторском Windows нет Docker CLI/WSL-дистрибутива и Tesseract. PostgreSQL/Compose и фактический OCR изображений пока не подтверждены; допустимы независимые проверки кода, но общий E1 остаётся на review до проверки runtime.
+- На координаторском Windows нет Docker daemon/WSL-дистрибутива. Отдельный PostgreSQL 16 test cluster B и автономный Docker Compose CLI доступны только для проверок БД и `config`; контейнерный build/up не подтверждён. Локальный Tesseract 5.5.3 `eng+rus` в `%TEMP%` фактически распознал синтетические PNG и PDF-скан C, но реальные квитанции и контейнерный OCR не проверены.
+- У B независимый повтор persisted PostgreSQL тестов обнаружил зависимость от старых jobs и часового лимита; исправление с изоляцией test schema в работе, поэтому полный E1-B ещё review. A начал E1 правки в старом `agent-a/e0` checkout; сохранённые изменения переносятся в `agent-a/e1` без сброса исходных файлов.
 
 ## Следующий шаг
 
