@@ -26,6 +26,7 @@ class SmokeError(Exception):
 
 def request(base: str, method: str, path: str, *, token: str | None = None,
             body: dict | None = None, upload: bytes | None = None,
+            upload_mime: str = "application/pdf",
             idempotency: bool = False) -> dict:
     headers = {"Accept": "application/json"}
     if token:
@@ -38,8 +39,9 @@ def request(base: str, method: str, path: str, *, token: str | None = None,
         headers["Content-Type"] = "application/json"
     if upload is not None:
         boundary = "zhkhsmoke" + uuid.uuid4().hex
+        suffix = "png" if upload_mime == "image/png" else "pdf"
         data = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; "
-                "filename=\"synthetic.pdf\"\r\nContent-Type: application/pdf\r\n\r\n").encode() + \
+                f"filename=\"synthetic.{suffix}\"\r\nContent-Type: {upload_mime}\r\n\r\n").encode() + \
                upload + f"\r\n--{boundary}--\r\n".encode()
         headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
     try:
@@ -80,6 +82,29 @@ def confirm_state(base: str, token: str, receipt_id: str, revision: int) -> None
         raise SmokeError("arithmetic-only boundary missing")
 
 
+def wait_for_job(base: str, token: str, job_id: str) -> None:
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:
+        job = request(base, "GET", f"/api/v1/jobs/{job_id}", token=token)
+        if job["state"] == "succeeded":
+            return
+        if job["state"] == "failed":
+            raise SmokeError(f"worker failed: {job['error']['code'] if job['error'] else 'UNKNOWN'}")
+        time.sleep(1)
+    raise SmokeError("worker timeout")
+
+
+def check_ocr_state(base: str, token: str, receipt_id: str) -> None:
+    receipt = request(base, "GET", f"/api/v1/receipts/{receipt_id}", token=token)
+    if receipt["status"] != "needs_review" or receipt["extraction_outcome"] != "recognized" or \
+            receipt["bill_data"]["document_total_due"] != "200.00":
+        raise SmokeError("synthetic PNG OCR result is not recognized")
+    if not any(item["source"] == "ocr" and item["needs_review"] for item in receipt["field_evidence"]):
+        raise SmokeError("OCR review evidence missing")
+    if not any(item["code"] == "OCR_REVIEW_REQUIRED" for item in receipt["issues"]):
+        raise SmokeError("OCR review warning missing")
+
+
 def start(base: str, token: str, state_path: Path) -> None:
     meta = request(base, "GET", "/api/v1/meta")
     if meta["features"]["engine_stub"] or not meta["features"]["receipt_ocr"]:
@@ -92,16 +117,7 @@ def start(base: str, token: str, state_path: Path) -> None:
     queued = request(base, "POST", "/api/v1/receipts", token=token,
                      upload=fixture.read_bytes(), idempotency=True)
     receipt_id, job_id = queued["receipt"]["id"], queued["job_id"]
-    deadline = time.monotonic() + 120
-    while time.monotonic() < deadline:
-        job = request(base, "GET", f"/api/v1/jobs/{job_id}", token=token)
-        if job["state"] == "succeeded":
-            break
-        if job["state"] == "failed":
-            raise SmokeError(f"worker failed: {job['error']['code'] if job['error'] else 'UNKNOWN'}")
-        time.sleep(1)
-    else:
-        raise SmokeError("worker timeout")
+    wait_for_job(base, token, job_id)
     receipt = request(base, "GET", f"/api/v1/receipts/{receipt_id}", token=token)
     if receipt["extraction_outcome"] != "recognized" or receipt["bill_data"]["document_total_due"] != "200.00":
         raise SmokeError("bytes extraction did not recognize the synthetic bill")
@@ -114,8 +130,15 @@ def start(base: str, token: str, state_path: Path) -> None:
                         body={"expected_revision": edited["revision"],
                               "acknowledged_warning_codes": warnings})
     confirm_state(base, token, receipt_id, confirmed["revision"])
+    png = Path(__file__).resolve().parents[1] / "fixtures" / "receipts" / "demo-bill-2026-08.png"
+    ocr_queued = request(base, "POST", "/api/v1/receipts", token=token,
+                         upload=png.read_bytes(), upload_mime="image/png", idempotency=True)
+    ocr_receipt_id = ocr_queued["receipt"]["id"]
+    wait_for_job(base, token, ocr_queued["job_id"])
+    check_ocr_state(base, token, ocr_receipt_id)
     temporary = state_path.with_name(state_path.name + ".tmp")
-    temporary.write_text(json.dumps({"receipt_id": receipt_id, "revision": confirmed["revision"]}), encoding="utf-8")
+    temporary.write_text(json.dumps({"receipt_id": receipt_id, "revision": confirmed["revision"],
+                                     "ocr_receipt_id": ocr_receipt_id}), encoding="utf-8")
     temporary.replace(state_path)
 
 
@@ -136,6 +159,7 @@ def main() -> int:
         else:
             state = json.loads(args.state.read_text(encoding="utf-8"))
             confirm_state(base, token, state["receipt_id"], state["revision"])
+            check_ocr_state(base, token, state["ocr_receipt_id"])
     except (SmokeError, OSError, KeyError, ValueError) as exc:
         print(f"E2 HTTP smoke {args.phase} FAILED: {exc}", file=sys.stderr)
         return 1

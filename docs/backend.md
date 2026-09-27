@@ -90,4 +90,4 @@ docker compose --project-name <isolated> --env-file .env -f compose.yaml -f comp
 BASE_URL=http://127.0.0.1:8080/team/zhkh DEMO_ACCESS_CODE=<private> python scripts/smoke_e2_http.py verify --state /tmp/e2-smoke-state.json
 ```
 
-Скрипт передаёт синтетический PDF как multipart bytes, ждёт persisted job, проверяет OCR → edit CAS → confirm → explain, а после restart читает тот же подтверждённый результат. В state file только UUID квитанции и номер ревизии, без токена или кода. Этот сценарий не проверяет MAX и VM.
+Скрипт передаёт синтетический текстовый PDF как multipart bytes, ждёт persisted job, проверяет извлечение → edit CAS → confirm → explain. Затем загружает синтетический PNG и проверяет работу контейнерного Tesseract, `source=ocr`, `needs_review` и предупреждение `OCR_REVIEW_REQUIRED`. После restart читает обе квитанции и то же подтверждённое объяснение. В state file только UUID квитанций и номер ревизии, без токена или кода. Этот сценарий не проверяет MAX и VM.
