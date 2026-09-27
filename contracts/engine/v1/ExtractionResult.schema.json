@@ -264,15 +264,23 @@
               "minItems": 4,
               "prefixItems": [
                 {
+                  "maximum": 1,
+                  "minimum": 0,
                   "type": "number"
                 },
                 {
+                  "maximum": 1,
+                  "minimum": 0,
                   "type": "number"
                 },
                 {
+                  "maximum": 1,
+                  "minimum": 0,
                   "type": "number"
                 },
                 {
+                  "maximum": 1,
+                  "minimum": 0,
                   "type": "number"
                 }
               ],

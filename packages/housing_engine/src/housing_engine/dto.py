@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, WithJsonSchema, field_validator, model_validator
 
 
 class DTO(BaseModel):
@@ -18,6 +18,23 @@ NonNegativeMoney = Annotated[str, StringConstraints(pattern=r"^(?:0|[1-9][0-9]{0
 DecimalValue = Annotated[str, StringConstraints(pattern=r"^-?(?:0|[1-9][0-9]{0,8})(?:\.[0-9]{1,6})?$")]
 Period = Annotated[str, StringConstraints(pattern=r"^[0-9]{4}-(?:0[1-9]|1[0-2])$")]
 Sha256 = Annotated[str, StringConstraints(pattern=r"^[a-f0-9]{64}$")]
+HttpsUrl = Annotated[str, StringConstraints(pattern=r"^https://[^\s]+$")]
+
+
+def utc_timestamp(value: datetime) -> datetime:
+    if value.tzinfo is None or value.utcoffset() != timedelta(0):
+        raise ValueError("Timestamp must be UTC")
+    return value
+
+
+UtcTimestamp = Annotated[
+    datetime,
+    AfterValidator(utc_timestamp),
+    WithJsonSchema({
+        "type": "string", "format": "date-time",
+        "pattern": r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|\+00:00)$",
+    }),
+]
 
 ServiceCode = Literal["cold_water", "hot_water", "drainage", "electricity", "heating", "maintenance", "capital_repair", "waste", "other"]
 Unit = Literal["m3", "kwh", "gcal", "m2", "month", "person", "other"]
@@ -78,7 +95,7 @@ class FieldEvidence(DTO):
     path: str = Field(pattern=r"^/(?:[^~/]|~[01])+(?:/(?:[^~/]|~[01])+)*$")
     source: Literal["pdf_text", "ocr", "manual", "template_default"]
     page_number: int | None = Field(ge=1)
-    bbox: tuple[float, float, float, float] | None
+    bbox: tuple[Annotated[float, Field(ge=0, le=1)], Annotated[float, Field(ge=0, le=1)], Annotated[float, Field(ge=0, le=1)], Annotated[float, Field(ge=0, le=1)]] | None
     source_text: str | None = Field(max_length=500)
     needs_review: bool
     reason: str | None = Field(max_length=500)
@@ -137,9 +154,9 @@ class ValidationResult(DTO):
 class ExplainRequest(DTO):
     receipt_ref: ReceiptRef
     bill_data: BillData
-    confirmed_at: datetime
+    confirmed_at: UtcTimestamp
     territory_id: str | None
-    now: datetime
+    now: UtcTimestamp
 
 
 class ReconciliationCheck(DTO):
@@ -169,10 +186,10 @@ class BalanceComponent(DTO):
 class SourceRef(DTO):
     id: str
     title: str
-    url: str | None
+    url: HttpsUrl | None
     territory_id: str | None
-    verified_at: datetime
-    review_after: datetime
+    verified_at: UtcTimestamp
+    review_after: UtcTimestamp
     content_version: str
     is_synthetic: bool
 
@@ -181,13 +198,23 @@ class NextAction(DTO):
     id: str
     type: Literal["open_link", "prepare_draft", "select_topic", "navigate"]
     label: str
-    url: str | None
+    url: HttpsUrl | None
     topic_id: str | None
     organization_id: str | None
     source_id: str | None
     target: Literal["receipt_upload", "receipt_history", "receipt_detail", "comparison"] | None
     receipt_ref: ReceiptRef | None
     requires: list[str]
+
+    @model_validator(mode="after")
+    def valid_destination(self):
+        if (self.url is not None) != (self.type == "open_link"):
+            raise ValueError("Only open_link has a URL, and it must have one")
+        if (self.target is not None) != (self.type == "navigate"):
+            raise ValueError("Only navigate has a target, and it must have one")
+        if self.target == "receipt_detail" and self.receipt_ref is None:
+            raise ValueError("receipt_detail requires receipt_ref")
+        return self
 
 
 class ReceiptExplanation(DTO):
@@ -212,7 +239,7 @@ class ReceiptExplanation(DTO):
 class ConfirmedBill(DTO):
     receipt_ref: ReceiptRef
     bill_data: BillData
-    confirmed_at: datetime
+    confirmed_at: UtcTimestamp
 
 
 class CompareRequest(DTO):
@@ -220,7 +247,7 @@ class CompareRequest(DTO):
     right: ConfirmedBill
     identity_acknowledged: bool
     territory_id: str | None
-    now: datetime
+    now: UtcTimestamp
 
 
 class ComparedLine(DTO):
@@ -277,7 +304,7 @@ class QuestionRequest(DTO):
     question: str = Field(min_length=1, max_length=2000)
     context: QuestionContext
     receipt: ExplainRequest | None
-    now: datetime
+    now: UtcTimestamp
 
 
 class ClarificationOption(DTO):
@@ -312,7 +339,7 @@ class DraftRequest(DTO):
     receipts: list[ExplainRequest] = Field(max_length=2)
     line_id: UUID | None
     user_question: str = Field(max_length=2000)
-    now: datetime
+    now: UtcTimestamp
 
 
 class Recipient(DTO):

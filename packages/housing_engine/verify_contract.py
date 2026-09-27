@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, FormatChecker
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,7 +27,8 @@ MODELS = {
     )
 }
 SCHEMAS = ROOT / "contracts" / "engine" / "v1"
-FIXTURES = ROOT / "fixtures" / "receipts"
+FIXTURES = Path(os.environ.get("ENGINE_FIXTURES_DIR", ROOT / "fixtures" / "receipts"))
+KNOWLEDGE = ROOT / "knowledge"
 
 
 def money(value: Decimal) -> str:
@@ -85,7 +88,22 @@ def verify() -> None:
         "delta_current_charges": "70.00", "delta_total_due": "70.00",
         "quantity_effect": "40.00", "tariff_effect": "30.00", "rounding_effect": "0.00",
     }
+    for name in ("manifest", "sources", "territories", "organizations", "glossary", "aliases"):
+        schema = json.loads((SCHEMAS / "knowledge" / f"{name}.schema.json").read_text(encoding="utf-8"))
+        Draft202012Validator.check_schema(schema)
+        data = yaml.safe_load((KNOWLEDGE / f"{name}.yaml").read_text(encoding="utf-8"))
+        Draft202012Validator(schema, format_checker=FormatChecker()).validate(data)
+    topic_schema = json.loads((SCHEMAS / "knowledge" / "topic.schema.json").read_text(encoding="utf-8"))
+    Draft202012Validator.check_schema(topic_schema)
+    for file in (KNOWLEDGE / "topics").glob("*.yaml") if (KNOWLEDGE / "topics").exists() else ():
+        Draft202012Validator(topic_schema, format_checker=FormatChecker()).validate(yaml.safe_load(file.read_text(encoding="utf-8")))
+    manifest = yaml.safe_load((KNOWLEDGE / "manifest.yaml").read_text(encoding="utf-8"))
+    territories = yaml.safe_load((KNOWLEDGE / "territories.yaml").read_text(encoding="utf-8"))["territories"]
+    territory_ids = {item["id"] for item in territories}
+    assert territory_ids == set(manifest["territory_ids"])
+    assert manifest["pilot_territory_id"] is None or manifest["pilot_territory_id"] in territory_ids
     print("Engine v1 schemas and synthetic 200 -> 270 fixtures: OK")
+    print("Knowledge catalog structure: OK; real pilot territory and verified sources pending")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["organizations"],
+  "properties": {
+    "organizations": {"type": "array", "items": {"type": "object", "additionalProperties": false,
+      "required": ["id", "name", "territory_id", "service_codes", "is_synthetic", "source_id", "channels"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1},
+        "territory_id": {"type": "string", "minLength": 1},
+        "service_codes": {"type": "array", "uniqueItems": true, "items": {"enum": ["cold_water", "hot_water", "drainage", "electricity", "heating", "maintenance", "capital_repair", "waste", "other"]}},
+        "is_synthetic": {"type": "boolean"},
+        "source_id": {"type": "string", "minLength": 1},
+        "channels": {"type": "array", "items": {"type": "object", "additionalProperties": false,
+          "required": ["kind", "url", "source_id", "verified_at"],
+          "properties": {
+            "kind": {"const": "https_page"},
+            "url": {"type": "string", "pattern": "^https://[^\\s]+$"},
+            "source_id": {"type": "string", "minLength": 1},
+            "verified_at": {"type": "string", "format": "date-time"}
+          }
+        }}
+      }
+    }}
+  }
+}
