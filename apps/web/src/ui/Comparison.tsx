@@ -59,7 +59,7 @@ export function Comparison() {
       </>}
       {result.issues.map((issue, index) => <p className="review-warning" key={`${issue.code}-${index}`}>{issue.message}</p>)}
       <ActionList actions={result.actions} />
-      <div className="actions"><Link to={`/draft?receipt=${encodeURIComponent(result.newer.id)}`}>Подготовить черновик</Link><Link to="/assistant">Задать вопрос</Link></div>
+      <div className="actions"><Link to={`/draft?receipt=${encodeURIComponent(result.newer.id)}`}>Подготовить черновик</Link><Link to={`/assistant?receipt=${encodeURIComponent(result.newer.id)}`}>Задать вопрос по документу</Link></div>
     </article>}
   </section>;
 }

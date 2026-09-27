@@ -58,5 +58,50 @@ try {
   await page.getByLabel('Поздний документ').locator('option').filter({ hasText: '2026-09' }).waitFor({ timeout: 15000 });
   const options = await page.getByLabel('Поздний документ').locator('option').allTextContents();
   if (!options.some((label) => label.includes('2026-09'))) throw new Error('History did not survive reload');
-  process.stdout.write(JSON.stringify({ mode: 'real E3 dev API', flow: 'demo-import-two-confirmed-compare-reload', comparison: '70/40/30', layout }) + '\n');
+  await page.getByRole('link', { name: 'Помощник' }).click();
+  await page.getByLabel('Тема').selectOption('account_number');
+  await page.getByLabel('Ваш вопрос').fill('Где найти лицевой счёт?');
+  await page.getByRole('button', { name: 'Спросить' }).click();
+  await page.getByRole('heading', { name: 'Ответ', exact: true }).waitFor();
+  await page.getByText('ГИС ЖКХ: Как перейти к списку лицевых счетов').waitFor();
+  const official = page.getByRole('link', { name: 'Открыть инструкцию ГИС ЖКХ' });
+  if (!(await official.getAttribute('href'))?.startsWith('https://')) throw new Error('Official source lacks HTTPS link');
+  await page.getByLabel('Тема').selectOption('');
+  await page.getByLabel('Ваш вопрос').fill('xyzzy неизвестное');
+  await page.getByRole('button', { name: 'Спросить' }).click();
+  await page.getByRole('heading', { name: 'Пока нет проверенного ответа' }).waitFor();
+
+  await page.getByRole('link', { name: 'История' }).click();
+  await page.getByRole('link', { name: 'Сравнить квитанции' }).click();
+  await page.getByLabel('Ранний документ').selectOption(older);
+  await page.getByLabel('Поздний документ').selectOption(newer);
+  await page.getByRole('button', { name: 'Сравнить', exact: true }).click();
+  await page.getByRole('link', { name: 'Подготовить черновик' }).waitFor();
+  await page.getByRole('link', { name: 'Подготовить черновик' }).click();
+  await page.getByLabel('Тема').selectOption('request_breakdown');
+  await page.getByRole('button', { name: 'Подготовить черновик' }).click();
+  await page.getByRole('heading', { name: 'Проверьте текст' }).waitFor();
+  if (await page.getByRole('button', { name: /отправить/i }).count()) throw new Error('Unexpected send button');
+  if (!(await page.getByLabel('Текст черновика').inputValue()).includes('270.00')) throw new Error('Draft lacks confirmed amount');
+  await page.getByLabel('Текст черновика').fill('Прошу пояснить начисление по моей квитанции.');
+  await page.getByRole('button', { name: 'Сохранить изменения' }).click();
+  await page.getByRole('status').filter({ hasText: 'Изменения сохранены' }).waitFor();
+  await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true,
+    value: { writeText: async (value) => { window.__e3CopiedText = value; } } }));
+  await page.getByRole('button', { name: 'Копировать текст' }).click();
+  await page.getByRole('status').filter({ hasText: 'Текст скопирован' }).waitFor();
+  if (await page.evaluate(() => window.__e3CopiedText) !== 'Прошу пояснить начисление по моей квитанции.') throw new Error('Copied draft differs from saved text');
+  await page.evaluate(async (id) => {
+    const { api } = await import('/team/zhkh/src/api/client.ts');
+    const receipt = await api.receipt(id);
+    await api.editReceipt(id, { expected_revision: receipt.revision,
+      bill_data: { ...receipt.bill_data, issuer_name: `${receipt.bill_data.issuer_name ?? 'Организация'} (исправлено)` } });
+  }, newer);
+  await page.getByRole('button', { name: 'Копировать текст' }).click();
+  await page.getByText('Черновик устарел').waitFor();
+  await page.getByRole('status').filter({ hasText: 'перед копированием' }).waitFor();
+  await page.getByRole('checkbox', { name: 'Я проверил устаревшие факты перед копированием' }).check();
+  await page.getByRole('button', { name: 'Копировать текст' }).click();
+  await page.getByRole('status').filter({ hasText: 'Текст скопирован' }).waitFor();
+  process.stdout.write(JSON.stringify({ mode: 'real E3 dev API', flow: 'demo-import-confirm-compare-FAQ-source-unknown-draft-copy-stale-reload', comparison: '70/40/30', layout }) + '\n');
 } finally { await browser.close(); }
