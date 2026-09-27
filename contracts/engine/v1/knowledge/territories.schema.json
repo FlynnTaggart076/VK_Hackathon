@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["territories"],
+  "properties": {
+    "territories": {"type": "array", "items": {"type": "object", "additionalProperties": false,
+      "required": ["id", "label", "is_synthetic", "source_id"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "label": {"type": "string", "minLength": 1},
+        "is_synthetic": {"type": "boolean"},
+        "source_id": {"type": ["string", "null"]}
+      }
+    }}
+  }
+}

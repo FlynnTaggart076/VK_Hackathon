@@ -1,0 +1,24 @@
+{
+  "api_version": "1.0",
+  "engine_version": null,
+  "knowledge_version": null,
+  "mode": "dev",
+  "limits": {
+    "upload_max_bytes": 10485760,
+    "pdf_max_pages": 3,
+    "receipt_retention_days": 30,
+    "source_retention_days": 7
+  },
+  "features": {
+    "voice": false,
+    "external_submission": false,
+    "receipt_ocr": false,
+    "comparison": false,
+    "engine_stub": true,
+    "demo_auth": false
+  },
+  "privacy_notice": {
+    "version": "1.0",
+    "text": "Учебный стенд: исходники хранятся 7 дней, данные квитанций — 30 дней."
+  }
+}

@@ -1,0 +1,5 @@
+version: "0.0.0-e0-contract-only"
+built_at: "2026-09-27T10:17:03Z"
+territory_ids:
+  - demo-territory
+pilot_territory_id: null

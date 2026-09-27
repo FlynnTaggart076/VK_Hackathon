@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "built_at", "territory_ids", "pilot_territory_id"],
+  "properties": {
+    "version": {"type": "string", "minLength": 1},
+    "built_at": {"type": "string", "format": "date-time"},
+    "territory_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "pilot_territory_id": {"type": ["string", "null"]}
+  }
+}

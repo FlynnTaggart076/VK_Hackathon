@@ -1,0 +1,577 @@
+{
+  "$defs": {
+    "BalanceComponent": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "pattern": "^-?(?:0|[1-9][0-9]{0,8})\\.[0-9]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Amount"
+        }
+      },
+      "required": [
+        "code",
+        "label",
+        "amount"
+      ],
+      "title": "BalanceComponent",
+      "type": "object"
+    },
+    "ExplanationLine": {
+      "additionalProperties": false,
+      "properties": {
+        "line_id": {
+          "format": "uuid",
+          "title": "Line Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "explanation": {
+          "title": "Explanation",
+          "type": "string"
+        },
+        "formula_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Formula Text"
+        },
+        "calculated_amount": {
+          "anyOf": [
+            {
+              "pattern": "^-?(?:0|[1-9][0-9]{0,8})\\.[0-9]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Calculated Amount"
+        },
+        "difference": {
+          "anyOf": [
+            {
+              "pattern": "^-?(?:0|[1-9][0-9]{0,8})\\.[0-9]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Difference"
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/Issue"
+          },
+          "title": "Issues",
+          "type": "array"
+        }
+      },
+      "required": [
+        "line_id",
+        "title",
+        "explanation",
+        "formula_text",
+        "calculated_amount",
+        "difference",
+        "issues"
+      ],
+      "title": "ExplanationLine",
+      "type": "object"
+    },
+    "Issue": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "^[A-Z][A-Z0-9_]*$",
+          "title": "Code",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warning",
+            "error"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Path"
+        },
+        "message": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "path",
+        "message"
+      ],
+      "title": "Issue",
+      "type": "object"
+    },
+    "NextAction": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "open_link",
+            "prepare_draft",
+            "select_topic",
+            "navigate"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "pattern": "^https://[^\\s]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Url"
+        },
+        "topic_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Topic Id"
+        },
+        "organization_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Organization Id"
+        },
+        "source_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Id"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "enum": [
+                "receipt_upload",
+                "receipt_history",
+                "receipt_detail",
+                "comparison"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target"
+        },
+        "receipt_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReceiptRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requires": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Requires",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "label",
+        "url",
+        "topic_id",
+        "organization_id",
+        "source_id",
+        "target",
+        "receipt_ref",
+        "requires"
+      ],
+      "title": "NextAction",
+      "type": "object"
+    },
+    "ReceiptRef": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "revision"
+      ],
+      "title": "ReceiptRef",
+      "type": "object"
+    },
+    "ReconciliationCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "enum": [
+            "document_current_charges",
+            "document_closing_balance",
+            "document_total_due"
+          ],
+          "title": "Field",
+          "type": "string"
+        },
+        "document_value": {
+          "anyOf": [
+            {
+              "pattern": "^-?(?:0|[1-9][0-9]{0,8})\\.[0-9]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Document Value"
+        },
+        "calculated_value": {
+          "anyOf": [
+            {
+              "pattern": "^-?(?:0|[1-9][0-9]{0,8})\\.[0-9]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Calculated Value"
+        },
+        "difference": {
+          "anyOf": [
+            {
+              "pattern": "^-?(?:0|[1-9][0-9]{0,8})\\.[0-9]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Difference"
+        },
+        "status": {
+          "enum": [
+            "matched",
+            "mismatch",
+            "incomplete",
+            "unsupported"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "document_value",
+        "calculated_value",
+        "difference",
+        "status"
+      ],
+      "title": "ReconciliationCheck",
+      "type": "object"
+    },
+    "SourceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "pattern": "^https://[^\\s]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Url"
+        },
+        "territory_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Territory Id"
+        },
+        "verified_at": {
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|\\+00:00)$",
+          "title": "Verified At",
+          "type": "string"
+        },
+        "review_after": {
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|\\+00:00)$",
+          "title": "Review After",
+          "type": "string"
+        },
+        "content_version": {
+          "title": "Content Version",
+          "type": "string"
+        },
+        "is_synthetic": {
+          "title": "Is Synthetic",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "url",
+        "territory_id",
+        "verified_at",
+        "review_after",
+        "content_version",
+        "is_synthetic"
+      ],
+      "title": "SourceRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "receipt_ref": {
+      "$ref": "#/$defs/ReceiptRef"
+    },
+    "engine_version": {
+      "title": "Engine Version",
+      "type": "string"
+    },
+    "knowledge_version": {
+      "title": "Knowledge Version",
+      "type": "string"
+    },
+    "summary": {
+      "title": "Summary",
+      "type": "string"
+    },
+    "current_charges": {
+      "anyOf": [
+        {
+          "pattern": "^-?(?:0|[1-9][0-9]{0,8})\\.[0-9]{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Current Charges"
+    },
+    "document_total_due": {
+      "anyOf": [
+        {
+          "pattern": "^-?(?:0|[1-9][0-9]{0,8})\\.[0-9]{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Document Total Due"
+    },
+    "calculated_closing_balance": {
+      "anyOf": [
+        {
+          "pattern": "^-?(?:0|[1-9][0-9]{0,8})\\.[0-9]{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Calculated Closing Balance"
+    },
+    "calculated_total_due": {
+      "anyOf": [
+        {
+          "pattern": "^-?(?:0|[1-9][0-9]{0,8})\\.[0-9]{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Calculated Total Due"
+    },
+    "unexplained_difference": {
+      "anyOf": [
+        {
+          "pattern": "^-?(?:0|[1-9][0-9]{0,8})\\.[0-9]{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Unexplained Difference"
+    },
+    "reconciliation_checks": {
+      "items": {
+        "$ref": "#/$defs/ReconciliationCheck"
+      },
+      "title": "Reconciliation Checks",
+      "type": "array"
+    },
+    "reconciliation_status": {
+      "enum": [
+        "matched",
+        "mismatch",
+        "incomplete",
+        "unsupported"
+      ],
+      "title": "Reconciliation Status",
+      "type": "string"
+    },
+    "lines": {
+      "items": {
+        "$ref": "#/$defs/ExplanationLine"
+      },
+      "title": "Lines",
+      "type": "array"
+    },
+    "balance_components": {
+      "items": {
+        "$ref": "#/$defs/BalanceComponent"
+      },
+      "title": "Balance Components",
+      "type": "array"
+    },
+    "issues": {
+      "items": {
+        "$ref": "#/$defs/Issue"
+      },
+      "title": "Issues",
+      "type": "array"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/SourceRef"
+      },
+      "title": "Sources",
+      "type": "array"
+    },
+    "actions": {
+      "items": {
+        "$ref": "#/$defs/NextAction"
+      },
+      "title": "Actions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "receipt_ref",
+    "engine_version",
+    "knowledge_version",
+    "summary",
+    "current_charges",
+    "document_total_due",
+    "calculated_closing_balance",
+    "calculated_total_due",
+    "unexplained_difference",
+    "reconciliation_checks",
+    "reconciliation_status",
+    "lines",
+    "balance_components",
+    "issues",
+    "sources",
+    "actions"
+  ],
+  "title": "ReceiptExplanation",
+  "type": "object"
+}

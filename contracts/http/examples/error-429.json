@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": "QUEUE_LIMIT_REACHED",
+    "message": "Очередь занята, повторите позже.",
+    "retryable": true,
+    "fields": [],
+    "details": {}
+  },
+  "request_id": "b1399c8c-d010-4e0c-b75f-bd312a647fea"
+}

@@ -1,0 +1,62 @@
+{
+  "id": "10000000-0000-4000-8000-000000000001",
+  "status": "confirmed",
+  "revision": 3,
+  "created_at": "2026-09-27T10:00:00Z",
+  "updated_at": "2026-09-27T10:05:00Z",
+  "dataset_kind": "synthetic",
+  "extraction_outcome": "recognized",
+  "bill_data": {
+    "schema_version": "1.0",
+    "period": "2026-08",
+    "currency": "RUB",
+    "issuer_name": "Учебная управляющая организация",
+    "provider_id": "demo-provider",
+    "account_number": "000123",
+    "address_text": "Учебный город, Примерная улица, дом 1, квартира 1",
+    "template_id": "demo-bill-v1",
+    "template_version": "1.0",
+    "services": [
+      {
+        "line_id": "20000000-0000-4000-8000-000000000001",
+        "raw_name": "Холодная вода",
+        "service_code": "cold_water",
+        "scope": "individual",
+        "unit": "m3",
+        "unit_label": null,
+        "quantity": "5.000000",
+        "tariff": "40.000000",
+        "charge_amount": "200.00",
+        "supplier_key": "demo-provider",
+        "segment_key": null,
+        "calculation_kind": "simple_product"
+      }
+    ],
+    "adjustments": [],
+    "settlement": {
+      "formula_kind": "signed_balance_v1",
+      "opening_balance": "0.00",
+      "payments_credited": "0.00",
+      "penalties": "0.00",
+      "other_account_changes": "0.00",
+      "document_closing_balance": "200.00"
+    },
+    "document_current_charges": "200.00",
+    "document_total_due": "200.00"
+  },
+  "field_evidence": [],
+  "issues": [],
+  "document": {
+    "available": true,
+    "mime_type": "application/pdf",
+    "page_count": 1,
+    "expires_at": "2026-10-04T10:00:00Z"
+  },
+  "job": {
+    "id": "30000000-0000-4000-8000-000000000001",
+    "state": "succeeded",
+    "stage": null
+  },
+  "confirmed_at": "2026-09-27T10:05:00Z",
+  "engine_version": "1.0.0-e0"
+}

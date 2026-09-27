@@ -1,0 +1,5 @@
+territories:
+  - id: demo-territory
+    label: Учебная территория
+    is_synthetic: true
+    source_id: null
