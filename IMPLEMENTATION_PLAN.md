@@ -59,3 +59,10 @@
 ## Следующий шаг
 
 Получить B финальные negative/retention тесты и HTTP smoke script; повторить полный bytes→OCR→edit→confirm→explain и restart на PG17 CI. Проверить A read-only формулу и живой браузерный E2 flow с тем же API; вернуть дефекты владельцам. E2 не принимать без полного сценария; VM/MAX остаются внешними проверками будущих этапов.
+## E2 live verification checkpoint (2026-09-27)
+
+- `integration/e2` pushed candidate `b8438db9cc3a975f6299df0b9c19cc4ae8353ad9`; `main` remains at accepted E1 code. C E2 is accepted; A and B E2 remain in review.
+- [Compose smoke run 36322770140](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36322770140) succeeded on PostgreSQL 17 and real engine containers. The isolated CI scenario sent synthetic PDF bytes through API/worker, edited, confirmed, explained, restarted API/worker and read the persisted result. It also sent synthetic PNG bytes and asserted OCR evidence with `needs_review` and `OCR_REVIEW_REQUIRED` before and after restart. This is container evidence on synthetic documents, not VM/MAX or real resident receipts.
+- Coordinator independently ran backend tests against isolated PostgreSQL 16 (`17 passed, 1 skipped`), engine contract verifier and 25 unit tests, fixture manifest SHA checks, frontend six tests/build and HTTP contract verifier. A's live browser flow against the Compose stack is still pending.
+- Open E2 review defects: B must support confirmed receipt → new needs_review revision (AT-12), expose all validation warning codes for confirmation in ReceiptView, and implement the §12.3 child-process OCR deadline/heartbeat behavior. A must make all server-owned template/calculation fields read-only and verify the live 360 px browser flow. Owners have received concrete corrections.
+- No release SHA or VM deployment exists. VM SSH authentication still returns `Permission denied (publickey)`; MAX credentials and actual MAX Web/mobile acceptance remain unavailable. Continue independent E2 verification without treating the external blockers as E2 acceptance.
