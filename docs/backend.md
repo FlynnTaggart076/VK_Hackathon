@@ -91,3 +91,27 @@ BASE_URL=http://127.0.0.1:8080/team/zhkh DEMO_ACCESS_CODE=<private> python scrip
 ```
 
 Скрипт передаёт синтетический текстовый PDF как multipart bytes, ждёт persisted job, проверяет извлечение → edit CAS → confirm → explain. Затем загружает синтетический PNG и проверяет работу контейнерного Tesseract, `source=ocr`, `needs_review` и предупреждение `OCR_REVIEW_REQUIRED`. После restart читает обе квитанции и то же подтверждённое объяснение. В state file только UUID квитанций и номер ревизии, без токена или кода. Этот сценарий не проверяет MAX и VM.
+
+## E3 MAX webhook checkpoint (2026-09-27)
+
+`/api/v1/auth/max` verifies signed initData and exchanges it for a revocable
+server session. The validation follows the [official MAX WebApp algorithm](https://dev.max.ru/docs/webapps/validation):
+the HMAC key is derived with `WebAppData`, then the decoded sorted parameter
+string is signed. `auth_date` is limited to five minutes with 30 seconds of
+future skew. Raw initData and tokens are never logged.
+
+`POST /integrations/max/webhook` compares `X-Max-Bot-Api-Secret` in constant
+time, normalizes a bounded update, commits the minimal payload to
+`webhook_inbox`, and only then returns 200. The worker performs one inbox or
+outbox unit per idle cycle and during the OCR child tick. Replays share a
+deduplication key. Direct `/start` and `/help` have text responses; attachments
+are directed to mini-app upload. Text FAQ replies are a temporary checkpoint
+until the E3 knowledge adapter is connected. Group content is not stored or
+answered. The outbox marks unknown network outcomes `uncertain` and does not
+automatically resend them. All inbox and outbox records expire within 24 hours.
+
+Outbound messages use the [official MAX POST /messages](https://dev.max.ru/docs-api/methods/POST/messages)
+with `Authorization` header and `user_id` query parameter; redirects are
+rejected to avoid forwarding credentials. The [Update object](https://dev.max.ru/docs-api/objects/Update)
+describes the accepted envelope. These are synthetic contract checks only;
+live MAX delivery requires credentials and E4 acceptance.
