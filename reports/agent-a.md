@@ -1,4 +1,28 @@
-﻿# Отчёт агента A — E2-A-01
+﻿# Отчёт агента A — E3-A-01
+
+Статус A: review, frontend browser gate прошёл; E3 в целом ожидает независимой проверки качества FAQ. Окончательная приёмка E3 у координатора. Ветка `agent-a/e3`, `BASE_SHA` `b33ed1e0493d76dfd7051a141e2075c698f8e967`, `TASK_COMMIT` `c11b5235319c12ecb18a6c4ca05c35a54f5c0560`, контракт engine/HTTP 1.0.
+
+Ключевые pushed SHA A: ранний mock/UI `b10026f6aabe38373124068934c7912700d97467`; demo import/history `2970ea7c26bcdbf7e59819256a862bd7d471db76`; real comparison browser `3abc57ffe88c406ca3622a214708dcb7bf8f97bf`; E2 selector fix `1b012d63829e859e7e5ffd0b936e806641da9888`; real FAQ/draft UI `d6db7886f8de480b12178ccf6f40207bfbdb57d7`; receipt-context FAQ and extended real browser `46439b965bd16024c4d97e895112b9d67b91aa91`; attached option fix `7142b8c4ca05097481bd8dc5f16e24f5a0ebd7bb`; stale copy assertion fix `9a1ecf90c1f7be1a4ec4b3b6a8c711500c086c42`; frontend docs `1e551045c4d993133a9d4d81c3737f0ef6ce0f00`.
+
+## E3 результат
+
+- `/history` читает серверную pagination и provenance, возобновляет job через `GET /receipts/{id}`, сообщает об истечении исходника при 410, удаляет только после подтверждения. `/comparison` выбирает две текущие confirmed ревизии и отображает серверные разницы 70/40/30, не вычисляя деньги в браузере; identity acknowledgement требуется до итогов, partial/ambiguous остаются явно неполными.
+- `/assistant` использует 15 тем и территории из каталога, текущую роль профиля и подтверждённую ревизию квитанции при вопросе по документу; показывает уточнение, проверенные источники с территорией/сроком, unsupported и безопасные действия. Проверенные местные каналы без данных организации не обещаются.
+- `/draft` показывает факты confirmed строки, получателя/actions, редактирование с CAS, copy-only и отдельное предупреждение при stale. Отправки обращения нет. Учебные образцы UI берёт из `catalog.demo_receipts` через защищённый `POST /receipts/demo`; PDF не размещены в `apps/web/public`.
+
+## E3 проверки
+
+Локально: Windows PowerShell, Node 22.23.3 в `C:\Users\Stepan\AppData\Local\Temp\codex-node-v22.23.3\node-v22.23.3-win-x64`, Chrome headless. Из `apps/web`: `npm ci` (133 packages), `npm test` (13/13), `npm run build` (успех), `node --check scripts/e3-real-flow.mjs` (успех). Production `dist` проверен поиском `mockServiceWorker|mock-only|demoAuth|VITE_ENABLE_MOCK`: совпадений нет.
+
+`npm run dev:mock -- --port 5174` и `E3_MOCK_URL=http://127.0.0.1:5174/team/zhkh/`, `CHROME_PATH=<локальный Chrome>`, `npm run test:browser:e3:mock`: Chrome 360×800 прошёл история → compare 70/40/30 → черновик → уточнение «справка» → unknown, `innerWidth=360`, `scrollWidth=360`. Это MSW с синтетическими данными, отдельно от real API.
+
+Linux Compose PG17: [GitHub Actions E3 CI #36329625261](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36329625261) на `integration/e3` SHA `065c8e0575a0ad97b83a6202c7a1988032816a6e` — **SUCCESS**. Координатор запустил `npm run test:browser:e3:real` с `BASE_URL=http://127.0.0.1:5173/team/zhkh/`, локальным `DEMO_ACCESS_CODE` и `CHROME_PATH` из CI env; Vite `dev:real` проксировал к Compose web/API/worker/PG17. Проверены два demo import, confirm, серверные 70/40/30, reload, общий источник ГИС ЖКХ, unknown, черновик/save/copy-only/stale после изменения ревизии и явное подтверждение устаревших фактов, 360 px. Тот же CI проверил E2/E3 HTTP, миграции/readiness, offline MAX webhook и PG replay. Это real dev HTTP/worker/PG17 на синтетических данных, не VM/MAX live.
+
+Ограничения: локального Docker daemon нет; VM/MAX Web/mobile и реальные квитанции не проверялись. Независимый FAQ quality gate координатора пока 49/60 на отдельном наборе; E3 нельзя принять до его завершения. `apps/web/public/mockServiceWorker.js` имеет CRLF-only локальный статус, в commits не включён; прежние worktrees сохранены. Следующий шаг — передать отчёт координатору; C/B исправляют и перепроверяют FAQ quality, A отвечает только на конкретные frontend дефекты.
+
+---
+
+# Отчёт агента A — E2-A-01
 
 - Статус: review; живой браузерный E2 прогон в CI успешен, окончательная приёмка этапа остаётся у координатора.
 - Ветка `agent-a/e2`; `BASE_SHA` `dae14d9a838154b72e4cf122881b190032ae0a74`; `TASK_COMMIT` `f613288e5b0a9bc733e6653ba9706bea7e3313d9`; контракт engine/HTTP 1.0.
