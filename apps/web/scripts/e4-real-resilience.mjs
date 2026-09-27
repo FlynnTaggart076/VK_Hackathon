@@ -96,6 +96,14 @@ try {
   await checkLayout(page, 1280);
   await checkLayout(page, 360);
 
+  await page.getByRole('link', { name: 'Помощник' }).click();
+  await page.getByLabel('Тема').selectOption('');
+  await page.getByLabel('Ваш вопрос').fill('xyzzy неизвестное');
+  await page.getByRole('button', { name: 'Спросить' }).click();
+  await page.getByRole('heading', { name: 'Пока нет проверенного ответа' }).waitFor();
+  if (await page.locator('article.answer').getByText('Источник:').count())
+    throw new Error('Unsupported answer displayed a fabricated source');
+
   await page.getByRole('link', { name: 'Платёжка' }).click();
   await page.getByLabel('Файл платёжки').setInputFiles({ name: 'unknown-layout.pdf', mimeType: 'application/pdf', buffer: unknown });
   await page.getByRole('button', { name: 'Загрузить', exact: true }).click();
@@ -116,6 +124,6 @@ try {
   if (new URL(page.url()).pathname + new URL(page.url()).search !== currentRoute) throw new Error('401 changed deep-link route');
   process.stdout.write(JSON.stringify({ mode: 'real E4 dev API', checks: [
     'injected network abort then real retry', 'real 413', 'real 409 and preserved edit',
-    'synthetic provenance', 'deep-link reload', 'manual_required', 'real 401', '360 and 1280 px',
+    'synthetic provenance', 'deep-link reload', 'unsupported without source', 'manual_required', 'real 401', '360 and 1280 px',
   ] }) + '\n');
 } finally { await browser.close(); }
