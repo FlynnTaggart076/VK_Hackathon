@@ -9,11 +9,13 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import create_engine, select
+from urllib.parse import urlencode
 
 from app.db.models import IdempotencyKey
 from app.main import Settings, create_app
 from app.jobs.worker import run_once
+from test_contract_responses import validate_response
 from test_dev_api import accept_privacy, headers, image_bytes, login, upload
 
 
@@ -72,19 +74,28 @@ def test_migration_and_persisted_ownership_after_restart(tmp_path, monkeypatch):
 
 
 def test_postgresql_migration_persistence_and_worker(tmp_path, monkeypatch):
-    database_url = os.environ.get("TEST_POSTGRES_URL")
-    if not database_url:
+    base_url = os.environ.get("TEST_POSTGRES_URL")
+    if not base_url:
         pytest.skip("set TEST_POSTGRES_URL for isolated local PostgreSQL")
-    assert database_url.startswith("postgresql+psycopg://zhkh@127.0.0.1:")
-    assert database_url.endswith("/zhkh_e1_test")
+    assert base_url.startswith("postgresql+psycopg://zhkh@127.0.0.1:")
+    assert base_url.endswith("/zhkh_e1_test")
+    schema = f"e1_test_{uuid.uuid4().hex}"
+    admin_engine = create_engine(base_url)
+    with admin_engine.begin() as connection:
+        connection.exec_driver_sql(f'CREATE SCHEMA "{schema}"')
+    admin_engine.dispose()
+    database_url = f"{base_url}?{urlencode({'options': f'-csearch_path={schema}'})}"
     migrate(database_url, monkeypatch)
     settings = Settings(mode="dev", demo_auth_enabled=True, demo_access_code="test-secret",
                         engine_mode="stub", database_url=database_url, storage_path=tmp_path / "private")
     with TestClient(create_app(settings)) as client:
-        token = login(client, "reviewer_a")["access_token"]
+        auth = login(client, "reviewer_a")
+        validate_response("AuthResponse", auth)
+        token = auth["access_token"]
         accept_privacy(client, token)
         key = str(uuid.uuid4())
         queued = upload(client, token, key).json()
+        validate_response("ReceiptQueued", queued)
     with TestClient(create_app(settings)) as restarted:
         token = login(restarted, "reviewer_a")["access_token"]
         assert restarted.get(f"/api/v1/receipts/{queued['receipt']['id']}", headers=headers(token)).status_code == 200
@@ -97,6 +108,8 @@ def test_postgresql_migration_persistence_and_worker(tmp_path, monkeypatch):
         else:
             pytest.fail("target persisted job did not finish after draining earlier test jobs")
         after = restarted.get(f"/api/v1/receipts/{queued['receipt']['id']}", headers=headers(token)).json()
+        validate_response("ReceiptView", after)
+        validate_response("Job", restarted.get(job_url, headers=headers(token)).json())
         assert after["extraction_outcome"] == "manual_required"
         assert after["bill_data"]["services"] == []
         assert restarted.get("/health/ready").status_code == 200

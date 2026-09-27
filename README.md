@@ -38,7 +38,8 @@ python scripts/check_http_contract.py
 ```
 
 PostgreSQL тест запускается только при `TEST_POSTGRES_URL` на отдельную локальную
-тестовую базу `zhkh_e1_test` на `127.0.0.1`; без неё он отмечен как skipped.
+тестовую базу `zhkh_e1_test` на `127.0.0.1`; каждый прогон создаёт свой
+уникальный schema внутри неё. Без переменной тест отмечен как skipped.
 Подробности миграций и ограничений — [docs/backend.md](docs/backend.md),
 схема развёртывания — [docs/deployment.md](docs/deployment.md).
 
