@@ -303,13 +303,13 @@ export const handlers = [
     if (params.id !== receiptId) return error(404, 'NOT_FOUND', 'Документ не найден.');
     return HttpResponse.json(currentReceipt, { headers: { 'X-Request-ID': requestId } });
   }),
-  http.get(`*${API_BASE}/receipts/:id/city-comparison`, ({ request, params }) => {
+  http.get(`*${API_BASE}/receipts/:id/city-comparison`, ({ request }) => {
     const denied = authError(request); if (denied) return denied;
     const url = new URL(request.url);
     return HttpResponse.json({ status: 'ineligible', city: null, period: null,
       service_code: url.searchParams.get('service_code') ?? 'other', unit: null,
       metric: url.searchParams.get('metric') ?? 'charge_amount', sample_size: null,
-      average: null, median: null, provenance: 'confirmed_opted_in_user_receipts', receipt_id: params.id });
+      average: null, median: null, provenance: 'confirmed_opted_in_real_receipts' });
   }),
   http.post(`*${API_BASE}/receipts`, async ({ request }) => {
     const denied = authError(request); if (denied) return denied;

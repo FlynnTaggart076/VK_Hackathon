@@ -1,4 +1,4 @@
-import type { AnswerContext, AnswerView, ApiErrorBody, Catalog, CityComparisonView, CompareRequest, ComparisonView, ConfirmReceiptRequest, CreateDraftRequest, DraftView, EditDraftRequest, EditReceiptRequest, Job, MeResponse, MetaResponse, Profile, ReceiptExplanation, ReceiptList, ReceiptQueued, ReceiptView, UnexpectedErrorBody, UpdateProfileRequest } from './types';
+import type { AggregateConsentView, AnswerContext, AnswerView, ApiErrorBody, Catalog, CityComparisonView, CompareRequest, ComparisonView, ConfirmReceiptRequest, CreateDraftRequest, DraftView, EditDraftRequest, EditReceiptRequest, Job, MeResponse, MetaResponse, Profile, ReceiptExplanation, ReceiptList, ReceiptQueued, ReceiptView, UnexpectedErrorBody, UpdateProfileRequest } from './types';
 import { APP_BASE, PREVIEW_MODE } from './appConfig';
 
 export const API_BASE = `${APP_BASE}api/v1`;
@@ -74,7 +74,7 @@ export const api = {
   updateProfile: (body: UpdateProfileRequest, signal?: AbortSignal) => request<Profile>('/me/profile', {
     method: 'PUT', body: JSON.stringify(body), signal,
   }),
-  aggregateConsent: (enabled: boolean, signal?: AbortSignal) => request<{ aggregate_opt_in: boolean }>('/me/aggregate-consent', {
+  aggregateConsent: (enabled: boolean, signal?: AbortSignal) => request<AggregateConsentView>('/me/aggregate-consent', {
     method: 'PUT', body: JSON.stringify({ enabled }), signal,
   }),
   answer: (question: string, context: AnswerContext, signal?: AbortSignal) => request<AnswerView>('/assistant/answers', {

@@ -7,11 +7,11 @@ export type Id = Schema['Id'];
 export type Timestamp = Schema['Timestamp'];
 export type Money = Schema['Money'];
 export type ApiErrorBody = Schema['ErrorEnvelope'];
-export type Profile = Schema['Profile'] & { aggregate_opt_in?: boolean };
+export type Profile = Schema['Profile'];
 export type AuthResponse = Schema['AuthResponse'];
 export type MetaResponse = Schema['Meta'];
 export type Catalog = Schema['Catalog'];
-export type MeResponse = Omit<Schema['UserAndProfile'], 'profile'> & { profile: Profile };
+export type MeResponse = Schema['UserAndProfile'];
 export type UpdateProfileRequest = Schema['UpdateProfileRequest'];
 export type ReceiptRef = Schema['ReceiptRef'];
 export type SourceRef = Schema['SourceRef'];
@@ -37,19 +37,8 @@ export type CreateDraftRequest = Schema['CreateDraftRequest'];
 export type EditDraftRequest = Schema['EditDraftRequest'];
 export type DraftView = Schema['DraftView'];
 
-// The city comparison contract is added to OpenAPI with the backend branch.
-export interface CityComparisonView {
-  status: 'available' | 'insufficient_data' | 'ambiguous_city' | 'ineligible';
-  city: string | null;
-  period: string | null;
-  service_code: string;
-  unit: string | null;
-  metric: 'charge_amount' | 'tariff';
-  sample_size: number | null;
-  average: string | null;
-  median: string | null;
-  provenance: 'confirmed_opted_in_user_receipts';
-}
+export type CityComparisonView = Schema['CityComparisonView'];
+export type AggregateConsentView = Schema['AggregateConsentView'];
 
 export interface UnexpectedErrorBody {
   error: { code: 'UNEXPECTED_RESPONSE'; message: string; retryable: boolean; fields: []; details: {} };

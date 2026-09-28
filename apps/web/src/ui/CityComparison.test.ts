@@ -5,7 +5,7 @@ import { previousMonth, publishableCityResult } from './CityComparison';
 const complete: CityComparisonView = {
   status: 'available', city: 'Москва', period: '2026-09', service_code: 'heating',
   unit: 'm2', metric: 'tariff', sample_size: 5, average: '10.00', median: '9.00',
-  provenance: 'confirmed_opted_in_user_receipts',
+  provenance: 'confirmed_opted_in_real_receipts',
 };
 
 describe('city aggregate privacy gate', () => {
