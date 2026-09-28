@@ -178,6 +178,10 @@ def question_text(session, item: WebhookInbox, store: SqlStore) -> str | None:
                 if needle in lowered:
                     context["service_code"] = code
                     break
+        elif clarification["field"] == "document_kind":
+            description = " ".join(question.split())[:200]
+            if description:
+                context["document_kind"] = description
         question = f"{prior.question[:1000]} {question[:900]}"
     personal, _ = owner_receipt_pair(store, str(user.id), db_session=session)
     try:
