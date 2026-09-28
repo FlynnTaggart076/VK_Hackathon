@@ -44,7 +44,8 @@ def _bill_rows(receipt: Receipt, bill: dict, profile: Profile) -> list[ReceiptCo
         return []
     rows = []
     for line in bill.get("services", []):
-        if (line.get("scope") not in {"individual", "common_property"} or
+        if (line.get("service_code") == "other" or
+                line.get("scope") not in {"individual", "common_property"} or
                 line.get("unit") not in {"m3", "kwh", "gcal", "m2", "month", "person"} or
                 not line.get("line_id")):
             continue
@@ -119,6 +120,8 @@ def city_comparison(store: SqlStore, user_id: str, receipt_id: str,
         if revision is None or revision.confirmed_at is None:
             return result("ineligible")
         bill = revision.bill_data
+        if service_code == "other":
+            return result("ineligible")
         city = canonical_city(bill.get("address_text"), profile.territory_id)
         if city is None:
             return result("ambiguous_city")

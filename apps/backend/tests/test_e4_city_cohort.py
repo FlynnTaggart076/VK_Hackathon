@@ -161,6 +161,24 @@ def test_canonical_city_and_consent_sqlite(tmp_path):
     _run(store)
 
 
+def test_catchall_other_never_forms_a_cohort(tmp_path):
+    url = f"sqlite:///{(tmp_path / 'other.sqlite').as_posix()}"
+    store = SqlStore(Settings(database_url=url, storage_path=tmp_path / "private-other"))
+    Base.metadata.create_all(store.engine)
+    owners = [_seed(store, i + 30) for i in range(5)]
+    for i, (uid, rid) in enumerate(owners):
+        with store.Session.begin() as session:
+            revision = session.get(ReceiptRevision, (uuid.UUID(rid), 1))
+            bill = dict(revision.bill_data)
+            bill["services"] = [{**bill["services"][0], "service_code": "other",
+                                 "raw_name": "Видеонаблюдение" if i % 2 else "Газ"}]
+            revision.bill_data = bill
+        set_aggregate_consent(store, uid, True)
+    assert city_comparison(store, owners[0][0], owners[0][1], "other", "charge_amount")["status"] == "ineligible"
+    with store.Session() as session:
+        assert session.scalars(select(ReceiptCohortLine)).all() == []
+
+
 def test_canonical_city_and_consent_postgresql(tmp_path):
     base_url = os.environ.get("TEST_POSTGRES_URL")
     if not base_url:
