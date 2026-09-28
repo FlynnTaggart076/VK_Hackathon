@@ -3,6 +3,8 @@ WORKDIR /workspace/apps/web
 COPY apps/web/package.json apps/web/package-lock.json ./
 RUN npm ci
 COPY apps/web ./
+ARG VITE_APP_BASE=/team/zhkh/
+ARG VITE_PREVIEW_MODE=false
 RUN npm run build
 
 FROM nginx:1.27.5-alpine

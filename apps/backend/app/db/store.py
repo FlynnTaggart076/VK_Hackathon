@@ -95,6 +95,26 @@ class SqlStore:
                     raise
         raise RuntimeError("unreachable")
 
+    def authenticate_preview(self) -> dict:
+        """Create one anonymous guest per call; the client cannot choose an owner."""
+        if self.settings.mode != "preview" or not self.settings.preview_auth_enabled:
+            raise ApiError(403, "PREVIEW_DISABLED", "Учебный вход недоступен.")
+        token = secrets.token_urlsafe(32)
+        user = User(id=uuid.uuid4(), created_at=now())
+        profile = Profile(user_id=user.id, role="other", territory_id=None,
+                          onboarding_completed=False, privacy_notice_version=None,
+                          privacy_acknowledged_at=None)
+        with self.Session.begin() as session:
+            session.add(user)
+            session.flush()
+            session.add(profile)
+            session.add(SessionToken(id=uuid.uuid4(), user_id=user.id,
+                                     token_hash=hashlib.sha256(token.encode()).hexdigest(),
+                                     expires_at=now() + timedelta(hours=1)))
+            result = {"access_token": token, "token_type": "bearer", "expires_in": 3600,
+                      "user": {"id": str(user.id)}, "profile": self._profile_value(profile)}
+        return result
+
     def user_for_token(self, token: str) -> str:
         token_hash = hashlib.sha256(token.encode()).hexdigest()
         with self.Session() as session:

@@ -1,0 +1,17 @@
+# Add only these locations to the existing /srv/team/web/nginx.conf server.
+# Keep /team/zhkh/, /team/, /healthz and all other routes intact.
+location = /team/zhkh-preview {
+    return 308 /team/zhkh-preview/$is_args$args;
+}
+
+location ^~ /team/zhkh-preview/ {
+    client_max_body_size 12m;
+    proxy_pass http://vk-zhkh-preview-web:80/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $http_x_real_ip;
+    proxy_set_header X-Forwarded-For $http_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+    proxy_connect_timeout 10s;
+    proxy_read_timeout 95s;
+    proxy_send_timeout 95s;
+}

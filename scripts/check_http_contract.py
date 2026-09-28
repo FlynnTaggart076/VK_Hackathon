@@ -27,6 +27,7 @@ ENGINE = ROOT / "contracts/engine/v1"
 REQUIRED_OPERATIONS = {
     ("get", "/api/v1/meta"),
     ("post", "/api/v1/auth/max"), ("post", "/api/v1/auth/demo"),
+    ("post", "/api/v1/auth/preview"),
     ("post", "/api/v1/auth/logout"), ("get", "/api/v1/me"),
     ("put", "/api/v1/me/profile"), ("get", "/api/v1/catalog"),
     ("post", "/api/v1/assistant/answers"), ("get", "/api/v1/assistant/answers/{id}"),

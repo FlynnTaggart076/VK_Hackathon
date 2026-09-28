@@ -1,0 +1,40 @@
+services:
+  migrate:
+    environment: &preview_settings
+      APP_MODE: preview
+      APP_ROOT_PATH: /team/zhkh-preview
+      ENGINE_MODE: real
+      PREVIEW_AUTH_ENABLED: "true"
+      DEMO_AUTH_ENABLED: "false"
+      DEMO_ACCESS_CODE: ""
+      MAX_BOT_TOKEN: ""
+      MAX_WEBHOOK_SECRET: ""
+      MAX_WEB_APP: ""
+  api:
+    environment: *preview_settings
+    mem_limit: 1024m
+    cpus: 1.5
+  worker:
+    environment: *preview_settings
+    networks: [private]
+    mem_limit: 2048m
+    cpus: 1.5
+  db:
+    mem_limit: 512m
+    cpus: 0.5
+  web:
+    build:
+      args:
+        VITE_APP_BASE: /team/zhkh-preview/
+        VITE_PREVIEW_MODE: "true"
+    mem_limit: 128m
+    cpus: 0.25
+    networks:
+      private: {}
+      edge:
+        aliases: [vk-zhkh-preview-web]
+
+networks:
+  edge:
+    external: true
+    name: vk-zhkh-preview-edge
