@@ -28,7 +28,7 @@ function authError(request: Request): HttpResponse<ApiErrorBody> | null {
     ? error(401, 'SESSION_EXPIRED', 'Срок сессии истёк.')
     : error(401, 'AUTH_REQUIRED', 'Войдите в приложение.');
 }
-const newProfile: Profile = { role: 'other', territory_id: null, onboarding_completed: false,
+const newProfile: Profile = { role: 'other', territory_id: null, onboarding_completed: false, aggregate_opt_in: false,
   privacy_notice_version: null, privacy_acknowledged_at: null };
 let profile: Profile = { ...newProfile };
 export function resetMockState(): void { profile = { ...newProfile }; currentReceipt = { ...queuedReceipt }; jobReads = 0; currentDemoId = null; removed = new Set(); mockDraft = null; }
@@ -41,7 +41,7 @@ const topicLabels: [string, string][] = [
   ['housing_document', 'Жилищный документ или справка'], ['new_resident', 'После переезда'],
 ];
 const catalog: Catalog = {
-  territories: [{ id: 'demo-territory', label: 'Учебная территория' }], organizations: [], topics: topicLabels.map(([id, label]) => ({ id, label })),
+  territories: [{ id: 'demo-territory', label: 'Учебная территория' }, { id: 'moscow', label: 'Москва' }], organizations: [], topics: topicLabels.map(([id, label]) => ({ id, label })),
   service_codes: [], units: [], document_kinds: [], demo_receipts: [
     { fixture_id: 'water-2026-08', label: 'Вода, август', description: 'Синтетическая квитанция' },
     { fixture_id: 'water-2026-09', label: 'Вода, сентябрь', description: 'Синтетическая квитанция' },
@@ -243,29 +243,52 @@ export const handlers = [
   http.put(`*${API_BASE}/me/profile`, async ({ request }) => {
     const denied = authError(request); if (denied) return denied;
     const body = await request.json() as UpdateProfileRequest;
-    if (!['owner', 'tenant', 'other'].includes(body.role) || body.territory_id !== 'demo-territory')
+    if (!['owner', 'tenant', 'other'].includes(body.role) || !catalog.territories.some((item) => item.id === body.territory_id))
       return error(422, 'VALIDATION_FAILED', 'Выберите доступную роль и территорию.');
     if (body.privacy_notice_version !== meta.privacy_notice.version || body.privacy_acknowledged !== true)
       return error(422, 'PRIVACY_NOTICE_REQUIRED', 'Подтвердите актуальное уведомление.');
-    profile = { role: body.role, territory_id: body.territory_id, onboarding_completed: true,
+    profile = { role: body.role, territory_id: body.territory_id, onboarding_completed: true, aggregate_opt_in: profile.aggregate_opt_in,
       privacy_notice_version: body.privacy_notice_version, privacy_acknowledged_at: now };
     return HttpResponse.json(profile);
   }),
+  http.put(`*${API_BASE}/me/aggregate-consent`, async ({ request }) => {
+    const denied = authError(request); if (denied) return denied;
+    const input = await request.json() as { enabled: boolean };
+    profile = { ...profile, aggregate_opt_in: input.enabled === true };
+    return HttpResponse.json({ aggregate_opt_in: profile.aggregate_opt_in });
+  }),
   http.post(`*${API_BASE}/assistant/answers`, async ({ request }) => {
     if (!authorized(request)) return error(401, 'AUTH_REQUIRED', 'Для ответа нужен вход.');
-    const input = await request.json() as { question: string; context: { topic_id: string | null; document_kind: string | null } };
+    const input = await request.json() as { question: string; context: { topic_id: string | null; territory_id: string | null; role: string | null; document_kind: string | null; service_code: string | null; organization_id: string | null } };
     const lower = input.question.toLowerCase();
+    if (lower.includes('проверь поля') && (input.context.role !== profile.role || input.context.territory_id !== profile.territory_id))
+      return error(409, 'INVALID_REQUEST', 'Роль и территория должны совпадать с сохранённым профилем.');
     const unsupported = lower.includes('неизвест') || lower.includes('космос');
-    const needsClarification = !unsupported && (input.context.topic_id === 'housing_document' || lower.includes('справк')) && !input.context.document_kind;
+    // Exercise every existing AnswerContext clarification field in the browser-only mock.
+    const fieldProbe = lower.includes('проверь поля');
+    const probeField = !fieldProbe ? null : !input.context.topic_id ? 'topic_id'
+      : input.context.territory_id !== 'moscow' ? 'territory_id'
+        : input.context.role !== 'owner' ? 'role'
+          : !input.context.organization_id ? 'organization_id'
+            : !input.context.service_code ? 'service_code'
+              : !input.context.document_kind ? 'document_kind' : null;
+    const supplier = input.context.topic_id === 'supplier_contacts';
+    const needsService = !unsupported && !probeField && supplier && !input.context.service_code;
+    const needsOrganization = !unsupported && supplier && !needsService && lower.includes('цепоч') && !input.context.organization_id;
+    const needsDocument = !unsupported && !needsService && !needsOrganization && (input.context.topic_id === 'housing_document' || lower.includes('справк')) && !input.context.document_kind;
+    const needsClarification = !!probeField || needsService || needsOrganization || needsDocument;
     const response: AnswerView = {
       id: answerId, created_at: now, stale: false, stale_reasons: [],
       status: unsupported ? 'unsupported' : needsClarification ? 'needs_clarification' : 'answered',
-      text: unsupported ? 'Для этого вопроса пока нет проверенной карточки.' : needsClarification ? 'По слову «справка» нельзя определить порядок получения документа.' : 'Это учебный ответ. Проверьте объём и тариф в двух платёжках; вывод о правильности начисления здесь не делается.',
+      text: unsupported ? 'Для этого вопроса пока нет проверенной карточки.' : needsService ? 'Уточните услугу, чтобы выбрать поставщика.' : needsOrganization ? 'Уточните организацию для учебного сценария.' : needsDocument ? 'По слову «справка» нельзя определить порядок получения документа.' : 'Это учебный ответ. Проверьте объём и тариф в двух платёжках; вывод о правильности начисления здесь не делается.',
       topic_id: unsupported ? null : input.context.topic_id || 'bill_change', steps: [],
       sources: unsupported || needsClarification ? [] : [{ id: 'mock-source', title: 'Учебная карточка темы', url: null,
         territory_id: 'demo-territory', verified_at: now, review_after: '2026-10-27T10:00:00Z', content_version: 'mock-1', is_synthetic: true }],
-      actions: [], clarification: needsClarification ? { field: 'document_kind', prompt: 'Какой именно документ нужен?', options: [
-        { value: 'registration', label: 'Сведения о регистрации' }, { value: 'ownership', label: 'Сведения о собственности' }] } : null,
+      actions: [], clarification: probeField ? { field: probeField, prompt: `Уточните поле ${probeField}`, options: probeField === 'territory_id' ? [{ value: 'moscow', label: 'Москва' }] : probeField === 'role' ? [{ value: 'owner', label: 'Собственник' }] : [] }
+        : needsService ? { field: 'service_code', prompt: 'По какой услуге возник вопрос?', options: [] }
+        : needsOrganization ? { field: 'organization_id', prompt: 'Какая организация указана?', options: [] }
+          : needsDocument ? { field: 'document_kind', prompt: 'Какой именно документ нужен?', options: [
+            { value: 'registration', label: 'Сведения о регистрации' }, { value: 'ownership', label: 'Сведения о собственности' }] } : null,
       limitations: ['Пример синтетический; реальные тарифы и порядок обращения здесь не указаны.'],
       knowledge_version: 'mock-knowledge-1', receipt_ref: null, dataset_kind: 'synthetic',
     };
@@ -278,6 +301,14 @@ export const handlers = [
     if (params.id === partialReceiptId) return HttpResponse.json(partialReceipt);
     if (params.id !== receiptId) return error(404, 'NOT_FOUND', 'Документ не найден.');
     return HttpResponse.json(currentReceipt, { headers: { 'X-Request-ID': requestId } });
+  }),
+  http.get(`*${API_BASE}/receipts/:id/city-comparison`, ({ request, params }) => {
+    const denied = authError(request); if (denied) return denied;
+    const url = new URL(request.url);
+    return HttpResponse.json({ status: 'ineligible', city: null, period: null,
+      service_code: url.searchParams.get('service_code') ?? 'other', unit: null,
+      metric: url.searchParams.get('metric') ?? 'charge_amount', sample_size: null,
+      average: null, median: null, provenance: 'confirmed_opted_in_user_receipts', receipt_id: params.id });
   }),
   http.post(`*${API_BASE}/receipts`, async ({ request }) => {
     const denied = authError(request); if (denied) return denied;

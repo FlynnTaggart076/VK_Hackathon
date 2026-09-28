@@ -10,7 +10,7 @@ nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
 nav a, .actions a, button { display: inline-block; border: 1px solid #2672a8; border-radius: 8px; padding: 10px 12px; color: #134b73; background: white; font: inherit; text-decoration: none; }
 button { cursor: pointer; background: #17689f; color: white; }
 button:disabled { opacity: .6; cursor: wait; }
-a:focus-visible, button:focus-visible, textarea:focus-visible { outline: 3px solid #ffbf47; outline-offset: 2px; }
+a:focus-visible, button:focus-visible, textarea:focus-visible, select:focus-visible, input:focus-visible { outline: 3px solid #ffbf47; outline-offset: 2px; }
 .panel { background: white; padding: 18px; margin: 12px 0; border-radius: 12px; box-shadow: 0 1px 5px #16384d18; }
 .panel h2 { margin-top: 0; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -19,11 +19,15 @@ a:focus-visible, button:focus-visible, textarea:focus-visible { outline: 3px sol
 .error { border-left: 4px solid #b93434; padding: 8px; background: #fff0f0; }
 .error small { display: block; }
 label { display: block; font-weight: 600; margin-bottom: 6px; }
-textarea, select, input[type="password"], input[type="file"], input:not([type]) { width: 100%; border: 1px solid #6d8291; border-radius: 8px; padding: 8px; font: inherit; margin-bottom: 12px; }
+textarea, select, input[type="text"], input[type="password"], input[type="file"], input:not([type]) { width: 100%; border: 1px solid #6d8291; border-radius: 8px; padding: 8px; font: inherit; margin-bottom: 12px; }
 .check { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; }
 .check input { margin-top: 4px; }
 .notice-box { padding: 12px; margin-top: 8px; border: 1px solid #c9d8e1; border-radius: 8px; }
 .notice-box h3 { margin-top: 0; }
+.clarification-field { padding: 10px 0; border-bottom: 1px solid #d6e0e6; }
+.clarification-field:last-of-type { border-bottom: 0; }
+.suggestion-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.suggestion-buttons button { background: #e8f2f9; color: #134b73; }
 form button { margin-top: 8px; }
 .answer { border-top: 1px solid #d6e0e6; margin-top: 16px; }
 .skip { position: absolute; left: -9999px; }
@@ -32,6 +36,9 @@ footer { padding: 20px 0; font-size: .85rem; }
 .receipt-page { display: block; width: 100%; height: auto; max-height: 550px; object-fit: contain; border: 1px solid #c9d8e1; background: #f4f6f7; }
 .field, fieldset { min-width: 0; }
 fieldset { border: 1px solid #c9d8e1; border-radius: 8px; margin: 16px 0; padding: 12px; }
+.service-row { border: 1px solid #c9d8e1; border-radius: 8px; margin: 8px 0; padding: 10px; }
+.service-row summary { cursor: pointer; font-weight: 600; overflow-wrap: anywhere; }
+.service-row fieldset { margin-bottom: 0; }
 .field-note { margin: -8px 0 12px; font-size: .85rem; overflow-wrap: anywhere; }
 .field-note p { margin: 4px 0; }
 .review-warning { color: #845500; }
