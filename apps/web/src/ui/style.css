@@ -5,6 +5,7 @@ body { margin: 0; min-width: 320px; }
 header { padding: 12px 0; }
 h1 { font-size: 1.6rem; margin: 0 0 4px; }
 header p, footer { color: #536779; margin: 0; }
+.preview-banner { display: grid; gap: 4px; padding: 12px; border: 2px solid #a15c00; border-radius: 10px; color: #4c2c00; background: #fff1cf; }
 nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
 nav a, .actions a, button { display: inline-block; border: 1px solid #2672a8; border-radius: 8px; padding: 10px 12px; color: #134b73; background: white; font: inherit; text-decoration: none; }
 button { cursor: pointer; background: #17689f; color: white; }

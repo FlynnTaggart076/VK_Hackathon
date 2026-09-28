@@ -1,5 +1,6 @@
 import { http, HttpResponse } from 'msw';
 import { API_BASE } from '../api/client';
+import { APP_BASE } from '../api/appConfig';
 import type { AnswerView, ApiErrorBody, BillData, Catalog, ComparisonView, DraftView, Job, MetaResponse, Profile, ReceiptExplanation, ReceiptQueued, ReceiptSummary, ReceiptView, UpdateProfileRequest } from '../api/types';
 
 const requestId = 'b1399c8c-d010-4e0c-b75f-bd312a647fea';
@@ -128,7 +129,7 @@ const comparisonBase: ComparisonView = {
 const previewPng = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z7rUAAAAASUVORK5CYII='), (char) => char.charCodeAt(0));
 async function syntheticPreview(): Promise<Uint8Array> {
   if (typeof window === 'undefined') return previewPng;
-  const response = await fetch('/team/zhkh/synthetic-receipt.png');
+  const response = await fetch(`${APP_BASE}synthetic-receipt.png`);
   return response.ok ? new Uint8Array(await response.arrayBuffer()) : previewPng;
 }
 

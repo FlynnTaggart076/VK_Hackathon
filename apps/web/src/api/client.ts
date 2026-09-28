@@ -1,9 +1,22 @@
 import type { AnswerContext, AnswerView, ApiErrorBody, Catalog, CompareRequest, ComparisonView, ConfirmReceiptRequest, CreateDraftRequest, DraftView, EditDraftRequest, EditReceiptRequest, Job, MeResponse, MetaResponse, Profile, ReceiptExplanation, ReceiptList, ReceiptQueued, ReceiptView, UnexpectedErrorBody, UpdateProfileRequest } from './types';
+import { APP_BASE, PREVIEW_MODE } from './appConfig';
 
-export const API_BASE = '/team/zhkh/api/v1';
-let sessionToken: string | null = null;
+export const API_BASE = `${APP_BASE}api/v1`;
+const previewStorageKey = 'zhkh-preview-session';
+function restoredPreviewToken(): string | null {
+  if (!PREVIEW_MODE || typeof window === 'undefined') return null;
+  try { return window.sessionStorage.getItem(previewStorageKey); } catch { return null; }
+}
+let sessionToken: string | null = restoredPreviewToken();
 
-export function setSessionToken(token: string | null): void { sessionToken = token; }
+export function setSessionToken(token: string | null): void {
+  sessionToken = token;
+  if (!PREVIEW_MODE || typeof window === 'undefined') return;
+  try {
+    if (token) window.sessionStorage.setItem(previewStorageKey, token);
+    else window.sessionStorage.removeItem(previewStorageKey);
+  } catch { /* A blocked sessionStorage does not prevent the current tab session. */ }
+}
 export function hasSessionToken(): boolean { return sessionToken !== null; }
 
 export class ApiRequestError extends Error {
