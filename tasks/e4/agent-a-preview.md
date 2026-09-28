@@ -1,0 +1,7 @@
+# E4-A-PREVIEW: browser test mini-app
+
+Base: coordinator task commit on `main`. Work only in a separate checkout and `agent-a/e4-preview` branch. Push code SHA and report to `reports/agent-a-preview.md`; do not deploy.
+
+Build the same frontend at a configurable base prefix (`/team/zhkh/` by default, `/team/zhkh-preview/` for this build). All BrowserRouter, API, static assets and mock paths must resolve under that prefix without changing the production build. In preview build mode only, automatically POST `/api/v1/auth/preview`, receive the backend-issued virtual guest session, and enter the app without MAX bridge or login form. Keep preview token per tab across reload in sessionStorage; production continues to keep its token in memory. Recover expired preview session with a fresh guest and a clear notice. Never expose a shared demo code. Mark every preview screen clearly as public training stand with synthetic data and no real submission; warn against uploading personal receipts. Preserve production signed MAX auth.
+
+Add focused frontend tests for both base paths/auth modes and build proof for production and preview. Verify navigation/deep links, onboarding, synthetic sample import, question, history and draft in browser or describe the exact missing backend dependency. Report SHA, commands/results, UI evidence and limitations. Coordinate `/auth/preview` contract with B: POST empty body, AuthResponse; backend `mode=preview` and only preview instance enables route.

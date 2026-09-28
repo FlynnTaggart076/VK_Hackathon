@@ -1,0 +1,9 @@
+# E4-B-PREVIEW: isolated backend and VM route
+
+Base: coordinator task commit on `main`. Work in separate checkout and `agent-b/e4-preview` branch. Push code SHA and report to `reports/agent-b-preview.md`. This task's first checkpoint is code and local/CI evidence; deploy only after coordinator accepts exact release SHA and gives follow-up.
+
+Provide `POST /api/v1/auth/preview` with empty request and normal AuthResponse, enabled only in explicit `APP_MODE=preview` plus a dedicated opt-in flag. It must generate a random unique guest user/profile/session in PostgreSQL, no common reviewer account and no client-selected identity. Reject this route in production/dev/demo and reject MAX auth/webhook functionality in preview even if stray MAX vars exist. The production `compose.vm.yaml` remains strict. Add negative/positive tests including two guests with distinct owner data, and configuration safety tests. Keep authentication, privacy notice, idempotency and file retention semantics; no real complaint submission.
+
+Add `compose.preview.vm.yaml` and build configuration for an independent Compose project, private PostgreSQL/document volumes, no published host ports, separate edge network/alias and a web build with `/team/zhkh-preview/` base; no MAX egress/credentials. Document private env, deployment/backup/restore and the minimal additive shared Nginx route at `/team/zhkh-preview/` while retaining `/team/zhkh/` and siblings. Test `docker compose config --quiet`, backend suite and isolated PostgreSQL HTTP scenario if local Docker works; report exact limitations. Before VM mutation on follow-up obey `Работа с сервером.md` and §12.8, clean accepted SHA, backup and restore check, config/nginx -t, affected services only, internal/public smoke. Never write secrets to Git/logs.
+
+Contract with A: preview meta reports `mode=preview`; POST `/api/v1/auth/preview` returns AuthResponse. Frontend decides preview build using build-time flag, not public meta alone.
