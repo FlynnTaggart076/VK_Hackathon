@@ -119,6 +119,9 @@ def question_text(session, item: WebhookInbox) -> str | None:
     if user is None:
         user = User(id=uuid.uuid4(), max_user_id=item.max_user_id, created_at=now())
         session.add(user)
+        # PostgreSQL may flush independent ORM objects in an order that violates
+        # profiles_user_id_fkey when only scalar IDs (no relationship) are set.
+        session.flush()
         session.add(Profile(user_id=user.id, role="other", territory_id=None,
                             onboarding_completed=False))
         session.flush()
