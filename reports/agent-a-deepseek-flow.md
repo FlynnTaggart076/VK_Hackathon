@@ -1,6 +1,6 @@
 # A · E4 DeepSeek dialogue UI and continuations
 
-Latest code commit pushed to `origin/agent-a/e4-deepseek-flow`: `5b6a4e44b516aa00639f6b8630cefebe0c6f381e` (initial code `dfe066d16d72c02b9057efb39a404ed6078e0f46`, base `9b58db6`). This report is a following documentation commit on the same branch.
+Latest code commit pushed to `origin/agent-a/e4-deepseek-flow`: `3f26f68b5e37b264528b8400f7fb06f7f62a48b7` (strict-ID fix `5b6a4e44b516aa00639f6b8630cefebe0c6f381e`, initial code `dfe066d16d72c02b9057efb39a404ed6078e0f46`, base `9b58db6`). This report is a following documentation commit on the same branch.
 
 ## Delivered
 
@@ -35,3 +35,9 @@ The clarification text field also accepts arbitrary phrases. `topic_id`, `territ
 `npm run build` passed, `npm test` passed 20 tests, and sequential 360 px browser runs `test:browser:e4:clarifications`, `test:browser:e3:mock`, `test:browser:e2` passed after this fix. The E4 browser run types custom values into all six clarification fields; it checks request bodies for topic, organization, service and document, and confirms that invalid territory/role never reach the API.
 
 Next: integrate B and C contracts, run browser tests against a real local API, then re-check the exact EPD layout and MAX mini-app after accepted release deployment.
+
+## E3 real browser CI entry follow-up
+
+Integration CI reached the real browser flow, then timed out waiting for the dev login at `apps/web/scripts/e3-real-flow.mjs:11` ([job annotation](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36477810085/job/109115794421)). The annotation does not establish why the login was absent. The script now records bounded page path, `/meta` status and `demo_auth`/mode, failed request paths, console and page errors, and visible entry text when login does not appear. It retries through the visible `Повторить загрузку API` button at most once, only after `/meta` fails with 429, 5xx or a network failure. A persistent error remains a failed test with diagnostic detail. The record resets before the post-login page reload so an earlier successful `/meta` cannot obscure a new failure. No response bodies, headers, tokens or query strings are logged.
+
+Verification on this code commit: `node --check` for the three changed scripts, `npm run build`, `npm test` (4 files, 20 tests) and `git diff --check` passed. `test:browser:e4:entry-diagnostics` passed against local Vite real mode at 360 px: the dev app made two initial `/meta` requests due to React development mount, one deliberate retry recovered from 503 to the login, and persistent 400 made no additional request and emitted a bounded diagnosis. `test:browser:e4:clarifications` passed against Vite mock mode at 360 px. That scenario submits a typed `Редкая справка` with `context.document_kind='Редкая справка'` and reaches an answer, covering the empty document-kind catalog without a repeated clarification loop. Full `test:browser:e3:real` still needs a running integrated backend and CI rerun; this follow-up does not claim the original CI failure is resolved.
