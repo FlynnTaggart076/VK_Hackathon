@@ -557,7 +557,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 not isinstance(body["question"], str) or not 1 <= len(body["question"].strip()) <= 2000 or \
                 not isinstance(body["context"], dict) or set(body["context"]) != context_fields:
             raise ApiError(422, "VALIDATION_FAILED", "Проверьте вопрос и контекст.")
-        context = body["context"]
+        context = dict(body["context"])
+        document_kind = context["document_kind"]
+        if document_kind is not None and (not isinstance(document_kind, str) or
+                                          not 1 <= len(document_kind.strip()) <= 200 or
+                                          any(ord(char) < 32 for char in document_kind)):
+            raise ApiError(422, "VALIDATION_FAILED", "Уточните название документа без служебных символов.")
+        if document_kind is not None:
+            context["document_kind"] = " ".join(document_kind.split())
         if (context["receipt_id"] is None) != (context["receipt_revision"] is None):
             raise ApiError(422, "VALIDATION_FAILED", "Укажите квитанцию и её ревизию вместе.")
         refs = []

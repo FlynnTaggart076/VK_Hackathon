@@ -315,3 +315,41 @@ def test_max_clarification_followup_preserves_topic_and_service(tmp_path):
     assert seen["context"]["topic_id"] == "contact_supplier"
     assert seen["context"]["service_code"] == "hot_water"
     assert "Контакт поставщика" in seen["question"]
+
+
+def test_document_kind_free_text_finishes_clarification(tmp_path):
+    context = {"territory_id": "moscow", "role": "owner", "topic_id": "housing_document",
+               "organization_id": None, "service_code": None,
+               "document_kind": "справка о составе семьи"}
+    answer = answer_json("Как получить справку о составе семьи?", context, [],
+                         {"role": "owner", "territory_id": "moscow"}, knowledge())
+    assert answer["status"] != "needs_clarification"
+
+    app = _store(tmp_path, max_bot_token="fixture-token", max_webhook_secret="fixture_secret")
+    uid = uuid.uuid4()
+    with app.state.store.Session.begin() as session:
+        session.add(User(id=uid, max_user_id=223))
+        session.flush()
+        session.add(Profile(user_id=uid, role="owner", territory_id="moscow"))
+        session.add(AssistantAnswer(id=uuid.uuid4(), user_id=uid, question="Как получить жилищный документ?",
+                                    result={"status": "needs_clarification", "text": "Уточните документ",
+                                            "topic_id": "housing_document", "steps": [], "sources": [],
+                                            "actions": [], "clarification": {"field": "document_kind",
+                                                                       "prompt": "Какой документ?", "options": []},
+                                            "limitations": [], "knowledge_version": knowledge().version,
+                                            "receipt_ref": None},
+                                    receipt_id=None, receipt_revision=None, dataset_kind="public_reference",
+                                    created_at=datetime.now(timezone.utc),
+                                    expires_at=datetime.now(timezone.utc)))
+    event = {"update_type": "message_created", "timestamp": 1_700_000_000_000,
+             "message": {"sender": {"user_id": 223},
+                         "recipient": {"chat_id": 456, "chat_type": "dialog"},
+                         "body": {"mid": "e4-document-followup", "text": "справка о составе семьи"}}}
+    with TestClient(app) as client:
+        assert client.post("/integrations/max/webhook", json=event,
+                           headers={"X-Max-Bot-Api-Secret": "fixture_secret"}).status_code == 200
+    assert process_inbox_once(app.state.store)
+    with app.state.store.Session() as session:
+        latest = session.scalar(select(AssistantAnswer).where(AssistantAnswer.user_id == uid)
+                                .order_by(AssistantAnswer.created_at.desc(), AssistantAnswer.id.desc()))
+        assert latest.result["status"] != "needs_clarification"
