@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Catalog } from '../api/types';
-import { selectedValue, serviceContext, suggestionsFor } from './clarification';
+import { recognizedValue, selectedValue, serviceContext, suggestionsFor } from './clarification';
 
 const catalog: Catalog = {
   topics: [{ id: 'supplier_contacts', label: 'Контакты поставщика' }],
@@ -14,6 +14,8 @@ describe('assistant clarification mapping', () => {
     expect(selectedValue('Москва', options)).toBe('moscow');
     expect(selectedValue('mo', options)).toBe('mo');
     expect(selectedValue('Новый город', options)).toBe('Новый город');
+    expect(recognizedValue('Новый город', options)).toBeNull();
+    expect(recognizedValue('МОСКВА', options)).toBe('moscow');
     expect(suggestionsFor('service_code', catalog, [])).toEqual([]);
   });
 

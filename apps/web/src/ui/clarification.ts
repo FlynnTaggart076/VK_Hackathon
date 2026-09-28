@@ -36,6 +36,14 @@ export function selectedValue(input: string, suggestions: Suggestion[]): string 
   return match?.value ?? value;
 }
 
+export function recognizedValue(input: string | undefined, suggestions: Suggestion[]): string | null {
+  const value = input?.trim();
+  if (!value) return null;
+  const lower = value.toLocaleLowerCase('ru');
+  return suggestions.find((item) => item.value.toLocaleLowerCase('ru') === lower ||
+    item.label.toLocaleLowerCase('ru') === lower)?.value ?? null;
+}
+
 const serviceAliases: Record<string, string> = {
   'холодная вода': 'cold_water', 'хвс': 'cold_water',
   'горячая вода': 'hot_water', 'гвс': 'hot_water',

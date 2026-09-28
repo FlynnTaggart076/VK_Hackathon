@@ -43,16 +43,50 @@ try {
   await ask(page, 'неизвестный космос');
   await page.getByRole('heading', { name: 'Пока нет проверенного ответа' }).waitFor();
 
+  await page.evaluate(() => {
+    window.__assistantBodies = [];
+    const original = window.fetch.bind(window);
+    window.fetch = (input, options) => {
+      if (String(input).includes('/assistant/answers') && typeof options?.body === 'string')
+        window.__assistantBodies.push(JSON.parse(options.body));
+      return original(input, options);
+    };
+  });
+  const lastBody = () => page.evaluate(() => window.__assistantBodies.at(-1));
   await ask(page, 'проверь поля');
   for (const [field, value] of [
     ['topic_id', 'Изменение суммы'], ['territory_id', 'Москва'], ['role', 'Собственник'],
-    ['organization_id', 'УК Пример'], ['service_code', 'отопление'], ['document_kind', 'Справка'],
+    ['organization_id', 'УК Пример'], ['service_code', 'Лифт'], ['document_kind', 'Редкая справка'],
   ]) {
     const input = page.getByLabel(`Уточните поле ${field}`);
     await input.waitFor();
+    if (field === 'topic_id' || field === 'organization_id') {
+      const free = field === 'topic_id' ? 'Лифты' : 'УК Ромашка';
+      await input.fill(free);
+      await page.getByRole('button', { name: 'Продолжить с уточнениями' }).click();
+      await input.waitFor();
+      const body = await lastBody();
+      if (body.context[field] !== null || !body.question.includes(free) || await input.inputValue() !== free)
+        throw new Error(`Free-text ${field} was sent as an invalid ID or lost`);
+    }
+    if (field === 'territory_id' || field === 'role') {
+      await input.fill(field === 'territory_id' ? 'Марс' : 'Космонавт');
+      const before = await page.evaluate(() => window.__assistantBodies.length);
+      await page.getByRole('button', { name: 'Продолжить с уточнениями' }).click();
+      await page.locator('.error').last().waitFor();
+      if (await page.evaluate(() => window.__assistantBodies.length) !== before) throw new Error(`Invalid ${field} reached API`);
+    }
     await input.fill(value);
     if (field === 'territory_id' || field === 'role') await page.getByRole('checkbox', { name: /Я прочитал\(а\) уведомление/ }).check();
     await page.getByRole('button', { name: 'Продолжить с уточнениями' }).click();
+    if (field === 'service_code') {
+      const body = await lastBody();
+      if (body.context.service_code !== 'other' || !body.question.includes('Лифт')) throw new Error('Free-text service did not map to other');
+    }
+    if (field === 'document_kind') {
+      const body = await lastBody();
+      if (body.context.document_kind !== 'Редкая справка') throw new Error('Free-text document kind was lost');
+    }
   }
   await page.getByRole('heading', { name: 'Ответ', exact: true }).waitFor();
   await page.getByRole('link', { name: 'История' }).click();
