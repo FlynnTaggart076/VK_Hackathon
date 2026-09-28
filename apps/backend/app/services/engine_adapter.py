@@ -56,7 +56,7 @@ def validation_json(bill: BillData) -> dict:
 def extract_json(receipt_id: uuid.UUID, content: bytes, mime_type: str, workspace: str) -> dict:
     document = DocumentInput(receipt_id=receipt_id, content=content, mime_type=mime_type,
                              sha256=hashlib.sha256(content).hexdigest())
-    config = ExtractionConfig(workspace=workspace, enabled_templates=["demo-bill-v1"])
+    config = ExtractionConfig(workspace=workspace, enabled_templates=["demo-bill-v1", "mos-oblast-epd-v1"])
     result = extract_receipt(document, config)
     return result.model_dump(mode="json")
 

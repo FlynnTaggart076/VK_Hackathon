@@ -17,6 +17,7 @@ from app.services.assistant_adapter import answer_json
 from app.services.assistant_store import knowledge, owner_receipt_pair
 from app.services.deepseek import ModelUnavailable, _completion, classify
 from app.services.max_queue import process_inbox_once
+from housing_engine.epd import parse_epd_text
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -122,13 +123,60 @@ def test_selected_topic_wins_and_fabricated_model_number_rejected():
     context = {"territory_id": "moscow", "role": "owner", "topic_id": "bill_change",
                "organization_id": None, "service_code": None, "document_kind": None}
     with patch("app.services.assistant_adapter.classify", return_value={
-        "intent": "faq", "topic_id": "contact_supplier"
+        "intent": "faq", "topic_id": "supplier_contacts"
     }), patch("app.services.assistant_adapter.phrase", return_value="Новый тариф 9999 рублей"):
         result = answer_json("Объясни начисления", context, [],
                              {"role": "owner", "territory_id": "moscow"}, knowledge(),
                              api_key="fixture-key")
     assert result["topic_id"] == "bill_change"
     assert "9999" not in result["text"]
+
+
+def test_valid_model_faq_intent_overrides_trigger_word_heuristic():
+    context = {"territory_id": "moscow", "role": "owner", "topic_id": None,
+               "organization_id": None, "service_code": None, "document_kind": None}
+    with patch("app.services.assistant_adapter.classify", return_value={
+        "intent": "faq", "topic_id": "supplier_contacts"
+    }), patch("app.services.assistant_adapter.phrase", side_effect=ModelUnavailable()):
+        result = answer_json("Где посмотреть контакт поставщика, если тариф вырос везде?", context, [],
+                             {"role": "owner", "territory_id": "moscow"}, knowledge(),
+                             api_key="fixture-key")
+    assert result["topic_id"] == "supplier_contacts"
+
+
+def test_confirmed_epd_uses_pii_free_model_facts_and_rejects_fake_amount():
+    source = (ROOT / "fixtures/receipts/epd-synthetic-2026-08.txt").read_text(encoding="utf-8")
+    parsed = parse_epd_text(source, uuid.uuid4())
+    bill = parsed.bill_data.model_dump(mode="json")
+    receipt = {"id": uuid.uuid4(), "revision": 1, "bill_data": bill,
+               "confirmed_at": datetime.now(timezone.utc), "dataset_kind": "user_provided"}
+    context = {"territory_id": "moscow-oblast", "role": "owner", "topic_id": None,
+               "organization_id": None, "service_code": None, "document_kind": None}
+    seen = {}
+
+    def safe_phrase(_question, facts, *_args):
+        seen["facts"] = facts
+        return "По подтверждённой квитанции видно состав начислений."
+
+    with patch("app.services.assistant_adapter.classify", return_value={
+        "intent": "bill_rise", "topic_id": "bill_change"
+    }), patch("app.services.assistant_adapter.phrase", side_effect=safe_phrase) as model:
+        result = answer_json("Почему вырос счёт?", context, [],
+                             {"role": "owner", "territory_id": "moscow-oblast"}, knowledge(),
+                             api_key="fixture-key", personal_snapshots=[receipt], allow_receipt_model=True)
+    model.assert_called_once()
+    assert result["text"].startswith("По подтверждённой квитанции")
+    for private in (bill["account_number"], bill["address_text"], bill["issuer_name"]):
+        if private:
+            assert private not in seen["facts"]
+    assert "services" in seen["facts"]
+    with patch("app.services.assistant_adapter.classify", return_value={
+        "intent": "bill_rise", "topic_id": "bill_change"
+    }), patch("app.services.assistant_adapter.phrase", return_value="Начислено 9999 рублей"):
+        rejected = answer_json("Почему вырос счёт?", context, [],
+                               {"role": "owner", "territory_id": "moscow-oblast"}, knowledge(),
+                               api_key="fixture-key", personal_snapshots=[receipt], allow_receipt_model=True)
+    assert "9999" not in rejected["text"]
 
 
 def test_max_model_failure_then_help_is_not_poisoned(tmp_path):

@@ -210,6 +210,7 @@ class MemoryStore:
             profile = self.profiles.setdefault(user_id, {
                 "role": "other", "territory_id": None, "onboarding_completed": False,
                 "privacy_notice_version": None, "privacy_acknowledged_at": None,
+                "aggregate_opt_in": False,
             })
             token = secrets.token_urlsafe(32)
             self.sessions[hashlib.sha256(token.encode()).hexdigest()] = (user_id, now() + timedelta(hours=1))
@@ -251,7 +252,7 @@ class MemoryStore:
         with self.lock:
             value = {"role": body["role"], "territory_id": body["territory_id"],
                      "onboarding_completed": True, "privacy_notice_version": body["privacy_notice_version"],
-                     "privacy_acknowledged_at": stamp(now())}
+                     "privacy_acknowledged_at": stamp(now()), "aggregate_opt_in": False}
             self.profiles[user_id] = value
             return deepcopy(value)
 
@@ -353,11 +354,11 @@ class MemoryStore:
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     settings.validate()
+    from app.db.store import SqlStore
     from app.services.assistant_store import knowledge
 
     trusted_catalog = knowledge()  # Fail startup if the installed catalog is invalid.
     if settings.database_url:
-        from app.db.store import SqlStore
         store = SqlStore(settings)
     else:
         if settings.mode != "dev":
@@ -506,6 +507,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise ApiError(422, "VALIDATION_FAILED", "Неверный профиль.")
         return await run_in_threadpool(store.update_profile, user_id, body)
 
+    @app.put("/api/v1/me/aggregate-consent")
+    async def update_aggregate_consent(request: Request, user_id: str = Depends(current_user)):
+        if not isinstance(store, SqlStore):
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Городская статистика пока недоступна.")
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректный JSON.") from None
+        if not isinstance(body, dict) or set(body) != {"enabled"} or type(body["enabled"]) is not bool:
+            raise ApiError(422, "VALIDATION_FAILED", "Укажите enabled: true или false.")
+        from app.services.cohort_store import set_aggregate_consent
+
+        return await run_in_threadpool(set_aggregate_consent, store, user_id, body["enabled"])
+
     @app.get("/api/v1/catalog")
     def catalog(user_id: str = Depends(current_user)):
         from typing import get_args
@@ -559,6 +574,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         from app.services.assistant_adapter import answer_json
         from app.services.assistant_store import knowledge, owner_receipt_pair, receipt_snapshots, save_answer
+        from app.services.cohort_store import city_comparison
 
         snapshots, profile = await run_in_threadpool(receipt_snapshots, store, user_id, refs)
         if context["role"] != profile["role"] or context["territory_id"] != profile["territory_id"]:
@@ -571,7 +587,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 answer_json, body["question"], context, snapshots, profile, bundle,
                 api_key=settings.deepseek_api_key if profile.get("privacy_notice_version") ==
                 settings.privacy_notice_version else None,
-                model=settings.deepseek_model, personal_snapshots=personal)
+                model=settings.deepseek_model, personal_snapshots=personal,
+                allow_receipt_model=profile.get("privacy_notice_version") == settings.privacy_notice_version,
+                city_lookup=lambda rid, code, metric: city_comparison(
+                    store, user_id, rid, code, metric))
         except (EngineError, ValidationError) as exc:
             if isinstance(exc, EngineError) and exc.retryable:
                 raise ApiError(503, exc.code, exc.message, retryable=True) from None
@@ -709,6 +728,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except EngineError as exc:
             status = 409 if exc.code == "INCOMPARABLE_RECEIPTS" else 503 if exc.retryable else 422
             raise ApiError(status, exc.code, exc.message, retryable=exc.retryable) from None
+
+    @app.get("/api/v1/receipts/{receipt_id}/city-comparison")
+    async def city_comparison_http(receipt_id: uuid.UUID, service_code: str, metric: str,
+                                   user_id: str = Depends(current_user)):
+        if not isinstance(store, SqlStore) or settings.engine_mode != "real":
+            raise ApiError(503, "SERVICE_UNAVAILABLE", "Городская статистика пока недоступна.")
+        from app.services.cohort_store import city_comparison
+
+        return await run_in_threadpool(city_comparison, store, user_id, str(receipt_id),
+                                       service_code, metric)
 
     @app.post("/api/v1/receipts", status_code=202)
     async def upload_receipt(file: UploadFile, idempotency_key: str = Header(alias="Idempotency-Key"),
