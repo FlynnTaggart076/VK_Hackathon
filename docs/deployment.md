@@ -1,10 +1,10 @@
 # Развёртывание ЖКХ MVP: Compose и командная VM
 
-Статус E4: на VM приложение ещё не развёрнуто. Исходный E3 SHA
-`d223c4e49a12c4ebc5d98c3c8da8fc6c0202e16f` не подходит для production
-MAX: у worker не было исходящей сети. Для первого deploy нужен новый принятый
-координатором release SHA, реальные MAX token/webhook secret и связанный
-mini-app target вне Git. Порядок и границы — `TECHNICAL_SPEC.md` §12.8.
+На VM уже развёрнут прежний production SHA `d3fa9b2` и отдельный preview
+`af2b066`. Новая версия с DeepSeek, ЕПД и городскими выборками ожидает
+принятого release SHA и обновления B. Токены MAX и DeepSeek находятся только
+в закрытом `runtime/app.env`, вне Git. Порядок, резервная копия и границы
+обновления — `TECHNICAL_SPEC.md` §12.8.
 
 ## Историческая E1 проверка
 
@@ -39,7 +39,8 @@ backend. Внутренний `app-vm.conf` получает уже очищен
 
 Первоначальная E1 VM схема добавляла только web в external сеть
 `vk-zhkh-edge` под alias `vk-zhkh-web`. Актуальная E4 схема ниже также
-даёт worker отдельный outbound путь. API и БД остаются в частной сети.
+даёт API отдельный outbound путь для DeepSeek, worker — путь для MAX. БД
+остаётся в частной сети.
 Файлы в `infra/` не
 заменяют общий Compose или Nginx команды. Изменение общего входа, backup
 конфигурации, проверка `nginx -t`, reload/recreate и публичный smoke test
@@ -52,8 +53,13 @@ docker compose --env-file ../runtime/app.env -p vk-zhkh -f compose.yaml -f compo
 ```
 
 `runtime/app.env` и реальные токены живут вне Git. `.env.example` содержит
-только пример значений. Ниже записан исторический E1 dev результат; текущий
-образ включает Tesseract и реальный engine, проверенный в E2/E3 CI.
+только пример значений. Для DeepSeek задаются `DEEPSEEK_API_KEY` и
+`DEEPSEEK_MODEL=deepseek-flash`; API и worker должны получить private env после
+обновления, а `model_egress` API и `max_egress` worker должны пройти отдельную
+DNS/TLS проверку. Перед отправкой вопроса в модель нужны согласие на актуальное
+уведомление (мини-приложение) или `/llm_on` (MAX). Отсутствие ключа даёт
+детерминированный ответ. Текущий образ включает Tesseract и реальный engine,
+проверенный в E2/E3 CI.
 
 ## Проверка E1 в CI
 
@@ -80,14 +86,15 @@ Compose project `vk-zhkh`; публичный путь `/team/zhkh/`; общий
 
 | Сервис | Сети | Host ports |
 |---|---|---|
-| db, migrate, api | `private` (`internal: true`) | нет |
+| db, migrate | `private` (`internal: true`) | нет |
+| api | `private`, собственная `model_egress` для DNS/HTTPS DeepSeek | нет |
 | worker | `private`, собственная `max_egress` для DNS/HTTPS MAX | нет |
 | web | `private`, external `vk-zhkh-edge` с alias `vk-zhkh-web` | нет |
 | общий Nginx | своя `default` и добавленная `vk-zhkh-edge` | существующий `10.203.77.10:8080:80` |
 
-`max_egress` не подключается к API/БД и не публикует worker. Выход worker
-нужен для `POST https://platform-api2.max.ru/messages`; MAX token не передаётся
-в web. Участники VM с sudo/Docker могут читать окружения контейнеров:
+`model_egress` подключён только к API; `max_egress` — только к worker.
+Выход worker нужен для `POST https://platform-api2.max.ru/messages`;
+MAX и DeepSeek token не передаются в web. Участники VM с sudo/Docker могут читать окружения контейнеров:
 `/srv/team` не является границей от операторов VM.
 
 Внутренний Nginx приложения `infra/nginx/app-vm.conf` получает уже очищенный
