@@ -100,7 +100,10 @@ class SqlStore:
         if self.settings.mode != "preview" or not self.settings.preview_auth_enabled:
             raise ApiError(403, "PREVIEW_DISABLED", "Учебный вход недоступен.")
         token = secrets.token_urlsafe(32)
-        user = User(id=uuid.uuid4(), created_at=now())
+        # The users table requires exactly one external or demo identity.
+        # Give each preview guest a server-generated identity in a reserved
+        # namespace; /auth/demo only accepts reviewer_a/reviewer_b.
+        user = User(id=uuid.uuid4(), demo_identity=f"preview-{uuid.uuid4().hex}", created_at=now())
         profile = Profile(user_id=user.id, role="other", territory_id=None,
                           onboarding_completed=False, privacy_notice_version=None,
                           privacy_acknowledged_at=None)
