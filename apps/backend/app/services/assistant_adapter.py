@@ -110,7 +110,7 @@ def _city_answer(question: str, context: dict, snapshots: list[dict], knowledge,
     services = bill.get("services", [])
     counts = {line.get("service_code"): sum(1 for item in services
               if item.get("service_code") == line.get("service_code")) for line in services}
-    eligible = sorted(code for code, count in counts.items() if code and count == 1)
+    eligible = sorted(code for code, count in counts.items() if code and code != "other" and count == 1)
     if not service and len(eligible) == 1:
         service = eligible[0]
     if not service and not eligible:
@@ -126,6 +126,9 @@ def _city_answer(question: str, context: dict, snapshots: list[dict], knowledge,
         }
         return output
     current_lines = [line for line in services if line.get("service_code") == service]
+    if service == "other":
+        output["text"] = "Разные услуги без уточнённого вида нельзя объединять в городской показатель."
+        return output
     if len(current_lines) != 1:
         output["text"] = ("Городское сравнение по этой услуге пока недоступно: в квитанции "
                           "несколько разных строк, которые нельзя объединять в один показатель.")
