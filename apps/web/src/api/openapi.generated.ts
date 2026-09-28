@@ -53,6 +53,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Enabled only with APP_MODE=preview and PREVIEW_AUTH_ENABLED=true. No request body or client-selected identity. Creates a distinct guest owner and session on every call in the isolated preview database. */
+        post: operations["authenticatePreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/logout": {
         parameters: {
             query?: never;
@@ -161,6 +178,7 @@ export interface paths {
         };
         get: operations["listReceipts"];
         put?: never;
+        /** @description Rejected with PREVIEW_SYNTHETIC_ONLY in preview mode; import /receipts/demo instead. */
         post: operations["uploadReceipt"];
         delete?: never;
         options?: never;
@@ -470,7 +488,7 @@ export interface components {
             engine_version: string | null;
             knowledge_version: string | null;
             /** @enum {string} */
-            mode: "dev" | "demo" | "production";
+            mode: "dev" | "demo" | "preview" | "production";
             limits: {
                 upload_max_bytes: number;
                 pdf_max_pages: number;
@@ -589,12 +607,14 @@ export interface components {
             items: components["schemas"]["ReceiptSummary"][];
             next_cursor: string | null;
         };
+        /** @description Full BillData snapshot; server sets manual-v1 template, unsupported settlement formula and line calculation kinds. */
         ManualReceiptRequest: {
             bill_data: components["schemas"]["BillData.schema"];
         };
         DemoReceiptRequest: {
             fixture_id: string;
         };
+        /** @description Full BillData snapshot. Server preserves template_id, template_version, settlement.formula_kind and calculation_kind for existing line IDs; new lines use document_amount. */
         EditReceiptRequest: {
             expected_revision: number;
             bill_data: components["schemas"]["BillData.schema"];
@@ -1662,6 +1682,20 @@ export interface operations {
             429: components["responses"]["RateLimited"];
         };
     };
+    authenticatePreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AuthResult"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
     logout: {
         parameters: {
             query?: never;
@@ -1794,6 +1828,11 @@ export interface operations {
                      * @description PDF, JPEG or PNG; at most 10 MiB
                      */
                     file: string;
+                    /**
+                     * @description Optional explicit built-in synthetic sample ID; exact bytes and SHA-256 must match the manifest or 422. OCR still processes uploaded bytes.
+                     * @enum {string}
+                     */
+                    demo_sample_id?: "demo-bill-2026-08.pdf" | "demo-bill-2026-09.pdf";
                 };
             };
         };
@@ -1801,6 +1840,7 @@ export interface operations {
             202: components["responses"]["ReceiptQueued"];
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
             413: components["responses"]["PayloadTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
@@ -2151,6 +2191,7 @@ export interface operations {
         responses: {
             204: components["responses"]["NoContent"];
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     receiveMaxWebhook: {
