@@ -11,9 +11,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select, text
 
-from app.db.models import Base, User
+from app.db.models import Base, Profile, User
 from app.db.store import SqlStore, now
 from app.errors import ApiError
+from app.jobs.worker import run_once
 from app.jobs.retention import run_retention_once
 from app.main import Settings, create_app
 from test_sql_store import migrate
@@ -158,3 +159,38 @@ def test_preview_guest_obeys_migrated_postgresql_constraint_and_retention(tmp_pa
         assert session.get(User, stale_id) is None
         assert session.get(User, reviewer.id) is not None
         assert session.get(User, guests[1].id) is not None
+
+
+@pytest.mark.parametrize("mode", ["preview", "production"])
+def test_real_worker_finishes_synthetic_import_outside_dev(tmp_path, mode):
+    # Worker transaction regression. SQLite is used only for this unit test;
+    # CI's HTTP smoke exercises the same path on migrated PostgreSQL 17.
+    sqlite_url = f"sqlite:///{(tmp_path / f'{mode}.sqlite').as_posix()}"
+    settings = Settings(mode=mode, preview_auth_enabled=mode == "preview",
+                        database_url=sqlite_url, engine_mode="real",
+                        storage_path=tmp_path / "private")
+    store = SqlStore(settings)
+    Base.metadata.create_all(store.engine)
+    if mode == "preview":
+        user_id = store.authenticate_preview()["user"]["id"]
+    else:
+        user_id = str(uuid.uuid4())
+        with store.Session.begin() as session:
+            session.add(User(id=uuid.UUID(user_id), max_user_id=123456, created_at=now()))
+            session.flush()
+            session.add(Profile(user_id=uuid.UUID(user_id), role="other", territory_id=None,
+                                onboarding_completed=False, privacy_notice_version=None,
+                                privacy_acknowledged_at=None))
+    store.update_profile(user_id, {
+        "role": "tenant", "territory_id": "demo-territory",
+        "privacy_notice_version": "1.0", "privacy_acknowledged": True,
+    })
+    queued = store.import_demo(user_id, str(uuid.uuid4()), "water-2026-08")
+    assert run_once(store) is True
+    receipt = store.receipt(user_id, queued["receipt"]["id"])
+    assert receipt["status"] == "needs_review"
+    assert receipt["extraction_outcome"] == "recognized"
+    assert receipt["dataset_kind"] == "synthetic"
+    assert receipt["engine_version"] == "synthetic-demo-v1"
+    assert receipt["bill_data"]["document_current_charges"] == "200.00"
+    assert receipt["job"]["state"] == "succeeded"
