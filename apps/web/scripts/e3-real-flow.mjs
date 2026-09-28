@@ -1,4 +1,5 @@
 import { chromium } from 'playwright-core';
+import { waitForDevEntry, watchDevEntry } from './real-entry.mjs';
 
 const { BASE_URL, DEMO_ACCESS_CODE, CHROME_PATH } = process.env;
 if (!BASE_URL || !DEMO_ACCESS_CODE || !CHROME_PATH) throw new Error('Set BASE_URL, DEMO_ACCESS_CODE and CHROME_PATH outside Git');
@@ -7,8 +8,9 @@ if (!base.pathname.endsWith('/team/zhkh/')) throw new Error('BASE_URL must end w
 const browser = await chromium.launch({ executablePath: CHROME_PATH, headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 360, height: 800 } });
+  const entry = watchDevEntry(page);
   await page.goto(base.href, { waitUntil: 'domcontentloaded' });
-  await page.getByRole('button', { name: 'Войти в dev' }).waitFor({ timeout: 15000 });
+  await waitForDevEntry(page, entry, 'initial');
   await page.getByLabel('Учётная запись').selectOption('reviewer_a');
   await page.getByLabel('Локальный код').fill(DEMO_ACCESS_CODE);
   await page.getByRole('button', { name: 'Войти в dev' }).click();
@@ -49,8 +51,9 @@ try {
   for (const value of ['70.00', '40.00', '30.00', 'Синтетический пример']) if (!comparison.includes(value)) throw new Error(`Missing server comparison value: ${value}`);
   const layout = await page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth }));
   if (layout.scrollWidth > layout.width) throw new Error(`Horizontal overflow: ${JSON.stringify(layout)}`);
+  entry.reset();
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.getByRole('button', { name: 'Войти в dev' }).waitFor();
+  await waitForDevEntry(page, entry, 'reload');
   await page.getByLabel('Учётная запись').selectOption('reviewer_a');
   await page.getByLabel('Локальный код').fill(DEMO_ACCESS_CODE);
   await page.getByRole('button', { name: 'Войти в dev' }).click();
