@@ -115,6 +115,20 @@ paths:
         '200': {$ref: '#/components/responses/Profile'}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '422': {$ref: '#/components/responses/ValidationFailed'}
+  /api/v1/me/aggregate-consent:
+    put:
+      tags: [auth]
+      operationId: updateAggregateConsent
+      description: Explicit, revocable use of confirmed real receipt service metrics for city aggregates.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AggregateConsentRequest'}
+      responses:
+        '200': {$ref: '#/components/responses/AggregateConsent'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
   /api/v1/catalog:
     get:
       tags: [meta]
@@ -241,6 +255,20 @@ paths:
       responses:
         '204': {$ref: '#/components/responses/NoContent'}
         '401': {$ref: '#/components/responses/Unauthorized'}
+  /api/v1/receipts/{id}/city-comparison:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [receipts]
+      operationId: getCityComparison
+      description: Exact city/month/service/scope/segment/unit cohort; numeric values suppressed below five distinct real opted-in users.
+      parameters:
+        - {name: service_code, in: query, required: true, schema: {type: string}}
+        - {name: metric, in: query, required: true, schema: {type: string, enum: [charge_amount, tariff]}}
+      responses:
+        '200': {$ref: '#/components/responses/CityComparison'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
   /api/v1/receipts/{id}/draft:
     parameters: [{$ref: '#/components/parameters/Id'}]
     put:
@@ -464,13 +492,31 @@ components:
     Profile:
       type: object
       additionalProperties: false
-      required: [role, territory_id, onboarding_completed, privacy_notice_version, privacy_acknowledged_at]
+      required: [role, territory_id, onboarding_completed, privacy_notice_version, privacy_acknowledged_at, aggregate_opt_in]
       properties:
         role: {type: string, enum: [owner, tenant, other]}
         territory_id: {type: [string, 'null']}
         onboarding_completed: {type: boolean}
         privacy_notice_version: {type: [string, 'null']}
         privacy_acknowledged_at: {oneOf: [{$ref: '#/components/schemas/Timestamp'}, {type: 'null'}]}
+        aggregate_opt_in: {type: boolean}
+    AggregateConsentRequest: {type: object, additionalProperties: false, required: [enabled], properties: {enabled: {type: boolean}}}
+    AggregateConsentView: {type: object, additionalProperties: false, required: [aggregate_opt_in], properties: {aggregate_opt_in: {type: boolean}}}
+    CityComparisonView:
+      type: object
+      additionalProperties: false
+      required: [status, city, period, service_code, unit, metric, sample_size, average, median, provenance]
+      properties:
+        status: {type: string, enum: [available, insufficient_data, ambiguous_city, ineligible]}
+        city: {type: [string, 'null']}
+        period: {type: [string, 'null']}
+        service_code: {type: string}
+        unit: {type: [string, 'null']}
+        metric: {type: string, enum: [charge_amount, tariff]}
+        sample_size: {type: [integer, 'null'], minimum: 5}
+        average: {type: [string, 'null']}
+        median: {type: [string, 'null']}
+        provenance: {type: string, const: confirmed_opted_in_real_receipts}
     User: {type: object, additionalProperties: false, required: [id], properties: {id: {$ref: '#/components/schemas/Id'}}}
     UserAndProfile:
       type: object
@@ -787,6 +833,8 @@ components:
     AuthResult: {description: Session created, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/AuthResponse'}}}}
     Me: {description: Current user, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/UserAndProfile'}, examples: {synthetic: {externalValue: './examples/me.json'}}}}}
     Profile: {description: Updated profile, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/Profile'}}}}
+    AggregateConsent: {description: Current aggregate opt-in state, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/AggregateConsentView'}}}}
+    CityComparison: {description: Suppressed or aggregate-only city metric, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/CityComparisonView'}}}}
     Catalog: {description: Public verified catalog, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/Catalog'}, examples: {synthetic: {externalValue: './examples/catalog.json'}}}}}
     Answer: {description: Answer or structured clarification/unsupported, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/AnswerView'}, examples: {unsupported: {externalValue: './examples/answer-unsupported.json'}, clarification: {externalValue: './examples/answer-clarification.json'}}}}}
     Receipt: {description: Receipt view, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ReceiptView'}, examples: {synthetic: {externalValue: './examples/receipt-confirmed.json'}, manual_required: {externalValue: './examples/receipt-manual-required.json'}}}}}

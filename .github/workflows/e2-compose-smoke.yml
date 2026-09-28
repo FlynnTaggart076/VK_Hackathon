@@ -101,7 +101,7 @@ jobs:
             echo "::error title=E2 HTTP persistence::$(tail -n 15 /tmp/zhkh-e2-verify.log | tr '\r\n' '  ' | tail -c 1800)"
             exit 1
           fi
-          if [[ "$GITHUB_REF_NAME" == integration/e3 || "$GITHUB_REF_NAME" == integration/e4 ]]; then
+          if [[ "$GITHUB_REF_NAME" == integration/e3 || "$GITHUB_REF_NAME" == integration/e4 || "$GITHUB_REF_NAME" == integration/e4-deepseek ]]; then
             if ! python3 scripts/smoke_e3_http.py > /tmp/zhkh-e3-http.log 2>&1; then
               echo "::error title=E3 HTTP comparison::$(tail -n 20 /tmp/zhkh-e3-http.log | tr '\r\n' '  ' | tail -c 1800)"
               exit 1
@@ -113,7 +113,7 @@ jobs:
             echo "::error title=E2 OCR process tree::$(tail -n 20 /tmp/zhkh-e2-tree-test.log | tr '\r\n' '  ' | tail -c 1800)"
             exit 1
           fi
-          if [[ "$GITHUB_REF_NAME" == integration/e3 || "$GITHUB_REF_NAME" == integration/e4 ]]; then
+          if [[ "$GITHUB_REF_NAME" == integration/e3 || "$GITHUB_REF_NAME" == integration/e4 || "$GITHUB_REF_NAME" == integration/e4-deepseek ]]; then
             if ! "${compose[@]}" run --rm --no-deps -v "$GITHUB_WORKSPACE:/repo:ro" \
                 -e PYTHONPATH=/workspace worker python /repo/scripts/verify_e3_webhook.py \
                 > /tmp/zhkh-e3-webhook.log 2>&1; then
@@ -121,7 +121,13 @@ jobs:
               exit 1
             fi
           fi
-          if [[ "$GITHUB_REF_NAME" == integration/e4 ]]; then
+          if [[ "$GITHUB_REF_NAME" == integration/e4 || "$GITHUB_REF_NAME" == integration/e4-deepseek ]]; then
+            if ! "${compose[@]}" run --rm --no-deps -v "$GITHUB_WORKSPACE:/repo:ro" \
+                worker sh -c 'TEST_POSTGRES_URL="$DATABASE_URL" PYTHONPATH=/workspace python -m pytest -q /repo/apps/backend/tests/test_e4_city_cohort.py' \
+                > /tmp/zhkh-e4-city-pg.log 2>&1; then
+              echo "::error title=E4 city consent PG17::$(tail -n 20 /tmp/zhkh-e4-city-pg.log | tr '\r\n' '  ' | tail -c 1800)"
+              exit 1
+            fi
             docker network create vk-zhkh-edge >/dev/null
             python3 - <<'PY'
           from pathlib import Path
@@ -206,14 +212,14 @@ jobs:
             echo "::error title=E2 UI receipt persistence::$(tail -n 15 /tmp/zhkh-e2-ui-restart.log | tr '\r\n' '  ' | tail -c 1800)"
             exit 1
           fi
-          if [[ "$GITHUB_REF_NAME" == integration/e3 || "$GITHUB_REF_NAME" == integration/e4 ]]; then
+          if [[ "$GITHUB_REF_NAME" == integration/e3 || "$GITHUB_REF_NAME" == integration/e4 || "$GITHUB_REF_NAME" == integration/e4-deepseek ]]; then
             if ! BASE_URL=http://127.0.0.1:5173/team/zhkh/ CHROME_PATH="$chrome_path" \
                 node apps/web/scripts/e3-real-flow.mjs > /tmp/zhkh-e3-browser.log 2>&1; then
               echo "::error title=E3 real browser::$(tail -n 20 /tmp/zhkh-e3-browser.log | tr '\r\n' '  ' | tail -c 1800)"
               exit 1
             fi
           fi
-          if [[ "$GITHUB_REF_NAME" == integration/e4 ]]; then
+          if [[ "$GITHUB_REF_NAME" == integration/e4 || "$GITHUB_REF_NAME" == integration/e4-deepseek ]]; then
             if ! BASE_URL=http://127.0.0.1:5173/team/zhkh/ CHROME_PATH="$chrome_path" \
                 node apps/web/scripts/e4-real-resilience.mjs > /tmp/zhkh-e4-browser.log 2>&1; then
               echo "::error title=E4 real browser::$(tail -n 20 /tmp/zhkh-e4-browser.log | tr '\r\n' '  ' | tail -c 1800)"

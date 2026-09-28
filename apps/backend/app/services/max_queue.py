@@ -145,6 +145,7 @@ def question_text(session, item: WebhookInbox, store: SqlStore) -> str | None:
         return None
     from app.services.assistant_adapter import answer_json
     from app.services.assistant_store import knowledge, owner_receipt_pair
+    from app.services.cohort_store import city_comparison
 
     user = session.scalar(select(User).where(User.max_user_id == item.max_user_id).with_for_update())
     if user is None:
@@ -186,7 +187,11 @@ def question_text(session, item: WebhookInbox, store: SqlStore) -> str | None:
                                  profile.chat_llm_consent_at is not None or
                                  profile.privacy_notice_version == store.settings.privacy_notice_version
                              ) else None,
-                             model=store.settings.deepseek_model, personal_snapshots=personal)
+                             model=store.settings.deepseek_model, personal_snapshots=personal,
+                             allow_receipt_model=profile.privacy_notice_version ==
+                             store.settings.privacy_notice_version,
+                             city_lookup=lambda rid, code, metric: city_comparison(
+                                 store, str(user.id), rid, code, metric))
     except Exception:
         # One malformed external response or exceptional engine record must not poison
         # the durable inbox and block later commands.

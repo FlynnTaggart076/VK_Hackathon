@@ -26,3 +26,23 @@ Required follow-up before E4 acceptance:
 4. Refactor MAX model call out of the inbox DB transaction if model latency or row lock contention appears in PG17/load checks. Current call is bounded; provider errors fall back safely.
 
 Official API reference: https://api-docs.deepseek.com/guides/json_mode/ and https://api-docs.deepseek.com/api/create-chat-completion/ . Private data handling reference: https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html .
+
+## Checkpoint 2: real city cohort and grounded EPD answers
+
+Previous B code checkpoint: `bfc1d97`; preview retention CI fix: `85359a2`. The new code below remains a dependency checkpoint until coordinator integration, PG17/Compose CI, and VM/MAX acceptance.
+
+Implemented:
+
+- Explicit `PUT /api/v1/me/aggregate-consent` opt-in, derived city cohort migration, revocation and receipt deletion. Only confirmed `user_provided` rows from opted-in owners participate. Query matches exact city, calendar month, service, scope, segment and unit; C's cohort helper suppresses mean/median and sample size below five distinct contributors. Duplicate ambiguous contributor values suppress the cohort. Cross-owner receipt IDs return 404.
+- `GET /api/v1/receipts/{id}/city-comparison` with `metric=charge_amount|tariff` and OpenAPI contract. Repeated service codes in a bill are ineligible until a line-specific contract is added; distinct hot-water carrier/energy and electricity segments are never averaged together.
+- Mini-app assistant and MAX city-intent answers use that same owner-scoped query. Citywide trend is stated only when both exact calendar months qualify and the owner's line scope/segment/unit match. Otherwise the answer states insufficient/ambiguous data. City comparisons are derived locally; no other user's bill or cohort rows enter DeepSeek prompts.
+- City numerical prose stays deterministic so the model cannot overstate a small sample. With consent, DeepSeek still classifies the city question; its generative phrasing is limited to verified FAQ and privacy-safe EPD lead-ins. A valid model FAQ classification takes precedence over a keyword heuristic, and an explicit selected topic remains authoritative.
+- Accepted `mos-oblast-epd-v1` template enabled. A confirmed EPD's safe `project_receipt_facts` reaches DeepSeek only after v2 privacy acknowledgement. Model supplies a short numeric-free lead-in; deterministic server text carries amounts and all comparisons. Model output with invented numbers is rejected. The one-receipt answer shows top charges, total current charges, and the count of remaining rows.
+
+Evidence:
+
+- Local backend plus engine: `101 passed, 5 skipped` on Windows Python 3.13. The skipped PG17 case is configured in E2 Compose CI with an isolated PostgreSQL schema. Cohort test covers four vs five contributors, two-month trend threshold, different city/period suppression, duplicate line suppression, MAX inbox path, consent revocation, synthetic exclusion, and owner isolation. EPD model mock checks outbound facts exclude account, address and issuer and rejects fabricated amount.
+- `scripts/check_http_contract.py`: OpenAPI 3.1, 31 operations, 25 JSON examples, engine fields linked. `git diff --check` clean.
+- Private `EX.pdf` read-only parse through C engine: `partial`, `mos-oblast-epd-v1`, 19 billed service rows, four adjustments, period and printed charge/due totals present. No private field values printed or committed.
+
+Remaining before release: verify actual PG17/Compose CI and API-container DNS/TLS, regenerate frontend OpenAPI types, exercise owner and MAX end-to-end on VM from accepted release SHA. EPD OCR is deterministic with user review; worker-side LLM candidate extraction for unresolved rows is not implemented yet. Preview's synthetic `demo-bill-v1` does not pass C's EPD-only safe projection, so its receipt model phrasing is not verified. No VM mutation was made from this branch.
