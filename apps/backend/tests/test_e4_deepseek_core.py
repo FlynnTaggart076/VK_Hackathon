@@ -179,6 +179,36 @@ def test_confirmed_epd_uses_pii_free_model_facts_and_rejects_fake_amount():
     assert "9999" not in rejected["text"]
 
 
+def test_synthetic_demo_receipt_model_projection_excludes_identity_and_raw_name():
+    bill = _bill("2026-08")
+    bill["address_text"] = "СЕКРЕТНЫЙ АДРЕС"
+    bill["account_number"] = "СЕКРЕТНЫЙ СЧЕТ"
+    bill["issuer_name"] = "СЕКРЕТНЫЙ ПОСТАВЩИК"
+    bill["services"][0]["raw_name"] = "СЕКРЕТНОЕ НАЗВАНИЕ УСЛУГИ"
+    snapshot = {"id": uuid.uuid4(), "revision": 1, "bill_data": bill,
+                "confirmed_at": datetime.now(timezone.utc), "dataset_kind": "synthetic"}
+    context = {"territory_id": "demo-territory", "role": "owner", "topic_id": None,
+               "organization_id": None, "service_code": None, "document_kind": None}
+    seen = {}
+
+    def capture(_question, facts, *_args):
+        seen["facts"] = facts
+        return "Учебная квитанция показывает состав начислений."
+
+    with patch("app.services.assistant_adapter.classify", return_value={
+        "intent": "bill_rise", "topic_id": "bill_change"
+    }), patch("app.services.assistant_adapter.phrase", side_effect=capture):
+        result = answer_json("Почему вырос счёт?", context, [],
+                             {"role": "owner", "territory_id": "demo-territory"}, knowledge(),
+                             api_key="fixture-key", personal_snapshots=[snapshot],
+                             allow_receipt_model=True)
+    assert result["text"].startswith("Учебная квитанция")
+    assert "synthetic_demo_receipt" in seen["facts"]
+    for secret in (bill["address_text"], bill["account_number"], bill["issuer_name"],
+                   bill["services"][0]["raw_name"]):
+        assert secret not in seen["facts"]
+
+
 def test_max_model_failure_then_help_is_not_poisoned(tmp_path):
     app = _store(tmp_path, max_bot_token="fixture-token", max_webhook_secret="fixture_secret",
                  deepseek_api_key="fixture-key")
