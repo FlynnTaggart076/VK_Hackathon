@@ -77,7 +77,7 @@ def test_preview_guest_owners_and_profiles_are_distinct(tmp_path):
     assert store.user_for_token(second["access_token"]) == second["user"]["id"]
     store.update_profile(first["user"]["id"], {
         "role": "tenant", "territory_id": "demo-territory",
-        "privacy_notice_version": "1.0", "privacy_acknowledged": True,
+        "privacy_notice_version": store.settings.privacy_notice_version, "privacy_acknowledged": True,
     })
     assert store.profile(first["user"]["id"])["onboarding_completed"] is True
     assert store.profile(second["user"]["id"])["onboarding_completed"] is False
@@ -183,7 +183,7 @@ def test_real_worker_finishes_synthetic_import_outside_dev(tmp_path, mode):
                                 privacy_acknowledged_at=None))
     store.update_profile(user_id, {
         "role": "tenant", "territory_id": "demo-territory",
-        "privacy_notice_version": "1.0", "privacy_acknowledged": True,
+        "privacy_notice_version": store.settings.privacy_notice_version, "privacy_acknowledged": True,
     })
     queued = store.import_demo(user_id, str(uuid.uuid4()), "water-2026-08")
     assert run_once(store) is True

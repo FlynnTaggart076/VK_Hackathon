@@ -6,7 +6,7 @@
   "limits": {
     "upload_max_bytes": 10485760,
     "pdf_max_pages": 3,
-    "receipt_retention_days": 30,
+    "receipt_retention_days": 120,
     "source_retention_days": 7
   },
   "features": {
@@ -18,7 +18,7 @@
     "demo_auth": false
   },
   "privacy_notice": {
-    "version": "1.0",
-    "text": "Учебный стенд: исходники хранятся 7 дней, данные квитанций — 30 дней."
+    "version": "2.0",
+    "text": "Исходные документы хранятся 7 дней, подтверждённые данные квитанций — 120 дней. Выбранный текст вопроса и обезличенные расчётные факты могут передаваться внешнему сервису DeepSeek после согласия."
   }
 }

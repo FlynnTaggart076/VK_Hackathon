@@ -19,7 +19,7 @@ def verify_config() -> None:
     expected = {
         "db": {"private"},
         "migrate": {"private"},
-        "api": {"private"},
+        "api": {"private", "model_egress"},
         "worker": {"private", "max_egress"},
         "web": {"private", "edge"},
     }
@@ -29,6 +29,7 @@ def verify_config() -> None:
         assert not service.get("ports"), f"{name} publishes a port"
     networks = config["networks"]
     assert networks["private"]["internal"] is True
+    assert not networks["model_egress"].get("internal", False)
     assert not networks["max_egress"].get("internal", False)
     assert networks["edge"]["external"] is True
     assert networks["edge"]["name"] == "vk-zhkh-edge"

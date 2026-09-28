@@ -2,7 +2,7 @@ name: E4 isolated browser preview
 
 on:
   push:
-    branches: [integration/e4-preview]
+    branches: [integration/e4-preview, integration/e4-deepseek]
   workflow_dispatch:
 
 jobs:

@@ -10,6 +10,9 @@ services:
       MAX_WEB_APP: ${MAX_WEB_APP:?set MAX_WEB_APP in private runtime/app.env}
   api:
     environment: *production_settings
+    networks:
+      private: {}
+      model_egress: {}
   worker:
     environment: *production_settings
     networks:
@@ -22,6 +25,7 @@ services:
         aliases: [vk-zhkh-web]
 
 networks:
+  model_egress: {}
   max_egress: {}
   edge:
     external: true

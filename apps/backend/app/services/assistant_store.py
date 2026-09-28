@@ -57,7 +57,71 @@ def receipt_snapshots(store: SqlStore, user_id: str, refs: list[dict]) -> tuple[
                               "bill_data": deepcopy(revision.bill_data),
                               "confirmed_at": aware(revision.confirmed_at),
                               "dataset_kind": receipt.dataset_kind})
-        return snapshots, {"role": profile.role, "territory_id": profile.territory_id}
+        return snapshots, {"role": profile.role, "territory_id": profile.territory_id,
+                           "privacy_notice_version": profile.privacy_notice_version}
+
+
+def owner_receipt_pair(store: SqlStore, user_id: str, preferred_id: str | None = None,
+                       db_session=None) -> tuple[list[dict], dict]:
+    """Current and nearest earlier comparable confirmed bill; never crosses owners."""
+    uid = uuid.UUID(str(user_id))
+
+    def read(session):
+        profile = session.get(Profile, uid)
+        if profile is None:
+            raise ApiError(401, "AUTH_REQUIRED", "Войдите в приложение.")
+        rows = session.execute(select(Receipt, ReceiptRevision).join(
+            ReceiptRevision,
+            (ReceiptRevision.receipt_id == Receipt.id) &
+            (ReceiptRevision.revision == Receipt.current_revision),
+        ).where(Receipt.user_id == uid, Receipt.status == "confirmed",
+                ReceiptRevision.confirmed_at.is_not(None))).all()
+        candidates = [(receipt, revision) for receipt, revision in rows
+                      if isinstance(revision.bill_data, dict)]
+        if preferred_id is not None:
+            candidates = [item for item in candidates if str(item[0].id) == preferred_id] + [
+                item for item in candidates if str(item[0].id) != preferred_id]
+            if not candidates or str(candidates[0][0].id) != preferred_id:
+                raise ApiError(404, "NOT_FOUND", "Подтверждённая квитанция не найдена.")
+        else:
+            candidates.sort(key=lambda item: (
+                item[1].bill_data.get("period") or "", aware(item[1].confirmed_at), str(item[0].id)),
+                reverse=True)
+        if not candidates:
+            return [], {"role": profile.role, "territory_id": profile.territory_id,
+                        "privacy_notice_version": profile.privacy_notice_version}
+        current, current_revision = candidates[0]
+        bill = current_revision.bill_data
+        account, provider, period = bill.get("account_number"), bill.get("provider_id"), bill.get("period")
+        earlier = []
+        previous_period = None
+        if isinstance(period, str) and len(period) == 7:
+            year, month = map(int, period.split("-"))
+            previous_period = f"{year - (month == 1):04d}-{12 if month == 1 else month - 1:02d}"
+        if account and provider and previous_period:
+            earlier = [(receipt, revision) for receipt, revision in candidates[1:]
+                       if revision.bill_data.get("account_number") == account and
+                       revision.bill_data.get("provider_id") == provider and
+                       revision.bill_data.get("period") == previous_period]
+            earlier.sort(key=lambda item: (
+                item[1].bill_data["period"], aware(item[1].confirmed_at), str(item[0].id)), reverse=True)
+
+        def snapshot(pair):
+            receipt, revision = pair
+            return {"id": receipt.id, "revision": receipt.current_revision,
+                    "bill_data": deepcopy(revision.bill_data),
+                    "confirmed_at": aware(revision.confirmed_at), "dataset_kind": receipt.dataset_kind}
+
+        selected = [snapshot((current, current_revision))]
+        if earlier:
+            selected.append(snapshot(earlier[0]))
+        return selected, {"role": profile.role, "territory_id": profile.territory_id,
+                          "privacy_notice_version": profile.privacy_notice_version}
+
+    if db_session is not None:
+        return read(db_session)
+    with store.Session() as session:
+        return read(session)
 
 
 def _current_refs(session, user_id: uuid.UUID, refs: list[dict]) -> bool:

@@ -252,6 +252,10 @@ def test_source_and_receipt_retention_are_separate(tmp_path, monkeypatch):
         with client.app.state.store.Session.begin() as session:
             session.get(Receipt, uuid.UUID(rid)).created_at = now() - timedelta(days=31)
         run_retention_once(client.app.state.store)
+        assert client.get(f"/api/v1/receipts/{rid}", headers=headers(token)).status_code == 200
+        with client.app.state.store.Session.begin() as session:
+            session.get(Receipt, uuid.UUID(rid)).created_at = now() - timedelta(days=121)
+        run_retention_once(client.app.state.store)
         assert client.get(f"/api/v1/receipts/{rid}", headers=headers(token)).status_code == 404
         assert list(settings.storage_path.iterdir()) == []
 

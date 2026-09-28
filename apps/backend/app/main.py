@@ -45,13 +45,15 @@ class Settings:
     max_webhook_secret: str | None = None
     max_web_app: str | None = None
     max_api_base_url: str = "https://platform-api2.max.ru"
+    deepseek_api_key: str | None = None
+    deepseek_model: str = "deepseek-flash"
     engine_mode: str = "stub"
     database_url: str | None = None
     storage_path: Path = Path(".local-storage")
     upload_max_bytes: int = 10_485_760
     pdf_max_pages: int = 3
     image_max_pixels: int = 25_000_000
-    privacy_notice_version: str = "1.0"
+    privacy_notice_version: str = "2.0"
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -64,6 +66,8 @@ class Settings:
             max_webhook_secret=os.getenv("MAX_WEBHOOK_SECRET"),
             max_web_app=os.getenv("MAX_WEB_APP"),
             max_api_base_url=os.getenv("MAX_API_BASE_URL", "https://platform-api2.max.ru"),
+            deepseek_api_key=os.getenv("DEEPSEEK_API_KEY"),
+            deepseek_model=os.getenv("DEEPSEEK_MODEL", "deepseek-flash"),
             engine_mode=os.getenv("ENGINE_MODE", "stub"),
             database_url=os.getenv("DATABASE_URL"),
             storage_path=Path(os.getenv("STORAGE_PATH", ".local-storage")),
@@ -93,6 +97,8 @@ class Settings:
                 r"(?:[A-Za-z][A-Za-z0-9_]{2,63}|https://max\.ru/[A-Za-z][A-Za-z0-9_]{2,63})",
                 self.max_web_app):
             raise ValueError("MAX_WEB_APP must be a MAX bot username or max.ru bot link")
+        if self.deepseek_model not in {"deepseek-flash", "deepseek-v4-pro"}:
+            raise ValueError("DEEPSEEK_MODEL must be an official supported model")
         api_url = urlsplit(self.max_api_base_url)
         if api_url.scheme != "https" or not api_url.hostname or api_url.username or api_url.password or \
                 api_url.query or api_url.fragment or api_url.path not in {"", "/"}:
@@ -399,14 +405,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "knowledge_version": trusted_catalog.version if settings.engine_mode == "real" else None,
                 "mode": settings.mode,
                 "limits": {"upload_max_bytes": settings.upload_max_bytes, "pdf_max_pages": settings.pdf_max_pages,
-                           "receipt_retention_days": 30, "source_retention_days": 7},
+                           "receipt_retention_days": 120, "source_retention_days": 7},
                 "features": {"voice": False, "external_submission": False,
                              "receipt_ocr": settings.engine_mode == "real",
                              "comparison": settings.engine_mode == "real" and bool(settings.database_url),
                              "engine_stub": settings.engine_mode == "stub",
                              "demo_auth": settings.demo_auth_enabled},
                 "privacy_notice": {"version": settings.privacy_notice_version,
-                                   "text": "Исходные документы хранятся 7 дней, данные квитанций — 30 дней."}}
+                                   "text": "Исходные документы хранятся 7 дней, подтверждённые данные квитанций — 120 дней. Для ответа выбранный текст вопроса и обезличенные расчётные факты могут передаваться внешнему сервису DeepSeek; исходные документы, адрес и номер счёта не передаются. Городская статистика использует подтверждённые квитанции только после отдельного согласия; его можно отозвать."}}
 
     @app.post("/api/v1/auth/demo")
     async def auth_demo(request: Request):
@@ -552,22 +558,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         from housing_engine import EngineError
 
         from app.services.assistant_adapter import answer_json
-        from app.services.assistant_store import knowledge, receipt_snapshots, save_answer
+        from app.services.assistant_store import knowledge, owner_receipt_pair, receipt_snapshots, save_answer
 
         snapshots, profile = await run_in_threadpool(receipt_snapshots, store, user_id, refs)
         if context["role"] != profile["role"] or context["territory_id"] != profile["territory_id"]:
             raise ApiError(409, "PROFILE_CHANGED", "Профиль изменился; обновите страницу.")
         try:
             bundle = await run_in_threadpool(knowledge)
-            result = await run_in_threadpool(answer_json, body["question"], context, snapshots, profile, bundle)
+            personal, _ = await run_in_threadpool(owner_receipt_pair, store, user_id,
+                                                  refs[0]["id"] if refs else None)
+            result = await run_in_threadpool(
+                answer_json, body["question"], context, snapshots, profile, bundle,
+                api_key=settings.deepseek_api_key if profile.get("privacy_notice_version") ==
+                settings.privacy_notice_version else None,
+                model=settings.deepseek_model, personal_snapshots=personal)
         except (EngineError, ValidationError) as exc:
             if isinstance(exc, EngineError) and exc.retryable:
                 raise ApiError(503, exc.code, exc.message, retryable=True) from None
             raise ApiError(422, "VALIDATION_FAILED", "Некорректный контекст вопроса.") from None
-        kind = snapshots[0]["dataset_kind"] if snapshots else \
+        selected = snapshots or personal if result.get("receipt_ref") else []
+        kind = selected[0]["dataset_kind"] if selected else \
             "synthetic" if profile["territory_id"] == "demo-territory" else "public_reference"
         return await run_in_threadpool(save_answer, store, user_id, body["question"],
-                                       result, refs[0] if refs else None, kind)
+                                       result, result.get("receipt_ref"), kind)
 
     @app.get("/api/v1/assistant/answers/{answer_id}")
     def read_answer(answer_id: uuid.UUID, user_id: str = Depends(current_user)):
