@@ -54,7 +54,7 @@ export function ReceiptExplanation() {
       <h3>Источники</h3>
       {!explanation.sources.length && <p>Внешние источники для этого расчёта не указаны; цифры берутся из подтверждённой платёжки.</p>}
       {explanation.sources.map((source) => <p key={source.id}>{source.title} · проверено {source.verified_at}{source.is_synthetic && ' · синтетический источник'}{source.url && <a href={source.url} target="_blank" rel="noopener noreferrer"> Открыть источник</a>}</p>)}
-      <p><Link to={`/review?id=${encodeURIComponent(explanation.receipt_ref.id)}`}>Вернуться к документу</Link></p>
+      <div className="actions"><Link to={`/review?id=${encodeURIComponent(explanation.receipt_ref.id)}`}>Вернуться к документу</Link><Link to={`/assistant?receipt=${encodeURIComponent(explanation.receipt_ref.id)}`}>Вопрос по платёжке</Link><Link to={`/city-comparison?receipt=${encodeURIComponent(explanation.receipt_ref.id)}`}>Сравнить с городом</Link></div>
     </>}
   </section>;
 }

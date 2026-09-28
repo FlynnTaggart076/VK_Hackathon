@@ -18,7 +18,7 @@ try {
   await page.getByRole('link', { name: 'Платёжка' }).click();
   const fixture = await readFile(new URL('../public/synthetic-receipt.png', import.meta.url));
   await page.getByLabel('Файл платёжки').setInputFiles({ name: 'demo-bill-2026-08.png', mimeType: 'image/png', buffer: fixture });
-  await page.getByRole('button', { name: 'Загрузить' }).click();
+  await page.getByRole('button', { name: 'Загрузить', exact: true }).click();
   await page.waitForURL(/\/processing\?job=/);
   await page.getByRole('link', { name: 'Проверить данные платёжки' }).waitFor({ timeout: 20000 });
   await page.getByRole('link', { name: 'Проверить данные платёжки' }).click();
