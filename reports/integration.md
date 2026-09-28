@@ -1,6 +1,15 @@
 # Отчёт координатора об интеграции
 
-Обновлено: 2026-09-27. Текущий этап: E4 после принятых E0–E3; E4 пока не принят. Ранние промежуточные проверки ниже сохранены как история. Актуальные E4 checkpoints находятся в конце отчёта.
+Обновлено: 2026-09-28. Текущий этап: E4 после принятых E0–E3; E4 пока не принят. Актуальный checkpoint изменения DeepSeek находится ниже, прежние проверки сохранены как история.
+
+## E4 checkpoint: DeepSeek, реальный ЕПД и городское сравнение (2026-09-28)
+
+- Владелец изменил продуктовый сценарий: DeepSeek должен вести диалог и определять тему, подтверждённые квитанции пользователя — объяснять рост к прошлому месяцу, а агрегат по городу — отвечать только при сопоставимых данных. Указание владельца заменяет запрет внешней LLM в `TECHNICAL_SPEC.md` v1.1. `docs/change-request-deepseek.md` и проверочный список `docs/deepseek-qa.md` фиксируют новые контракты и границы данных.
+- `DST.txt` и `EX.pdf` находятся только локально; `.gitignore` проверен через `git check-ignore -v`, оба файла не отслеживаются. Частный EX — одна текстовая страница ЕПД с персональными данными, поэтому в Git внесены лишь синтетические макеты и обезличенные счётчики покрытия. Official DeepSeek Chat Completions JSON/vision docs проверены; модель `deepseek-flash`, ключ должен передаваться в server env без печати. Ни один реальный PDF или его персональные поля не отправлялись из этой сессии в DeepSeek.
+- Task SHA `9b58db6eb6fa28c46afb3da5ae7c59c337f0a6d6` pushed в `main`; A/B/C запущены в отдельных checkout/ветках. A чинит уточнения и UI, B — DeepSeek/личный контекст/consent/агрегат, C — ЕПД. A/B пока разрабатывают, их SHA не приняты. Новый task для C по чистой математике когорты `tasks/e4/agent-c-cohort.md` выдан после приёмки парсера.
+- C pushed code `03c219f760b14ae07d05f68f39ec8428f7acf9da`, report `4220f49ae373cac8a28e665968706553492a48f2`; remote branch SHA независимо подтверждён `git ls-remote`. Coordinator просмотрел diff, отсутствие PII в отчёте/фикстурах и `git diff --check`, cherry-picked как integration code `bff6742`, report `574b722` в отдельный checkout. Независимо повторены **51 engine tests**, contract verifier и **32 backend tests/4 local PG skips**. Локальный EX дал `partial`, 19 billed service rows, 4 adjustments, `can_confirm=True`, ноль validation errors; суммы строк и printed non-insurance total сходятся, страхование/справочная таблица исключены. Проверка model projection на личном EX: account/address/issuer/provider не присутствуют. Backend пока не включает новый template ID; API загрузка ещё не проверена.
+- Координатор вернул A дефекты, найденные в ревью черновика: роль/территория давали бы `409 PROFILE_CHANGED`, а один `service_code` смешивал бы тарифные сегменты при городском сравнении. B переданы требования exact previous calendar month, фильтра scope/segment/unit, безопасного fallback после model timeout, privacy notice v2 и исходящего доступа API к DeepSeek из VM. Исправления ещё не приняты.
+- Развёрнутыми остаются production `d3fa9b2` и отдельный preview `af2b066`; новый код не развернут и не проверен в MAX. Следующий шаг: получить pushed A/B SHA и отчёты, проверить diff/PG17/браузер, объединить совместимые изменения и только затем выдать B принятый release SHA по §12.8. E4/E5 не закрыты, готовность продукта не заявляется.
 
 ## E4 checkpoint: FAQ, bot token и новая задача B (2026-09-27)
 
