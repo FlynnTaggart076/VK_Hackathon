@@ -14,7 +14,7 @@ def run_retention_once(store: SqlStore) -> None:
     moment = now()
     with store.Session() as session:
         old_receipts = session.scalars(select(Receipt).where(
-            Receipt.created_at <= moment - timedelta(days=30)
+            Receipt.created_at <= moment - timedelta(days=120)
         ).order_by(Receipt.created_at, Receipt.id).limit(100)).all()
         targets = [(str(row.user_id), str(row.id)) for row in old_receipts]
     for user_id, receipt_id in targets:
@@ -66,11 +66,11 @@ def run_retention_once(store: SqlStore) -> None:
 
     if store.settings.mode == "preview":
         # Preview users are anonymous and only have one-hour sessions. Remove
-        # their derived data after the documented 30-day receipt retention.
+        # their derived data after the documented 120-day receipt retention.
         with store.Session.begin() as session:
             stale = session.scalars(select(User).where(
                 User.max_user_id.is_(None), User.demo_identity.like("preview-%"),
-                User.created_at <= moment - timedelta(days=31)
+                User.created_at <= moment - timedelta(days=121)
             ).order_by(User.created_at, User.id).limit(100).with_for_update(skip_locked=True)).all()
             for user in stale:
                 session.delete(user)

@@ -2,7 +2,7 @@ name: E2 Compose smoke
 
 on:
   push:
-    branches: [integration/e2, integration/e3, integration/e4]
+    branches: [integration/e2, integration/e3, integration/e4, integration/e4-deepseek]
     paths:
       - .github/workflows/e2-compose-smoke.yml
       - apps/**

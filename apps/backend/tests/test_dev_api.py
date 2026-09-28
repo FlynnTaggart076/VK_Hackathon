@@ -41,7 +41,8 @@ def image_bytes(color="white") -> bytes:
 def accept_privacy(client, token):
     response = client.put("/api/v1/me/profile", headers=headers(token), json={
         "role": "tenant", "territory_id": "demo-territory",
-        "privacy_notice_version": "1.0", "privacy_acknowledged": True,
+        "privacy_notice_version": client.get("/api/v1/meta").json()["privacy_notice"]["version"],
+        "privacy_acknowledged": True,
     })
     assert response.status_code == 200
 
