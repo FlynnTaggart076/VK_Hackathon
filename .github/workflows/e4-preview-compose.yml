@@ -1,0 +1,74 @@
+name: E4 isolated browser preview
+
+on:
+  push:
+    branches: [integration/e4-preview]
+  workflow_dispatch:
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test both frontend build modes
+        working-directory: apps/web
+        run: |
+          npm ci
+          npm test
+          npm run build
+          VITE_APP_BASE=/team/zhkh-preview/ VITE_PREVIEW_MODE=true npm run build
+
+  preview-compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start isolated PostgreSQL 17 preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          export POSTGRES_PASSWORD="$(openssl rand -hex 24)"
+          export PREVIEW_CI_WEB_PORT=18082
+          project="zhkh-preview-ci-${GITHUB_RUN_ID}"
+          docker network create vk-zhkh-preview-edge >/dev/null
+          compose=(docker compose -p "$project" -f compose.yaml -f compose.preview.vm.yaml -f compose.preview.ci.yaml)
+          on_exit() {
+            status=$?
+            if (( status != 0 )); then
+              "${compose[@]}" ps || true
+              "${compose[@]}" logs --no-color --tail=60 api worker web 2>&1 | sed -E 's#(postgresql\+psycopg://zhkh:)[^@ ]+#\1***#g' || true
+            fi
+            "${compose[@]}" down >/dev/null 2>&1 || true
+            docker network rm vk-zhkh-preview-edge >/dev/null 2>&1 || true
+          }
+          trap on_exit EXIT
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up --build -d >/tmp/zhkh-preview-build.log 2>&1 || {
+            tail -n 30 /tmp/zhkh-preview-build.log | sed -E 's#(postgresql\+psycopg://zhkh:)[^@ ]+#\1***#g'
+            exit 1
+          }
+          ready=000
+          for attempt in $(seq 1 45); do
+            ready="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18082/team/zhkh-preview/health/ready || true)"
+            if [[ "$ready" == 200 ]]; then break; fi
+            sleep 3
+          done
+          test "$ready" = 200
+          "${compose[@]}" exec -T web nginx -t
+          web="$(curl -s -o /tmp/zhkh-preview-index.html -w '%{http_code}' http://127.0.0.1:18082/team/zhkh-preview/ || true)"
+          deep="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18082/team/zhkh-preview/history || true)"
+          test "$web" = 200 && test "$deep" = 200
+          python3 - <<'PY'
+          import re
+          import urllib.request
+          body=open('/tmp/zhkh-preview-index.html', encoding='utf-8').read()
+          asset=re.search(r'/team/zhkh-preview/assets/[^" ]+\.js', body)
+          assert asset, 'preview build asset prefix'
+          with urllib.request.urlopen('http://127.0.0.1:18082'+asset.group(), timeout=10) as response:
+              assert response.status == 200
+          PY
+          PREVIEW_BASE_URL=http://127.0.0.1:18082/team/zhkh-preview/ python3 packages/housing_engine/preview_acceptance.py
