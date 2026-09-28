@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 import uuid
+import os
+from datetime import timedelta
+from urllib.parse import urlencode
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, select, text
 
-from app.db.models import Base
-from app.db.store import SqlStore
+from app.db.models import Base, User
+from app.db.store import SqlStore, now
 from app.errors import ApiError
+from app.jobs.retention import run_retention_once
 from app.main import Settings, create_app
+from test_sql_store import migrate
 
 
 POSTGRES_URL = "postgresql+psycopg://fixture:fixture@127.0.0.1/fixture"
@@ -61,6 +67,11 @@ def test_preview_guest_owners_and_profiles_are_distinct(tmp_path):
     second = store.authenticate_preview()
     assert first["user"]["id"] != second["user"]["id"]
     assert first["access_token"] != second["access_token"]
+    with store.Session() as session:
+        identities = session.scalars(select(User.demo_identity).order_by(User.id)).all()
+        assert len(identities) == 2
+        assert all(identity.startswith("preview-") and len(identity) <= 64 for identity in identities)
+        assert identities[0] != identities[1]
     assert store.user_for_token(first["access_token"]) == first["user"]["id"]
     assert store.user_for_token(second["access_token"]) == second["user"]["id"]
     store.update_profile(first["user"]["id"], {
@@ -104,3 +115,46 @@ def test_preview_http_contract_and_disabled_paths(tmp_path, monkeypatch):
         assert client.post("/integrations/max/webhook", json={}).status_code == 403
         assert client.post("/api/v1/auth/demo", json={"identity": "reviewer_a",
                                                        "access_code": "fixture"}).status_code == 403
+
+
+def test_preview_guest_obeys_migrated_postgresql_constraint_and_retention(tmp_path, monkeypatch):
+    """CI sets TEST_PREVIEW_POSTGRES_URL to the disposable PG17 Compose database."""
+    base_url = os.environ.get("TEST_PREVIEW_POSTGRES_URL")
+    if not base_url:
+        pytest.skip("set TEST_PREVIEW_POSTGRES_URL for isolated PostgreSQL 17 CI")
+    assert base_url.startswith("postgresql+psycopg://") and "?" not in base_url
+    schema = f"preview_pg_{uuid.uuid4().hex}"
+    admin = create_engine(base_url)
+    with admin.begin() as connection:
+        connection.exec_driver_sql(f'CREATE SCHEMA "{schema}"')
+    admin.dispose()
+    database_url = f"{base_url}?{urlencode({'options': f'-csearch_path={schema}'})}"
+    migrate(database_url, monkeypatch)
+    settings = Settings(mode="preview", preview_auth_enabled=True, database_url=database_url,
+                        engine_mode="real", storage_path=tmp_path / "private")
+    settings.validate()
+    store = SqlStore(settings)
+    with store.engine.connect() as connection:
+        assert connection.execute(text("""
+            SELECT count(*) FROM pg_constraint c
+            JOIN pg_namespace n ON n.oid = c.connamespace
+            WHERE c.conname = 'ck_users_one_identity' AND n.nspname = :schema
+        """), {"schema": schema}).scalar_one() == 1
+    first = store.authenticate_preview()
+    second = store.authenticate_preview()
+    assert first["user"]["id"] != second["user"]["id"]
+    with store.Session.begin() as session:
+        guests = session.scalars(select(User).order_by(User.id)).all()
+        assert len(guests) == 2
+        assert all(user.max_user_id is None and user.demo_identity.startswith("preview-") for user in guests)
+        assert guests[0].demo_identity != guests[1].demo_identity
+        stale_id = guests[0].id
+        guests[0].created_at = now() - timedelta(days=32)
+        reviewer = User(id=uuid.uuid4(), demo_identity="reviewer_a",
+                        created_at=now() - timedelta(days=32))
+        session.add(reviewer)
+    run_retention_once(store)
+    with store.Session() as session:
+        assert session.get(User, stale_id) is None
+        assert session.get(User, reviewer.id) is not None
+        assert session.get(User, guests[1].id) is not None

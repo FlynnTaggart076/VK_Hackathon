@@ -69,7 +69,7 @@ def run_retention_once(store: SqlStore) -> None:
         # their derived data after the documented 30-day receipt retention.
         with store.Session.begin() as session:
             stale = session.scalars(select(User).where(
-                User.max_user_id.is_(None), User.demo_identity.is_(None),
+                User.max_user_id.is_(None), User.demo_identity.like("preview-%"),
                 User.created_at <= moment - timedelta(days=31)
             ).order_by(User.created_at, User.id).limit(100).with_for_update(skip_locked=True)).all()
             for user in stale:
