@@ -20,6 +20,7 @@ colleague_anton/
 **/.coverage
 **/coverage/
 runtime/
+runtime-preview/
 storage/
 *.sqlite3
 *.db
