@@ -39,6 +39,7 @@ def stamp(value: datetime) -> str:
 class Settings:
     mode: str = "dev"
     demo_auth_enabled: bool = False
+    preview_auth_enabled: bool = False
     demo_access_code: str | None = None
     max_bot_token: str | None = None
     max_webhook_secret: str | None = None
@@ -57,6 +58,7 @@ class Settings:
         return cls(
             mode=os.getenv("APP_MODE", "dev"),
             demo_auth_enabled=os.getenv("DEMO_AUTH_ENABLED", "false").lower() == "true",
+            preview_auth_enabled=os.getenv("PREVIEW_AUTH_ENABLED", "false").lower() == "true",
             demo_access_code=os.getenv("DEMO_ACCESS_CODE"),
             max_bot_token=os.getenv("MAX_BOT_TOKEN"),
             max_webhook_secret=os.getenv("MAX_WEBHOOK_SECRET"),
@@ -68,12 +70,17 @@ class Settings:
         )
 
     def validate(self) -> None:
-        if self.mode not in {"dev", "demo", "production"}:
-            raise ValueError("APP_MODE must be dev, demo or production")
+        if self.mode not in {"dev", "demo", "preview", "production"}:
+            raise ValueError("APP_MODE must be dev, demo, preview or production")
         if self.engine_mode not in {"real", "stub"}:
             raise ValueError("ENGINE_MODE must be real or stub")
         if self.mode == "production" and (self.demo_auth_enabled or self.engine_mode == "stub"):
             raise ValueError("Production forbids demo auth and engine stub")
+        if self.preview_auth_enabled != (self.mode == "preview"):
+            raise ValueError("Preview auth requires explicit APP_MODE=preview and PREVIEW_AUTH_ENABLED=true")
+        if self.mode == "preview" and (self.demo_auth_enabled or self.max_bot_token or
+                                       self.max_webhook_secret or self.max_web_app):
+            raise ValueError("Preview forbids demo auth and MAX credentials")
         if self.mode != "dev" and self.engine_mode == "stub":
             raise ValueError("Engine stub is dev-only")
         if self.mode == "production" and (not self.max_bot_token or not self.max_webhook_secret):
@@ -403,6 +410,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/v1/auth/demo")
     async def auth_demo(request: Request):
+        if settings.mode == "preview":
+            raise ApiError(403, "DEMO_DISABLED", "Демовход выключен в preview.")
         try:
             body = await request.json()
         except (ValueError, UnicodeDecodeError):
@@ -413,8 +422,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise ApiError(422, "VALIDATION_FAILED", "Неверный запрос демовхода.")
         return await run_in_threadpool(store.authenticate_demo, body["identity"], body["access_code"])
 
+    @app.post("/api/v1/auth/preview")
+    async def auth_preview(request: Request):
+        if settings.mode != "preview" or not settings.preview_auth_enabled:
+            raise ApiError(403, "PREVIEW_DISABLED", "Учебный вход недоступен.")
+        body = await request.body()
+        if body:
+            try:
+                if json.loads(body) != {}:
+                    raise ValueError()
+            except (ValueError, UnicodeDecodeError):
+                raise ApiError(422, "VALIDATION_FAILED", "Учебный вход не принимает данные пользователя.") from None
+        return await run_in_threadpool(store.authenticate_preview)
+
     @app.post("/api/v1/auth/max")
     async def auth_max(request: Request):
+        if settings.mode == "preview":
+            raise ApiError(403, "MAX_DISABLED", "MAX выключен в preview.")
         if not settings.max_bot_token or not settings.database_url:
             raise ApiError(503, "SERVICE_UNAVAILABLE", "Вход MAX не настроен.", retryable=False)
         try:
@@ -431,6 +455,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/integrations/max/webhook")
     async def max_webhook(request: Request,
                           max_secret: str | None = Header(default=None, alias="X-Max-Bot-Api-Secret")):
+        if settings.mode == "preview":
+            raise ApiError(403, "MAX_DISABLED", "MAX выключен в preview.")
         if not settings.max_webhook_secret or not settings.database_url:
             raise ApiError(503, "SERVICE_UNAVAILABLE", "Webhook MAX не настроен.", retryable=True)
         if not max_secret or not hmac.compare_digest(max_secret, settings.max_webhook_secret):
@@ -675,6 +701,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def upload_receipt(file: UploadFile, idempotency_key: str = Header(alias="Idempotency-Key"),
                              demo_sample_id: str | None = Form(default=None),
                              user_id: str = Depends(current_user)):
+        if settings.mode == "preview":
+            await file.close()
+            raise ApiError(403, "PREVIEW_SYNTHETIC_ONLY", "В preview доступны только учебные квитанции из каталога.")
         try:
             uuid.UUID(idempotency_key)
         except ValueError:

@@ -1,0 +1,8 @@
+# Loopback-only override for CI and local synthetic HTTP smoke.
+# Use after compose.yaml and compose.preview.vm.yaml; never on the VM.
+services:
+  web:
+    ports:
+      - "127.0.0.1:${PREVIEW_CI_WEB_PORT:-18082}:80"
+    volumes:
+      - ./infra/nginx/app-preview-local.conf:/etc/nginx/conf.d/default.conf:ro

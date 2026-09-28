@@ -6,7 +6,7 @@ from datetime import timedelta
 
 from sqlalchemy import delete, select
 
-from app.db.models import AssistantAnswer, Document, Draft, IdempotencyKey, Job, Outbox, Receipt, WebhookInbox
+from app.db.models import AssistantAnswer, Document, Draft, IdempotencyKey, Job, Outbox, Receipt, User, WebhookInbox
 from app.db.store import SqlStore, now
 
 
@@ -63,3 +63,14 @@ def run_retention_once(store: SqlStore) -> None:
             Outbox.state == "sending", Outbox.run_after <= moment - timedelta(seconds=30)
         ).with_for_update(skip_locked=True)):
             item.state = "uncertain"
+
+    if store.settings.mode == "preview":
+        # Preview users are anonymous and only have one-hour sessions. Remove
+        # their derived data after the documented 30-day receipt retention.
+        with store.Session.begin() as session:
+            stale = session.scalars(select(User).where(
+                User.max_user_id.is_(None), User.demo_identity.is_(None),
+                User.created_at <= moment - timedelta(days=31)
+            ).order_by(User.created_at, User.id).limit(100).with_for_update(skip_locked=True)).all()
+            for user in stale:
+                session.delete(user)

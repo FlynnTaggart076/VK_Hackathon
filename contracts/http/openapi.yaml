@@ -10,6 +10,8 @@ info:
 servers:
   - url: /team/zhkh
     description: Public VM prefix; proxy strips this prefix before backend.
+  - url: /team/zhkh-preview
+    description: Isolated synthetic-only browser preview; proxy strips this prefix.
   - url: http://localhost:8080/team/zhkh
     description: Local Compose prefix.
 tags:
@@ -73,6 +75,19 @@ paths:
         '403': {$ref: '#/components/responses/Forbidden'}
         '422': {$ref: '#/components/responses/ValidationFailed'}
         '429': {$ref: '#/components/responses/RateLimited'}
+  /api/v1/auth/preview:
+    post:
+      tags: [auth]
+      operationId: authenticatePreview
+      security: []
+      description: >-
+        Enabled only with APP_MODE=preview and PREVIEW_AUTH_ENABLED=true.
+        No request body or client-selected identity. Creates a distinct guest
+        owner and session on every call in the isolated preview database.
+      responses:
+        '200': {$ref: '#/components/responses/AuthResult'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
   /api/v1/auth/logout:
     post:
       tags: [auth]
@@ -140,6 +155,7 @@ paths:
     post:
       tags: [receipts]
       operationId: uploadReceipt
+      description: Rejected with PREVIEW_SYNTHETIC_ONLY in preview mode; import /receipts/demo instead.
       parameters: [{$ref: '#/components/parameters/IdempotencyKey'}]
       requestBody:
         required: true
@@ -159,6 +175,7 @@ paths:
         '202': {$ref: '#/components/responses/ReceiptQueued'}
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
         '409': {$ref: '#/components/responses/Conflict'}
         '413': {$ref: '#/components/responses/PayloadTooLarge'}
         '415': {$ref: '#/components/responses/UnsupportedMediaType'}
@@ -491,7 +508,7 @@ components:
         api_version: {type: string}
         engine_version: {type: [string, 'null']}
         knowledge_version: {type: [string, 'null']}
-        mode: {type: string, enum: [dev, demo, production]}
+        mode: {type: string, enum: [dev, demo, preview, production]}
         limits:
           type: object
           additionalProperties: false
