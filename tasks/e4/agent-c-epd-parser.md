@@ -1,0 +1,7 @@
+# C: EPD receipt parser and numeric facts (current E4 change)
+
+Base: task commit on `main`; work in `packages/housing_engine/**` and permitted sanitized fixtures; branch `agent-c/e4-epd-parser`, separate checkout. Follow `docs/change-request-deepseek.md`.
+
+Use private root `EX.pdf` read-only as the real layout target; do not commit, copy or quote owner name, address, account, QR/barcode or raw extracted text in reports. Audit the existing parser and produce a second template for this one-page text-bearing EPD. Parse the main charge table (service labels, scope, units, quantities, tariff, original charge, adjustments if reliably mapped, current charges and due) into `BillData` with field evidence and review flags. Do not treat the reference meter table as billed services or blend the two totals (with/without voluntary insurance). Return `partial`/`manual_required` for ambiguous values. Keep synthetic template unchanged. Report precision/coverage as counts and anonymized issue codes only.
+
+Add a synthetic, privacy-safe EPD lookalike fixture with two months and test C's deterministic comparison, including changed tariff vs quantity vs adjustment. Provide B a minimal, PII-free structured fact projection for DeepSeek prompts; the model may describe these facts, not calculate them. Acceptance: verifier, engine tests, local EX parse outcome/coverage without personal values in output, and no regression on existing synthetic extraction. Commit/push code and `reports/agent-c-epd-parser.md` with SHA, commands/results, limitations and exact unsupported columns.

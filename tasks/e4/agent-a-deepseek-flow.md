@@ -1,0 +1,7 @@
+# A: repair assistant continuations (current E4 change)
+
+Base: task commit on `main`; work only in `apps/web/**`, branch `agent-a/e4-deepseek-flow`, separate checkout. Follow `docs/change-request-deepseek.md`.
+
+Deliver a complete mini-app assistant interaction using the existing `AnswerView` API: every `clarification.field` has an editable text input and a list of suggestions/options when supplied; user can submit free text, amend a previous answer, and ask again without losing selected topic, question, receipt or prior context. At minimum exercise `topic_id`, `territory_id`, `role`, `organization_id`, `service_code`, `document_kind`; make unknown values visible rather than silently dropping them. Handle `needs_clarification`, `unsupported`, model-unavailable/fallback, and concise factual answer states. Review all buttons and links in the assistant, receipt review/explanation, history, comparison and draft flows; fix concrete dead ends under `apps/web/**` or report a backend contract blocker with route and reproduction. Keep preview synthetic label and mobile-width layout.
+
+Acceptance: frontend build/tests; meaningful browser or component tests for supplier contact -> service clarification -> typed value -> answer, a second chained clarification, topic-by-question, prior-month question without a selected receipt, unknown input and keyboard use at 360px. Commit/push code and `reports/agent-a-deepseek-flow.md` with SHA, commands/results, reproducible defects and remaining dependencies. Do not read `DST.txt` or copy `EX.pdf`.
