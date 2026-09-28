@@ -24,6 +24,28 @@ def _confirmed(snapshot: dict, territory_id: str | None) -> ExplainRequest:
     )
 
 
+def _safe_model_receipt(snapshot: dict) -> dict | None:
+    """Explicit allowlist of normalized facts; never copy source names or identity."""
+    bill = BillData.model_validate_json(json.dumps(snapshot["bill_data"]))
+    if bill.template_id == "mos-oblast-epd-v1":
+        from housing_engine import project_receipt_facts
+
+        return project_receipt_facts(bill)
+    if bill.template_id != "demo-bill-v1" or snapshot.get("dataset_kind") != "synthetic":
+        return None
+    return {
+        "period": bill.period,
+        "services": [{"code": line.service_code, "scope": line.scope,
+                      "segment": line.segment_key, "unit": line.unit,
+                      "quantity": line.quantity, "tariff": line.tariff,
+                      "charge_amount": line.charge_amount}
+                     for line in bill.services[:20]],
+        "current_charges": bill.document_current_charges,
+        "total_due": bill.document_total_due,
+        "provenance": "synthetic_demo_receipt",
+    }
+
+
 def _money(value: str | None) -> str:
     return f"{Decimal(value):.2f} ₽" if value is not None else "не указано"
 
@@ -221,13 +243,9 @@ def answer_json(question: str, context: dict, snapshots: list[dict],
             return _city_answer(question, context, active_snapshots, knowledge, city_lookup)
         output = _receipt_answer(question, active_snapshots, knowledge)
         if api_key and allow_receipt_model and active_snapshots and intent == "bill_rise":
-            from housing_engine import project_receipt_facts
-
-            if all(item["bill_data"].get("template_id") == "mos-oblast-epd-v1"
-                   for item in active_snapshots):
-                safe_facts = {"receipts": [project_receipt_facts(
-                    BillData.model_validate_json(json.dumps(item["bill_data"])))
-                    for item in active_snapshots]}
+            projected = [_safe_model_receipt(item) for item in active_snapshots]
+            if all(item is not None for item in projected):
+                safe_facts = {"receipts": projected}
                 if len(active_snapshots) > 1:
                     from app.services.comparison_adapter import compare_json
 
