@@ -150,9 +150,9 @@ def test_preview_guest_obeys_migrated_postgresql_constraint_and_retention(tmp_pa
         assert all(user.max_user_id is None and user.demo_identity.startswith("preview-") for user in guests)
         assert guests[0].demo_identity != guests[1].demo_identity
         stale_id = guests[0].id
-        guests[0].created_at = now() - timedelta(days=32)
+        guests[0].created_at = now() - timedelta(days=122)
         reviewer = User(id=uuid.uuid4(), demo_identity="reviewer_a",
-                        created_at=now() - timedelta(days=32))
+                        created_at=now() - timedelta(days=122))
         session.add(reviewer)
     run_retention_once(store)
     with store.Session() as session:

@@ -79,8 +79,8 @@ jobs:
               recent = session.get(User, uuid.UUID(second['user']['id']))
               assert stale.demo_identity.startswith('preview-')
               assert recent.demo_identity.startswith('preview-')
-              stale.created_at = now() - timedelta(days=32)
-              reviewer = User(id=uuid.uuid4(), demo_identity='reviewer_a', created_at=now() - timedelta(days=32))
+              stale.created_at = now() - timedelta(days=122)
+              reviewer = User(id=uuid.uuid4(), demo_identity='reviewer_a', created_at=now() - timedelta(days=122))
               session.add(reviewer)
               stale_id, recent_id, reviewer_id = stale.id, recent.id, reviewer.id
           run_retention_once(store)
