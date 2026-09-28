@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiRequestError, hasSessionToken, setSessionToken } from '../api/client';
+import { PREVIEW_MODE } from '../api/appConfig';
+import { previewAuth } from '../api/previewAuth';
 import { maxAuth, maxInitData } from '../api/maxAuth';
 import type { AnswerContext, AnswerView, Catalog, MetaResponse, Profile, ReceiptView } from '../api/types';
 import { Onboarding, canUpload } from './Onboarding';
@@ -13,7 +15,7 @@ import { Draft } from './Draft';
 import { ActionList } from './ActionList';
 import { ErrorMessage } from './errors';
 
-const mockEnabled = import.meta.env.DEV && import.meta.env.VITE_ENABLE_MOCK === 'true';
+const mockEnabled = import.meta.env.DEV && !PREVIEW_MODE && import.meta.env.VITE_ENABLE_MOCK === 'true';
 const screens = [
   { path: '/', title: 'Главная', text: 'Вопросы, платёжки, история и учебные примеры.', states: 'пустая история, demo-пометка' },
 ] as const;
@@ -24,7 +26,7 @@ function Entry({ meta, sessionExpired, onAuth }: { meta: MetaResponse | null; se
   const [accessCode, setAccessCode] = useState('');
   const [identity, setIdentity] = useState<'reviewer_a' | 'reviewer_b' | ''>('');
   const [bridgeVersion, setBridgeVersion] = useState(0);
-  const initData = !import.meta.env.DEV && !sessionExpired ? maxInitData() : null;
+  const initData = !import.meta.env.DEV && !PREVIEW_MODE && !sessionExpired ? maxInitData() : null;
   useEffect(() => {
     const ready = () => setBridgeVersion((value) => value + 1);
     window.addEventListener('zhkh:max-bridge-ready', ready);
@@ -41,6 +43,16 @@ function Entry({ meta, sessionExpired, onAuth }: { meta: MetaResponse | null; se
     finally { setBusy(false); }
   }
   useEffect(() => { if (initData) void enterMax(); }, [bridgeVersion]);
+  async function enterPreview() {
+    setBusy(true); setError(null);
+    try {
+      const result = await previewAuth();
+      setSessionToken(result.access_token);
+      onAuth(result.profile);
+    } catch (cause) { setError(cause); }
+    finally { setBusy(false); }
+  }
+  useEffect(() => { if (PREVIEW_MODE) void enterPreview(); }, []);
   async function enterDemo(event?: React.FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     setBusy(true); setError(null);
@@ -55,9 +67,14 @@ function Entry({ meta, sessionExpired, onAuth }: { meta: MetaResponse | null; se
   }
   return <section className="panel">
     <h2>Вход</h2>
-    <p>В рабочей версии вход происходит в MAX после проверки стартовых данных сервером.</p>
+    {PREVIEW_MODE ? <>
+      <p>Создаём отдельного виртуального гостя для этой вкладки. Код и вход MAX не нужны.</p>
+      {sessionExpired && <p role="status">Прежняя учебная сессия истекла. Создаём нового гостя; его история начнётся заново.</p>}
+      {error && <button type="button" disabled={busy} onClick={() => void enterPreview()}>Повторить учебный вход</button>}
+      {busy && <p role="status">Открываем учебный стенд…</p>}
+    </> : <p>В рабочей версии вход происходит в MAX после проверки стартовых данных сервером.</p>}
     {meta && <p>API {meta.api_version} · База знаний {meta.knowledge_version ?? 'ещё не подключена'}</p>}
-    {mockEnabled ? <button type="button" onClick={() => void enterDemo()} disabled={busy}>{busy ? 'Входим…' : 'Войти в учебный mock'}</button> :
+    {PREVIEW_MODE ? null : mockEnabled ? <button type="button" onClick={() => void enterDemo()} disabled={busy}>{busy ? 'Входим…' : 'Войти в учебный mock'}</button> :
       import.meta.env.DEV && meta?.features.demo_auth ? <form onSubmit={(event) => void enterDemo(event)}>
         <p className="badge">Локальный dev вход. Код задаётся при запуске backend и не сохраняется в браузере.</p>
         <label htmlFor="demo-identity">Учётная запись</label>
@@ -161,6 +178,7 @@ export function App() {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [sessionError, setSessionError] = useState<unknown>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [guestRenewed, setGuestRenewed] = useState(false);
   const [loadingSession, setLoadingSession] = useState(false);
   const [reloadMeta, setReloadMeta] = useState(0);
   const [reloadSession, setReloadSession] = useState(0);
@@ -176,7 +194,7 @@ export function App() {
   }, [reloadMeta]);
   useEffect(() => {
     const expired = () => { setAuthenticated(false); setProfile(null); setCatalog(null); setSessionExpired(true);
-      setSessionError(new Error(import.meta.env.DEV ? 'Сессия истекла. Войдите снова.' : 'Сессия истекла. Переоткройте мини-приложение в MAX.')); };
+      setSessionError(new Error(PREVIEW_MODE ? 'Учебная сессия истекла. Открываем нового гостя.' : import.meta.env.DEV ? 'Сессия истекла. Войдите снова.' : 'Сессия истекла. Переоткройте мини-приложение в MAX.')); };
     window.addEventListener('zhkh:session-expired', expired);
     return () => window.removeEventListener('zhkh:session-expired', expired);
   }, []);
@@ -190,18 +208,20 @@ export function App() {
       .finally(() => setLoadingSession(false));
     return () => controller.abort();
   }, [authenticated, reloadSession]);
-  const needsLogin = <section className="panel"><h2>Нужен вход</h2><p>{sessionExpired && !import.meta.env.DEV ? 'Переоткройте мини-приложение в MAX. После входа можно продолжить на этом экране.' : 'После входа можно продолжить на этом экране.'}</p></section>;
+  const needsLogin = <section className="panel"><h2>Нужен вход</h2><p>{PREVIEW_MODE ? 'Подождите создания виртуального гостя.' : sessionExpired && !import.meta.env.DEV ? 'Переоткройте мини-приложение в MAX. После входа можно продолжить на этом экране.' : 'После входа можно продолжить на этом экране.'}</p></section>;
   const waiting = <section className="panel"><h2>Профиль</h2>{sessionError ? <>
     <p>Не удалось получить профиль и каталог.</p><button type="button" onClick={() => setReloadSession((value) => value + 1)}>Повторить</button>
   </> : <p role="status">Получаем данные первого запуска…</p>}</section>;
   return <div className="app">
     <a className="skip" href="#content">К содержимому</a>
     <header><h1>Помощник ЖКХ</h1><p>Первые вопросы о платёжке и следующий шаг</p></header>
+    {PREVIEW_MODE && <aside className="preview-banner" role="note"><strong>Публичный учебный стенд · синтетические данные</strong><span>Не загружайте личные квитанции и персональные данные. Обращения отсюда никому не отправляются.</span></aside>}
     <nav aria-label="Основная навигация"><Link to="/">Главная</Link><Link to="/onboarding">Первый запуск</Link><Link to="/assistant">Помощник</Link><Link to="/upload">Платёжка</Link><Link to="/history">История</Link></nav>
     <main id="content" tabIndex={-1}>
       {metaError !== null && <><ErrorMessage error={metaError} /><button type="button" onClick={() => setReloadMeta((value) => value + 1)}>Повторить загрузку API</button></>}
       {sessionError !== null && <ErrorMessage error={sessionError} />}
-      {!authenticated && <Entry meta={meta} sessionExpired={sessionExpired} onAuth={(value) => { setProfile(value); setSessionExpired(false); setAuthenticated(true); }} />}
+      {guestRenewed && <p className="notice" role="status">Создан новый виртуальный гость: прежняя учебная история в этой вкладке недоступна.</p>}
+      {!authenticated && <Entry meta={meta} sessionExpired={sessionExpired} onAuth={(value) => { setProfile(value); if (PREVIEW_MODE && sessionExpired) setGuestRenewed(true); setSessionExpired(false); setAuthenticated(true); }} />}
       {location.pathname === '/' && authenticated && meta && !canUpload(profile, meta) && <p className="notice">Перед загрузкой платёжки завершите <Link to="/onboarding">первый запуск</Link>.</p>}
       {loadingSession && waiting}
       <Routes>
@@ -218,6 +238,6 @@ export function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </main>
-    <footer>Интерфейс разработки. Распознавание и ответы проверяйте по доступным возможностям API.</footer>
+    <footer>{PREVIEW_MODE ? 'Учебная версия. Используйте только синтетические примеры.' : 'Интерфейс разработки. Распознавание и ответы проверяйте по доступным возможностям API.'}</footer>
   </div>;
 }

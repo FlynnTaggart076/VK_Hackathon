@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, ApiRequestError } from '../api/client';
+import { PREVIEW_MODE } from '../api/appConfig';
 import type { Catalog, Job, MetaResponse, Profile, ReceiptQueued } from '../api/types';
 import { canUpload } from './Onboarding';
 import { ErrorMessage } from './errors';
@@ -37,12 +38,13 @@ export function Upload({ meta, profile, catalog, onQueued }: {
 
   return <section className="panel">
     <h2>Загрузка платёжки</h2>
-    <p>PDF, JPEG или PNG; до {Math.floor(meta.limits.upload_max_bytes / 1024 / 1024)} МБ и {meta.limits.pdf_max_pages} страниц PDF.</p>
+    {PREVIEW_MODE ? <p className="review-warning">Публичный учебный стенд: не загружайте личные квитанции. Для проверки выберите синтетический образец ниже.</p> :
+      <p>PDF, JPEG или PNG; до {Math.floor(meta.limits.upload_max_bytes / 1024 / 1024)} МБ и {meta.limits.pdf_max_pages} страниц PDF.</p>}
     {meta.features.engine_stub && <p className="badge">Dev stub: файл будет поставлен в очередь, OCR пока не выполняется.</p>}
     {!canUpload(profile, meta) ? <>
       <p role="status">Перед загрузкой заполните профиль и подтвердите актуальное уведомление. Общий вопрос можно задать после входа без загрузки документа.</p>
       <Link to="/onboarding">Перейти к первому запуску</Link>
-    </> : <form onSubmit={(event) => void submit(event)}>
+    </> : !PREVIEW_MODE && <form onSubmit={(event) => void submit(event)}>
       <label htmlFor="receipt-file">Файл платёжки</label>
       <input id="receipt-file" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={(event) => {
         setFile(event.target.files?.[0] ?? null); setKey(event.target.files?.[0] ? crypto.randomUUID() : null); setError(null);
