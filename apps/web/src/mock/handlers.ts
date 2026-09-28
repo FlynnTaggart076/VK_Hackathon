@@ -274,7 +274,8 @@ export const handlers = [
               : !input.context.document_kind ? 'document_kind' : null;
     const supplier = input.context.topic_id === 'supplier_contacts';
     const needsService = !unsupported && !probeField && supplier && !input.context.service_code;
-    const needsOrganization = !unsupported && supplier && !needsService && lower.includes('цепоч') && !input.context.organization_id;
+    const needsOrganization = !unsupported && supplier && !needsService && lower.includes('цепоч') &&
+      !input.context.organization_id && !lower.includes('организация со слов пользователя:');
     const needsDocument = !unsupported && !needsService && !needsOrganization && (input.context.topic_id === 'housing_document' || lower.includes('справк')) && !input.context.document_kind;
     const needsClarification = !!probeField || needsService || needsOrganization || needsDocument;
     const response: AnswerView = {
@@ -284,7 +285,7 @@ export const handlers = [
       topic_id: unsupported ? null : input.context.topic_id || 'bill_change', steps: [],
       sources: unsupported || needsClarification ? [] : [{ id: 'mock-source', title: 'Учебная карточка темы', url: null,
         territory_id: 'demo-territory', verified_at: now, review_after: '2026-10-27T10:00:00Z', content_version: 'mock-1', is_synthetic: true }],
-      actions: [], clarification: probeField ? { field: probeField, prompt: `Уточните поле ${probeField}`, options: probeField === 'territory_id' ? [{ value: 'moscow', label: 'Москва' }] : probeField === 'role' ? [{ value: 'owner', label: 'Собственник' }] : [] }
+      actions: [], clarification: probeField ? { field: probeField, prompt: `Уточните поле ${probeField}`, options: probeField === 'territory_id' ? [{ value: 'moscow', label: 'Москва' }] : probeField === 'role' ? [{ value: 'owner', label: 'Собственник' }] : probeField === 'organization_id' ? [{ value: 'org-demo', label: 'УК Пример' }] : [] }
         : needsService ? { field: 'service_code', prompt: 'По какой услуге возник вопрос?', options: [] }
         : needsOrganization ? { field: 'organization_id', prompt: 'Какая организация указана?', options: [] }
           : needsDocument ? { field: 'document_kind', prompt: 'Какой именно документ нужен?', options: [

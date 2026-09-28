@@ -15,7 +15,7 @@ import { CityComparison } from './CityComparison';
 import { Draft } from './Draft';
 import { ActionList } from './ActionList';
 import { ErrorMessage } from './errors';
-import { clarificationLabels, selectedValue, serviceContext, suggestionsFor, type Clarification, type ClarificationField } from './clarification';
+import { clarificationLabels, recognizedValue, selectedValue, serviceContext, suggestionsFor, type Clarification, type ClarificationField } from './clarification';
 
 const mockEnabled = import.meta.env.DEV && !PREVIEW_MODE && import.meta.env.VITE_ENABLE_MOCK === 'true';
 const screens = [
@@ -121,8 +121,12 @@ function Assistant({ profile, catalog, meta, onProfileChanged }: { profile: Prof
       .catch((cause) => { if (active) setError(cause); });
     return () => { active = false; };
   }, [receiptId]);
-  const proposedTerritory = clarified.territory_id ? selectedValue(clarified.territory_id, suggestionsFor('territory_id', catalog, prompts.territory_id?.options ?? [])) : profile.territory_id;
-  const proposedRole = clarified.role ? selectedValue(clarified.role, suggestionsFor('role', catalog, prompts.role?.options ?? [])) : profile.role;
+  const proposedTerritoryId = recognizedValue(clarified.territory_id, suggestionsFor('territory_id', catalog, prompts.territory_id?.options ?? []));
+  const invalidTerritory = !!clarified.territory_id?.trim() && !proposedTerritoryId;
+  const proposedTerritory = proposedTerritoryId || profile.territory_id;
+  const proposedRoleValue = clarified.role ? selectedValue(clarified.role, suggestionsFor('role', catalog, prompts.role?.options ?? [])) : profile.role;
+  const invalidRole = !['owner', 'tenant', 'other'].includes(proposedRoleValue);
+  const proposedRole = invalidRole ? profile.role : proposedRoleValue;
   const profileWillChange = proposedTerritory !== profile.territory_id || proposedRole !== profile.role;
   const receiptServices = new Map<string, string[]>();
   for (const line of receipt?.bill_data.services ?? []) receiptServices.set(line.service_code, [...(receiptServices.get(line.service_code) ?? []), line.raw_name]);
@@ -132,11 +136,18 @@ function Assistant({ profile, catalog, meta, onProfileChanged }: { profile: Prof
     const normalized = Object.fromEntries(Object.entries(values).map(([field, input]) => [
       field, selectedValue(input, suggestionsFor(field as ClarificationField, catalog, prompts[field as ClarificationField]?.options ?? [])),
     ])) as Partial<Record<ClarificationField, string>>;
+    const knownTopic = recognizedValue(values.topic_id, suggestionsFor('topic_id', catalog, prompts.topic_id?.options ?? []));
+    const knownTerritory = recognizedValue(values.territory_id, suggestionsFor('territory_id', catalog, prompts.territory_id?.options ?? []));
+    const knownOrganization = recognizedValue(values.organization_id, suggestionsFor('organization_id', catalog, prompts.organization_id?.options ?? []));
+    if (values.territory_id?.trim() && !knownTerritory) {
+      setError(new Error('Такой территории нет в каталоге. Выберите подсказку или измените территорию в разделе «Первый запуск». Введённый текст сохранён.'));
+      return;
+    }
     if (normalized.role && !['owner', 'tenant', 'other'].includes(normalized.role)) {
       setError(new Error('Для роли выберите один из предложенных вариантов. Введённое значение осталось в поле.'));
       return;
     }
-    const territory = normalized.territory_id || profile.territory_id;
+    const territory = knownTerritory || profile.territory_id;
     const role = (normalized.role as AnswerContext['role']) || profile.role;
     const updateProfile = territory !== profile.territory_id || role !== profile.role;
     if (updateProfile && !privacyAccepted) {
@@ -144,13 +155,18 @@ function Assistant({ profile, catalog, meta, onProfileChanged }: { profile: Prof
       return;
     }
     const service = serviceContext(normalized.service_code);
-    const extraService = service.freeText ? `\nУточнение пользователя по услуге: ${service.freeText}.` : '';
-    const submittedQuestion = `${question.trim().slice(0, 2000 - extraService.length)}${extraService}`;
+    const freeText = [
+      values.topic_id?.trim() && !knownTopic ? `Тема словами пользователя: ${values.topic_id.trim()}.` : null,
+      values.organization_id?.trim() && !knownOrganization ? `Организация со слов пользователя: ${values.organization_id.trim()}.` : null,
+      service.freeText ? `Уточнение пользователя по услуге: ${service.freeText}.` : null,
+    ].filter(Boolean).join('\n');
+    const suffix = freeText ? `\n${freeText}` : '';
+    const submittedQuestion = `${question.trim().slice(0, 2000 - suffix.length)}${suffix}`;
     const context: AnswerContext = {
       territory_id: territory,
       role,
-      topic_id: topicId || normalized.topic_id || null,
-      organization_id: normalized.organization_id || null,
+      topic_id: topicId || knownTopic || null,
+      organization_id: knownOrganization,
       service_code: service.code || serviceCode || null,
       document_kind: normalized.document_kind || null,
       receipt_id: receipt?.status === 'confirmed' ? receipt.id : null,
@@ -199,6 +215,8 @@ function Assistant({ profile, catalog, meta, onProfileChanged }: { profile: Prof
     {Object.keys(prompts).length > 0 && <form className="notice-box" onSubmit={(event) => { event.preventDefault(); void ask(); }}>
       <h3>Уточнения</h3>
       <p className="notice">Можно выбрать подсказку или ввести свой ответ. Уже введённые значения доступны для исправления.</p>
+      {invalidTerritory && <p className="review-warning">Такой территории нет в каталоге. Выберите территорию из подсказок; ваш текст остаётся в поле.</p>}
+      {invalidRole && <p className="review-warning">Для роли выберите собственника, арендатора или другую роль из подсказок; ваш текст остаётся в поле.</p>}
       {(Object.entries(prompts) as [ClarificationField, Clarification][]).map(([field, prompt]) => {
         const suggestions = suggestionsFor(field, catalog, prompt.options);
         return <div key={field} className="clarification-field">
