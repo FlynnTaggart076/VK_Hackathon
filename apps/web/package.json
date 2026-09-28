@@ -16,6 +16,7 @@
     "test:browser:e3:real": "node scripts/e3-real-flow.mjs",
     "test:browser:e4:real": "node scripts/e4-real-resilience.mjs",
     "test:browser:e4:clarifications": "node scripts/e4-clarifications-mock.mjs",
+    "test:browser:e4:entry-diagnostics": "node scripts/e4-real-entry-diagnostics.mjs",
     "test:browser:e4:dense-review": "node scripts/e4-dense-review-mock.mjs",
     "test:browser:e4:bridge-sim": "node scripts/e4-bridge-sim.mjs"
   },
