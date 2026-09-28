@@ -135,8 +135,6 @@ def claim(store: SqlStore) -> tuple[uuid.UUID, uuid.UUID] | None:
 def finish(store: SqlStore, job_id: uuid.UUID, token: uuid.UUID) -> None:
     with store.Session.begin() as session:
         job = session.get(Job, job_id, with_for_update=True)
-        if store.settings.mode != "dev" or (store.settings.engine_mode != "stub" and job and job.kind != "demo_import"):
-            raise RuntimeError("Fixture worker is allowed only in dev")
         if not job or job.state != "running" or job.lease_token != token or job.lease_until is None or aware(job.lease_until) <= now():
             return  # an expired or replaced lease cannot write a result
         receipt = session.get(Receipt, job.resource_id, with_for_update=True)
@@ -148,6 +146,10 @@ def finish(store: SqlStore, job_id: uuid.UUID, token: uuid.UUID) -> None:
             job.lease_until = None
             job.updated_at = now()
             return
+        is_synthetic_import = job.kind == "demo_import" and receipt.dataset_kind == "synthetic"
+        is_dev_stub = store.settings.mode == "dev" and store.settings.engine_mode == "stub"
+        if not is_dev_stub and not (store.settings.engine_mode == "real" and is_synthetic_import):
+            raise RuntimeError("Fixture result requires dev stub or real synthetic demo import")
         if session.get(ReceiptRevision, (receipt.id, 1)) is not None:
             job.state = "succeeded"  # prior committed result; never insert a second revision
             job.stage = None
@@ -155,7 +157,7 @@ def finish(store: SqlStore, job_id: uuid.UUID, token: uuid.UUID) -> None:
             job.lease_until = None
             job.updated_at = now()
             return
-        if job.kind == "demo_import" and receipt.dataset_kind == "synthetic":
+        if is_synthetic_import:
             fixture_id = job.operation_key.split(":", 2)[1]
             if fixture_id not in DEMO_FIXTURES:
                 raise ValueError("unsupported demo fixture")
@@ -172,7 +174,8 @@ def finish(store: SqlStore, job_id: uuid.UUID, token: uuid.UUID) -> None:
                                     bill_data=bill_data,
                                     extraction_meta={"field_evidence": [], "issues": issues, "outcome": outcome},
                                     validation={"can_confirm": False, "errors": [], "warnings": issues},
-                                    confirmed_at=None, engine_version="dev-stub-e1"))
+                                    confirmed_at=None,
+                                    engine_version="synthetic-demo-v1" if is_synthetic_import else "dev-stub-e1"))
         receipt.status = "needs_review"
         receipt.extraction_outcome = outcome
         receipt.updated_at = now()
