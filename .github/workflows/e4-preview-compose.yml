@@ -59,6 +59,37 @@ jobs:
           done
           test "$ready" = 200
           "${compose[@]}" exec -T web nginx -t
+          "${compose[@]}" exec -T api python - <<'PY'
+          import uuid
+          from datetime import timedelta
+          from sqlalchemy import select, text
+          from app.db.models import User
+          from app.db.store import SqlStore, now
+          from app.jobs.retention import run_retention_once
+          from app.main import Settings
+
+          store = SqlStore(Settings.from_env())
+          with store.engine.connect() as connection:
+              assert connection.execute(text("SELECT count(*) FROM pg_constraint WHERE conname = 'ck_users_one_identity'")).scalar_one() == 1
+          first = store.authenticate_preview()
+          second = store.authenticate_preview()
+          assert first['user']['id'] != second['user']['id']
+          with store.Session.begin() as session:
+              stale = session.get(User, uuid.UUID(first['user']['id']))
+              recent = session.get(User, uuid.UUID(second['user']['id']))
+              assert stale.demo_identity.startswith('preview-')
+              assert recent.demo_identity.startswith('preview-')
+              stale.created_at = now() - timedelta(days=32)
+              reviewer = User(id=uuid.uuid4(), demo_identity='reviewer_a', created_at=now() - timedelta(days=32))
+              session.add(reviewer)
+              stale_id, recent_id, reviewer_id = stale.id, recent.id, reviewer.id
+          run_retention_once(store)
+          with store.Session() as session:
+              assert session.get(User, stale_id) is None
+              assert session.get(User, recent_id) is not None
+              assert session.get(User, reviewer_id) is not None
+          print('PG17 preview identity constraint and scoped retention: OK')
+          PY
           web="$(curl -s -o /tmp/zhkh-preview-index.html -w '%{http_code}' http://127.0.0.1:18082/team/zhkh-preview/ || true)"
           deep="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18082/team/zhkh-preview/history || true)"
           test "$web" = 200 && test "$deep" = 200
