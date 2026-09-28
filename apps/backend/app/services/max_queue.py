@@ -85,7 +85,7 @@ def enqueue_update(store: SqlStore, update: NormalizedUpdate) -> None:
         raise
 
 
-def command_text(item: WebhookInbox) -> str | None:
+def _command_text(item: WebhookInbox) -> str | None:
     if not item.max_user_id:
         return None
     if item.event_type == "bot_started" or (item.text or "").strip().lower() == "/start":
@@ -99,6 +99,37 @@ def command_text(item: WebhookInbox) -> str | None:
     return None
 
 
+def command_text(item: WebhookInbox) -> str | None:
+    result = _command_text(item)
+    if result and (item.event_type == "bot_started" or
+                   (item.text or "").strip().lower() in {"/start", "/help"}):
+        result += ("\nДля ответов текст вопроса после удаления типичных личных данных "
+                   "может передаваться внешнему сервису DeepSeek. Включить: /llm_on, "
+                   "отозвать согласие: /llm_off. Без согласия доступен локальный справочник. "
+                   "Не присылайте в чат адрес, номер счёта или полный документ.")
+    return result
+
+
+def chat_consent_text(session, item: WebhookInbox, settings) -> str | None:
+    command = (item.text or "").strip().lower()
+    if not item.max_user_id or command not in {"/llm_on", "/llm_off"}:
+        return None
+    user = session.scalar(select(User).where(User.max_user_id == item.max_user_id).with_for_update())
+    if user is None:
+        user = User(id=uuid.uuid4(), max_user_id=item.max_user_id, created_at=now())
+        session.add(user)
+        session.flush()
+        session.add(Profile(user_id=user.id, role="other", territory_id=None,
+                            onboarding_completed=False))
+        session.flush()
+    profile = session.get(Profile, user.id)
+    profile.chat_llm_consent_at = now() if command == "/llm_on" else None
+    return ("Согласие на передачу очищенного текста вопроса DeepSeek сохранено. "
+            "Квитанции из мини-приложения требуют отдельного подтверждения правил обработки."
+            if command == "/llm_on" else
+            "Согласие на передачу текста вопроса DeepSeek отозвано.")
+
+
 def start_keyboard(settings: object) -> list[dict]:
     open_app = {"type": "open_app", "text": "Разобрать платёжку"}
     if settings.max_web_app:
@@ -108,12 +139,13 @@ def start_keyboard(settings: object) -> list[dict]:
     ]}}]
 
 
-def question_text(session, item: WebhookInbox) -> str | None:
-    """Use C's same offline catalog for direct text questions; persist the result."""
+def question_text(session, item: WebhookInbox, store: SqlStore) -> str | None:
+    """Answer direct chat from the same owner-scoped facts as the mini-app."""
     if not item.max_user_id or not item.text:
         return None
     from app.services.assistant_adapter import answer_json
-    from app.services.assistant_store import knowledge
+    from app.services.assistant_store import knowledge, owner_receipt_pair
+    from app.services.cohort_store import city_comparison
 
     user = session.scalar(select(User).where(User.max_user_id == item.max_user_id).with_for_update())
     if user is None:
@@ -129,12 +161,55 @@ def question_text(session, item: WebhookInbox) -> str | None:
     context = {"territory_id": profile.territory_id, "role": profile.role,
                "topic_id": None, "organization_id": None, "service_code": None,
                "document_kind": None, "receipt_id": None, "receipt_revision": None}
-    result = answer_json(item.text, context, [],
-                         {"role": profile.role, "territory_id": profile.territory_id}, knowledge())
-    session.add(AssistantAnswer(id=uuid.uuid4(), user_id=user.id, question=item.text,
-                                result=result, receipt_id=None, receipt_revision=None,
-                                dataset_kind="synthetic" if profile.territory_id == "demo-territory"
-                                else "public_reference", created_at=now(),
+    question = item.text
+    prior = session.scalar(select(AssistantAnswer).where(
+        AssistantAnswer.user_id == user.id,
+        AssistantAnswer.created_at >= now() - timedelta(minutes=15),
+    ).order_by(AssistantAnswer.created_at.desc(), AssistantAnswer.id.desc()).limit(1))
+    if prior and prior.result.get("clarification"):
+        clarification = prior.result["clarification"]
+        context["topic_id"] = prior.result.get("topic_id")
+        if clarification["field"] == "service_code":
+            lowered = question.lower()
+            for needle, code in (("горяч", "hot_water"), ("холод", "cold_water"),
+                                 ("отоп", "heating"), ("элект", "electricity"),
+                                 ("водоотвед", "drainage"), ("капремонт", "capital_repair"),
+                                 ("мусор", "waste")):
+                if needle in lowered:
+                    context["service_code"] = code
+                    break
+        elif clarification["field"] == "document_kind":
+            description = " ".join(question.split())[:200]
+            if description:
+                context["document_kind"] = description
+        question = f"{prior.question[:1000]} {question[:900]}"
+    personal, _ = owner_receipt_pair(store, str(user.id), db_session=session)
+    try:
+        result = answer_json(question, context, [],
+                             {"role": profile.role, "territory_id": profile.territory_id},
+                             knowledge(), api_key=store.settings.deepseek_api_key if (
+                                 profile.chat_llm_consent_at is not None or
+                                 profile.privacy_notice_version == store.settings.privacy_notice_version
+                             ) else None,
+                             model=store.settings.deepseek_model, personal_snapshots=personal,
+                             allow_receipt_model=profile.privacy_notice_version ==
+                             store.settings.privacy_notice_version,
+                             city_lookup=lambda rid, code, metric: city_comparison(
+                                 store, str(user.id), rid, code, metric))
+    except Exception:
+        # One malformed external response or exceptional engine record must not poison
+        # the durable inbox and block later commands.
+        result = {"status": "unsupported", "text": "Сейчас не удалось разобрать вопрос. Попробуйте ещё раз.",
+                  "topic_id": None, "steps": [], "sources": [], "actions": [],
+                  "clarification": None, "limitations": ["Временная ошибка ответа."],
+                  "knowledge_version": knowledge().version, "receipt_ref": None}
+    ref = result.get("receipt_ref")
+    kind = personal[0]["dataset_kind"] if ref and personal else (
+        "synthetic" if profile.territory_id == "demo-territory" else "public_reference")
+    session.add(AssistantAnswer(id=uuid.uuid4(), user_id=user.id, question=question,
+                                result=result, receipt_id=uuid.UUID(ref["id"]) if ref else None,
+                                receipt_revision=ref["revision"] if ref else None,
+                                dataset_kind=kind, created_at=now(),
                                 expires_at=now() + timedelta(days=30)))
     response = result["text"]
     if result["clarification"]:
@@ -152,7 +227,8 @@ def process_inbox_once(store: SqlStore) -> bool:
                               .with_for_update(skip_locked=True).limit(1))
         if item is None:
             return False
-        reply = command_text(item) or question_text(session, item)
+        reply = (command_text(item) or chat_consent_text(session, item, store.settings)
+                 or question_text(session, item, store))
         if reply:
             is_start = item.event_type == "bot_started" or (item.text or "").strip().lower() == "/start"
             session.add(Outbox(id=uuid.uuid4(), business_key=item.dedup_key,

@@ -33,6 +33,8 @@ services:
       MAX_WEBHOOK_SECRET: ${MAX_WEBHOOK_SECRET:-}
       MAX_WEB_APP: ${MAX_WEB_APP:-}
       MAX_API_BASE_URL: ${MAX_API_BASE_URL:-https://platform-api2.max.ru}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-flash}
     depends_on:
       db:
         condition: service_healthy

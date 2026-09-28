@@ -17,6 +17,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from pypdf import PdfReader
 
 from .dto import BillData, DocumentInput, ExtractionConfig, ExtractionResult, FieldEvidence, Issue
+from .epd import EPD_TEMPLATE_ID, is_epd, parse_epd_text
 from .errors import EngineError
 from .receipts import validate_bill
 
@@ -287,15 +288,22 @@ def _parse(text: str, receipt_id, source: str, positions: dict[str, tuple[int, t
 
 def extract_receipt(document: DocumentInput, config: ExtractionConfig) -> ExtractionResult:
     _check_document(document)
-    if TEMPLATE_ID not in config.enabled_templates:
+    if not ({TEMPLATE_ID, EPD_TEMPLATE_ID} & set(config.enabled_templates)):
         return _manual("TEMPLATE_DISABLED", "Поддерживаемый макет не включён; используйте ручной ввод.")
     start = time.monotonic()
     if document.mime_type == "application/pdf":
         pages, _ = _pdf_text(document, config)
         text = "\n".join(pages)
         useful = "DEMO-BILL-V1" in text.upper() and any("SERVICE" in line.upper() and "QTY" in line.upper() for line in text.splitlines()) and any(char.isdigit() for char in text)
-        if useful:
+        if useful and TEMPLATE_ID in config.enabled_templates:
             return _parse(text, document.receipt_id, "pdf_text", _page_positions(document.content, pages))
+        if len(pages) == 1 and EPD_TEMPLATE_ID in config.enabled_templates and is_epd(text):
+            try:
+                layout = PdfReader(io.BytesIO(document.content), strict=False).pages[0].extract_text(extraction_mode="layout") or ""
+            except Exception:
+                layout = ""
+            if is_epd(layout):
+                return parse_epd_text(layout, document.receipt_id, engine_version=ENGINE_VERSION)
         meaningful_lines = [line for line in text.splitlines() if any(ch.isalpha() for ch in line) and any(ch.isdigit() for ch in line)]
         if len(text.strip()) >= 50 and len(meaningful_lines) >= 3:
             return _manual("TEMPLATE_UNKNOWN", "Текстовый PDF не соответствует учебному макету; используйте ручной ввод.")

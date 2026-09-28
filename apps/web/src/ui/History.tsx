@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
-import type { ReceiptSummary } from '../api/types';
+import { PREVIEW_MODE } from '../api/appConfig';
+import type { Profile, ReceiptSummary } from '../api/types';
 import { ErrorMessage } from './errors';
 
-export function History() {
+export function History({ profile, onConsentChanged }: { profile: Profile; onConsentChanged: (enabled: boolean) => void }) {
   const navigate = useNavigate();
   const [items, setItems] = useState<ReceiptSummary[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -12,6 +13,18 @@ export function History() {
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [consent, setConsent] = useState(profile.aggregate_opt_in ?? false);
+  const [consentBusy, setConsentBusy] = useState(false);
+  const [consentError, setConsentError] = useState<unknown>(null);
+  useEffect(() => { setConsent(profile.aggregate_opt_in ?? false); }, [profile.aggregate_opt_in]);
+  async function saveConsent() {
+    setConsentBusy(true); setConsentError(null);
+    try {
+      const result = await api.aggregateConsent(consent);
+      onConsentChanged(result.aggregate_opt_in);
+    } catch (cause) { setConsentError(cause); }
+    finally { setConsentBusy(false); }
+  }
   async function load(page: string | null) {
     setBusy(true); setError(null);
     try {
@@ -48,6 +61,14 @@ export function History() {
   return <section className="panel">
     <h2>История документов</h2>
     <p>В истории доступны ваши документы. Сравнить можно только две подтверждённые квитанции.</p>
+    {PREVIEW_MODE ? <p className="badge">Учебные квитанции не входят в статистику города.</p> : <div className="notice-box">
+      <h3>Городская статистика</h3>
+      <p>Только подтверждённые реальные квитанции с указанным городом участвуют в обезличенной статистике после отдельного согласия. Согласие можно отозвать здесь.</p>
+      <label className="check"><input type="checkbox" checked={consent} disabled={consentBusy} onChange={(event) => setConsent(event.target.checked)} />Разрешаю использовать мои подтверждённые квитанции для городской статистики</label>
+      <button type="button" disabled={consentBusy || consent === (profile.aggregate_opt_in ?? false)} onClick={() => void saveConsent()}>{consentBusy ? 'Сохраняем…' : 'Сохранить выбор'}</button>
+      <ErrorMessage error={consentError} />
+      <p className="notice">Чужие квитанции и личные данные не показываются; числовой результат доступен только при достаточном количестве участников.</p>
+    </div>}
     <div className="actions"><Link to="/comparison">Сравнить квитанции</Link><Link to="/upload">Загрузить документ</Link></div>
     <ErrorMessage error={error} />
     {error !== null && <button type="button" disabled={busy} onClick={() => void load(cursor)}>Повторить загрузку истории</button>}
@@ -59,7 +80,7 @@ export function History() {
       {item.dataset_kind === 'synthetic' && <p className="badge">Синтетический пример</p>}
       {item.document_total_due !== null && <p>Итого по документу: {item.document_total_due} ₽</p>}
       <p>{item.source_available ? 'Исходный файл доступен' : 'Исходный файл недоступен; извлечённые данные сохранены'}</p>
-      <div className="actions"><Link to={`/review?id=${encodeURIComponent(item.id)}`}>Открыть</Link>{item.status === 'queued' || item.status === 'processing' ? <button type="button" onClick={() => void resume(item)}>Продолжить обработку</button> : null}{item.source_available && <button type="button" onClick={() => void downloadSource(item)}>Исходный файл</button>}<button type="button" onClick={() => setConfirmId(item.id)}>Удалить</button></div>
+      <div className="actions"><Link to={`/review?id=${encodeURIComponent(item.id)}`}>Открыть</Link>{item.status === 'confirmed' && <><Link to={`/assistant?receipt=${encodeURIComponent(item.id)}`}>Вопрос по платёжке</Link><Link to={`/city-comparison?receipt=${encodeURIComponent(item.id)}`}>Сравнить с городом</Link></>}{item.status === 'queued' || item.status === 'processing' ? <button type="button" onClick={() => void resume(item)}>Продолжить обработку</button> : null}{item.source_available && <button type="button" onClick={() => void downloadSource(item)}>Исходный файл</button>}<button type="button" onClick={() => setConfirmId(item.id)}>Удалить</button></div>
       {confirmId === item.id && <div className="notice-box" role="group" aria-label="Подтверждение удаления"><p>Удалить этот документ и связанные данные?</p><div className="actions"><button type="button" disabled={busy} onClick={() => void remove(item.id)}>Да, удалить</button><button type="button" onClick={() => setConfirmId(null)}>Отмена</button></div></div>}
     </li>)}</ul>
     {nextCursor && <button type="button" disabled={busy} onClick={() => void load(nextCursor)}>Следующая страница</button>}

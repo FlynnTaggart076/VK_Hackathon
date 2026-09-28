@@ -118,6 +118,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/aggregate-consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Explicit, revocable use of confirmed real receipt service metrics for city aggregates. */
+        put: operations["updateAggregateConsent"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog": {
         parameters: {
             query?: never;
@@ -232,6 +249,25 @@ export interface paths {
         post?: never;
         /** @description Idempotent deletion; absent or foreign ID also returns 204. */
         delete: operations["deleteReceipt"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/receipts/{id}/city-comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** @description Exact city/month/service/scope/segment/unit cohort; numeric values suppressed below five distinct real opted-in users. */
+        get: operations["getCityComparison"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -449,6 +485,28 @@ export interface components {
             onboarding_completed: boolean;
             privacy_notice_version: string | null;
             privacy_acknowledged_at: components["schemas"]["Timestamp"] | null;
+            aggregate_opt_in: boolean;
+        };
+        AggregateConsentRequest: {
+            enabled: boolean;
+        };
+        AggregateConsentView: {
+            aggregate_opt_in: boolean;
+        };
+        CityComparisonView: {
+            /** @enum {string} */
+            status: "available" | "insufficient_data" | "ambiguous_city" | "ineligible";
+            city: string | null;
+            period: string | null;
+            service_code: string;
+            unit: string | null;
+            /** @enum {string} */
+            metric: "charge_amount" | "tariff";
+            sample_size: number | null;
+            average: string | null;
+            median: string | null;
+            /** @constant */
+            provenance: "confirmed_opted_in_real_receipts";
         };
         User: {
             id: components["schemas"]["Id"];
@@ -1406,6 +1464,26 @@ export interface components {
                 "application/json": components["schemas"]["Profile"];
             };
         };
+        /** @description Current aggregate opt-in state */
+        AggregateConsent: {
+            headers: {
+                "X-Request-ID": components["headers"]["RequestId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["AggregateConsentView"];
+            };
+        };
+        /** @description Suppressed or aggregate-only city metric */
+        CityComparison: {
+            headers: {
+                "X-Request-ID": components["headers"]["RequestId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["CityComparisonView"];
+            };
+        };
         /** @description Public verified catalog */
         Catalog: {
             headers: {
@@ -1740,6 +1818,24 @@ export interface operations {
             422: components["responses"]["ValidationFailed"];
         };
     };
+    updateAggregateConsent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AggregateConsentRequest"];
+            };
+        };
+        responses: {
+            200: components["responses"]["AggregateConsent"];
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
     getCatalog: {
         parameters: {
             query?: never;
@@ -1925,6 +2021,26 @@ export interface operations {
         responses: {
             204: components["responses"]["NoContent"];
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    getCityComparison: {
+        parameters: {
+            query: {
+                service_code: string;
+                metric: "charge_amount" | "tariff";
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["CityComparison"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
         };
     };
     editReceipt: {

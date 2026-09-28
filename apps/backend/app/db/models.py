@@ -35,6 +35,8 @@ class Profile(Base):
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     privacy_notice_version: Mapped[str | None] = mapped_column(String(50))
     privacy_acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    chat_llm_consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    aggregate_opt_in: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
 class SessionToken(Base):
@@ -83,6 +85,29 @@ class ReceiptRevision(Base):
     validation: Mapped[dict] = mapped_column(JSONValue, nullable=False)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     engine_version: Mapped[str] = mapped_column(String(100), nullable=False)
+
+
+class ReceiptCohortLine(Base):
+    """Derived metrics only; no address, account, provider, or source document."""
+    __tablename__ = "receipt_cohort_lines"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    receipt_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("receipts.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    line_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    city: Mapped[str] = mapped_column(String(64), nullable=False)
+    period: Mapped[str] = mapped_column(String(7), nullable=False)
+    service_code: Mapped[str] = mapped_column(String(40), nullable=False)
+    scope: Mapped[str] = mapped_column(String(24), nullable=False)
+    segment: Mapped[str | None] = mapped_column(String(64))
+    unit: Mapped[str] = mapped_column(String(24), nullable=False)
+    metric: Mapped[str] = mapped_column(String(24), nullable=False)
+    value: Mapped[str] = mapped_column(String(24), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    __table_args__ = (
+        UniqueConstraint("receipt_id", "line_id", "metric", name="uq_receipt_cohort_line_metric"),
+        Index("ix_receipt_cohort_lookup", "city", "period", "service_code", "scope", "segment", "unit", "metric"),
+        Index("ix_receipt_cohort_user", "user_id"),
+    )
 
 
 class Job(Base):

@@ -17,7 +17,7 @@ from sqlalchemy import create_engine, delete, func, select, text, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.db.models import AssistantAnswer, Document, Draft, IdempotencyKey, Job, Profile, Receipt, ReceiptRevision, SessionToken, User, WorkerHeartbeat
+from app.db.models import AssistantAnswer, Document, Draft, IdempotencyKey, Job, Profile, Receipt, ReceiptCohortLine, ReceiptRevision, SessionToken, User, WorkerHeartbeat
 from app.errors import ApiError
 
 
@@ -60,7 +60,8 @@ class SqlStore:
         return {"role": profile.role, "territory_id": profile.territory_id,
                 "onboarding_completed": profile.onboarding_completed,
                 "privacy_notice_version": profile.privacy_notice_version,
-                "privacy_acknowledged_at": stamp(profile.privacy_acknowledged_at) if profile.privacy_acknowledged_at else None}
+                "privacy_acknowledged_at": stamp(profile.privacy_acknowledged_at) if profile.privacy_acknowledged_at else None,
+                "aggregate_opt_in": profile.aggregate_opt_in}
 
     def authenticate_demo(self, identity: str, access_code: str) -> dict:
         if not self.settings.demo_auth_enabled or self.settings.mode == "production":
@@ -212,6 +213,9 @@ class SqlStore:
             profile = session.get(Profile, uuid.UUID(user_id), with_for_update=True)
             if not profile:
                 raise ApiError(401, "AUTH_REQUIRED", "Войдите в приложение.")
+            if profile.territory_id != body["territory_id"] and profile.aggregate_opt_in:
+                session.execute(delete(ReceiptCohortLine).where(ReceiptCohortLine.user_id == profile.user_id))
+                profile.aggregate_opt_in = False
             profile.role = body["role"]
             profile.territory_id = body["territory_id"]
             profile.onboarding_completed = True
@@ -575,6 +579,7 @@ class SqlStore:
                 if any(ref.get("id") == receipt_id for ref in draft.receipt_refs):
                     deleted_drafts.add(str(draft.id))
                     session.delete(draft)
+            session.execute(delete(ReceiptCohortLine).where(ReceiptCohortLine.receipt_id == receipt.id))
             session.execute(delete(ReceiptRevision).where(ReceiptRevision.receipt_id == receipt.id))
             for record in session.scalars(select(IdempotencyKey).where(IdempotencyKey.user_id == receipt.user_id)):
                 body = record.response_body
@@ -618,6 +623,7 @@ class SqlStore:
                                                          "outcome": receipt.extraction_outcome},
                                         validation=deepcopy(validation), confirmed_at=None,
                                         engine_version=engine_version))
+            session.execute(delete(ReceiptCohortLine).where(ReceiptCohortLine.receipt_id == receipt.id))
             receipt.current_revision = new_revision
             receipt.status = "needs_review"
             receipt.updated_at = now()
@@ -680,6 +686,10 @@ class SqlStore:
             receipt.status = "confirmed"
             receipt.updated_at = created
             session.flush()
+            if profile.aggregate_opt_in and receipt.dataset_kind == "user_provided":
+                from app.services.cohort_store import index_confirmed_receipt
+
+                index_confirmed_receipt(session, receipt, prior.bill_data, profile)
             result = self._receipt_view(session, receipt)
             session.add(IdempotencyKey(id=uuid.uuid4(), user_id=uid, route=route, key=key_id,
                                        fingerprint=fingerprint, status_code=200,
@@ -717,4 +727,4 @@ class SqlStore:
             session.execute(text("SELECT 1"))
             version = session.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
             worker = session.get(WorkerHeartbeat, "worker")
-            return version == "e3_max_keyboard" and bool(worker and aware(worker.updated_at) > now() - timedelta(seconds=90))
+            return version == "e4_city_cohort" and bool(worker and aware(worker.updated_at) > now() - timedelta(seconds=90))

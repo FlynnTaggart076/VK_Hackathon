@@ -87,12 +87,13 @@ export function ReceiptReview() {
   const [acknowledged, setAcknowledged] = useState<string[]>([]);
   const confirmKey = useRef(crypto.randomUUID());
   const [reload, setReload] = useState(0);
+  const [expandedLines, setExpandedLines] = useState<string[]>([]);
 
   useEffect(() => {
     if (!id) return;
     const controller = new AbortController();
     setLoading(true); setError(null); setReceipt(null); setDraft(null); setConflict(null);
-    api.receipt(id, controller.signal).then((value) => { setReceipt(value); setDraft(value.bill_data); })
+    api.receipt(id, controller.signal).then((value) => { setReceipt(value); setDraft(value.bill_data); setExpandedLines(value.bill_data.services[0] ? [value.bill_data.services[0].line_id] : []); })
       .catch((cause) => { if (!(cause instanceof DOMException && cause.name === 'AbortError')) setError(cause); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
@@ -175,7 +176,10 @@ export function ReceiptReview() {
         </details>
         <h3>Строки начислений</h3>
         {draft.services.length === 0 && <p>Строки не найдены. Добавьте их по исходнику.</p>}
-        {draft.services.map((line, index) => <fieldset key={line.line_id}><legend>Строка {index + 1}</legend>
+        {draft.services.map((line, index) => <details key={line.line_id} className="service-row" open={expandedLines.includes(line.line_id)}
+          onToggle={(event) => { const open = event.currentTarget.open; setExpandedLines((current) => open ? [...new Set([...current, line.line_id])] : current.filter((id) => id !== line.line_id)); }}>
+          <summary>Строка {index + 1} · {line.raw_name || 'без названия'} · {line.charge_amount === null ? 'сумма неизвестна' : `${line.charge_amount} ₽`}</summary>
+          <fieldset><legend>Проверка строки {index + 1}</legend>
           <Field label="Название услуги" value={line.raw_name} onChange={(value) => updateLine(index, { raw_name: value ?? '' })} hint={<Evidence path={`/services/${index}/raw_name`} evidence={receipt.field_evidence} issues={receipt.issues} />} />
           <label htmlFor={`code-${line.line_id}`}>Код услуги</label><select id={`code-${line.line_id}`} value={line.service_code} onChange={(event) => updateLine(index, { service_code: event.target.value as Service['service_code'] })}>{serviceCodes.map((code) => <option key={code} value={code}>{code}</option>)}</select>
           <label htmlFor={`scope-${line.line_id}`}>Область</label><select id={`scope-${line.line_id}`} value={line.scope} onChange={(event) => updateLine(index, { scope: event.target.value as Service['scope'] })}>{scopes.map((scope) => <option key={scope} value={scope}>{scope}</option>)}</select>
@@ -190,8 +194,9 @@ export function ReceiptReview() {
             <Field label="Ключ сегмента" value={line.segment_key} onChange={(value) => updateLine(index, { segment_key: value })} />
           </details>
           <button type="button" onClick={() => update('services', draft.services.filter((_, pos) => pos !== index))}>Удалить строку</button>
-        </fieldset>)}
-        <button type="button" onClick={() => update('services', [...draft.services, { line_id: crypto.randomUUID(), raw_name: '', service_code: 'other', scope: 'unspecified', unit: null, unit_label: null, quantity: null, tariff: null, charge_amount: null, supplier_key: null, segment_key: null, calculation_kind: 'document_amount' }])}>Добавить строку</button>
+          </fieldset>
+        </details>)}
+        <button type="button" onClick={() => { const line: Service = { line_id: crypto.randomUUID(), raw_name: '', service_code: 'other', scope: 'unspecified', unit: null, unit_label: null, quantity: null, tariff: null, charge_amount: null, supplier_key: null, segment_key: null, calculation_kind: 'document_amount' }; update('services', [...draft.services, line]); setExpandedLines((current) => [...current, line.line_id]); }}>Добавить строку</button>
         <h3>Перерасчёты</h3>
         {draft.adjustments.map((item, index) => <fieldset key={item.adjustment_id}><legend>Перерасчёт {index + 1}</legend>
           <Field label="Название" value={item.label} onChange={(value) => updateAdjustment(index, { label: value ?? '' })} />
@@ -220,7 +225,7 @@ export function ReceiptReview() {
         {receipt.issues.some((issue) => issue.severity === 'error') && <p role="alert">Сервер сообщил об ошибках данных. Подтверждение недоступно.</p>}
         <button type="button" disabled={!canConfirm} onClick={() => void confirm()}>Подтвердить проверенные данные</button>
       </section>}
-      {receipt.status === 'confirmed' && <p><Link to={`/explanation?id=${encodeURIComponent(receipt.id)}`}>Открыть объяснение</Link></p>}
+      {receipt.status === 'confirmed' && <div className="actions"><Link to={`/explanation?id=${encodeURIComponent(receipt.id)}`}>Открыть объяснение</Link><Link to={`/assistant?receipt=${encodeURIComponent(receipt.id)}`}>Вопрос по платёжке</Link><Link to={`/city-comparison?receipt=${encodeURIComponent(receipt.id)}`}>Сравнить с городом</Link></div>}
     </>}
   </section>;
 }

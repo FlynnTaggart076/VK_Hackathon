@@ -12,6 +12,9 @@ services:
       MAX_WEB_APP: ""
   api:
     environment: *preview_settings
+    networks:
+      private: {}
+      model_egress: {}
     mem_limit: 1024m
     cpus: 1.5
   worker:
@@ -35,6 +38,7 @@ services:
         aliases: [vk-zhkh-preview-web]
 
 networks:
+  model_egress: {}
   edge:
     external: true
     name: vk-zhkh-preview-edge
