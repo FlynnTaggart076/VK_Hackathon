@@ -1,6 +1,6 @@
 # A · E4 DeepSeek dialogue UI and continuations
 
-Code commit pushed to `origin/agent-a/e4-deepseek-flow`: `dfe066d16d72c02b9057efb39a404ed6078e0f46` (base `9b58db6`). This report is a following documentation commit on the same branch.
+Latest code commit pushed to `origin/agent-a/e4-deepseek-flow`: `5b6a4e44b516aa00639f6b8630cefebe0c6f381e` (initial code `dfe066d16d72c02b9057efb39a404ed6078e0f46`, base `9b58db6`). This report is a following documentation commit on the same branch.
 
 ## Delivered
 
@@ -27,5 +27,11 @@ Portable Node `v22.23.3` was used from `%TEMP%`; no system installation or secre
 - Verified supplier contact data may still be absent; a completed service clarification can correctly end in an unsupported or limited answer. Model outage text depends on B's `AnswerView` fallback.
 - City aggregation and real EPD extraction require B/C server tests. The 19-row browser check uses synthetic rows; the actual PDF, PostgreSQL cohort, VM endpoint and MAX client were not tested by A.
 - The collapsed dense review remains a long vertical form. A real 19-row, 173-evidence review needs a human pass after integration; every extracted value must remain reviewable before confirmation.
+
+## Strict ID follow-up
+
+The clarification text field also accepts arbitrary phrases. `topic_id`, `territory_id` and `service_code` cannot receive arbitrary phrases under the backend contract. The follow-up sends a recognized topic ID or `null` plus the user's topic words in the question; an unknown organization name also goes into the question with `organization_id=null`. An unknown territory or role remains visible in its field with an actionable validation error before any profile PUT or answer call. Service phrases map to the enum or `other` with the original words in the question. `document_kind` is a free string in `QuestionContext` and is sent as typed.
+
+`npm run build` passed, `npm test` passed 20 tests, and sequential 360 px browser runs `test:browser:e4:clarifications`, `test:browser:e3:mock`, `test:browser:e2` passed after this fix. The E4 browser run types custom values into all six clarification fields; it checks request bodies for topic, organization, service and document, and confirms that invalid territory/role never reach the API.
 
 Next: integrate B and C contracts, run browser tests against a real local API, then re-check the exact EPD layout and MAX mini-app after accepted release deployment.
