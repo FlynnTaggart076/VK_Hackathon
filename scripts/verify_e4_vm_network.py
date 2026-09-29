@@ -13,8 +13,18 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 
+def verify_restarts(config: dict) -> None:
+    services = config["services"]
+    for name in ("db", "api", "worker", "web"):
+        assert services[name].get("restart") == "unless-stopped", (name, services[name].get("restart"))
+    # Alembic is a one-shot prerequisite, never a daemon to restart indefinitely.
+    assert services["migrate"].get("restart") in (None, "no")
+    print("E4 persistent service restart policies: OK")
+
+
 def verify_config() -> None:
     config = json.load(sys.stdin)
+    verify_restarts(config)
     services = config["services"]
     expected = {
         "db": {"private"},
@@ -58,6 +68,11 @@ def verify_egress() -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2 or sys.argv[1] not in {"config", "egress"}:
-        raise SystemExit("usage: verify_e4_vm_network.py config|egress")
-    (verify_config if sys.argv[1] == "config" else verify_egress)()
+    if len(sys.argv) != 2 or sys.argv[1] not in {"config", "restart", "egress"}:
+        raise SystemExit("usage: verify_e4_vm_network.py config|restart|egress")
+    if sys.argv[1] == "config":
+        verify_config()
+    elif sys.argv[1] == "restart":
+        verify_restarts(json.load(sys.stdin))
+    else:
+        verify_egress()

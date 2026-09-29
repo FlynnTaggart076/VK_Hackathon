@@ -47,6 +47,7 @@ jobs:
           }
           trap on_exit EXIT
           "${compose[@]}" config --quiet
+          "${compose[@]}" config --format json | python3 scripts/verify_e4_vm_network.py restart
           "${compose[@]}" up --build -d >/tmp/zhkh-preview-build.log 2>&1 || {
             tail -n 30 /tmp/zhkh-preview-build.log | sed -E 's#(postgresql\+psycopg://zhkh:)[^@ ]+#\1***#g'
             exit 1
