@@ -15,7 +15,7 @@ try {
   await page.getByLabel('Учётная запись').selectOption('reviewer_a');
   await page.getByLabel('Локальный код').fill(DEMO_ACCESS_CODE);
   await page.getByRole('button', { name: 'Войти в dev' }).click();
-  await page.getByRole('link', { name: 'Первый запуск' }).click();
+  await page.getByRole('link', { name: 'Изменить роль и территорию' }).click();
   await page.getByLabel('Ваша роль').selectOption('tenant');
   await page.getByLabel('Территория').selectOption('demo-territory');
   await page.getByRole('checkbox').check();
