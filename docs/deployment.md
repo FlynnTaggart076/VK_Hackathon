@@ -2,9 +2,17 @@
 
 На VM уже развёрнут прежний production SHA `d3fa9b2` и отдельный preview
 `af2b066`. Новая версия с DeepSeek, ЕПД и городскими выборками ожидает
-принятого release SHA и обновления B. Токены MAX и DeepSeek находятся только
-в закрытом `runtime/app.env`, вне Git. Порядок, резервная копия и границы
+принятого release SHA и обновления B. Токены MAX уже находятся в закрытом
+`runtime/app.env`; ключ DeepSeek B добавит туда же перед обновлением, вне Git.
+Порядок, резервная копия и границы
 обновления — `TECHNICAL_SPEC.md` §12.8.
+
+После перезагрузки VM 2026-09-29 сервисы приложения с `restart: no` остались
+остановленными и общий `/team/` давал 502. Актуальные VM Compose overrides
+задают `restart: unless-stopped` для `db/api/worker/web` production и preview;
+`migrate` остаётся одноразовым. Перед каждым `up` проверяйте эффективный
+`docker compose config` и не сбрасывайте это правило. Детали backup/restore и
+сохранённых параллельных изменений — в `reports/agent-b-restart-policy.md`.
 
 ## Историческая E1 проверка
 
