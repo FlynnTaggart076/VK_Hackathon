@@ -4,12 +4,17 @@
 
 ## Поставка release-005015c, 2026-09-29
 
+**Решение:** кандидат `47190ff` принят для публикации финального doc-only release в main и развёртывания B. [E2 CI](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36621394896) и [E4 CI](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36621395229) success на этом exact SHA. Runtime-код импортированного релиза не меняли; дополнены тестовые локаторы, LF manifest fixtures, отчёты и задания. VM rollout ещё впереди; до него работают стенды `37e6aba`.
+
+- A fixes `62715f4`/report `baed1b9` приняты как `4a0a2af`/`7eb1bf2`. Условная ссылка первого запуска заменена в тестах на постоянную ссылку профиля; добавлен mock тест заполненного профиля. Повторный полный CI прошёл.
+- C fix `8772023`/report `aecd0b0` приняты как `47190ff`/`7628118`: `.gitattributes` для трёх JSON, правильные SHA/bytes manifest для Git LF blobs. 74 engine + 74 backend tests, 6 local PG skips, оба verifier OK. Coordinator повторил 15 targeted tests и оба verifier на интегрированном checkout; все passed. PG CI проверяет свои сценарии, но не заменяет пропущенные локальные tests поимённо.
+
 - Пользовательский ZIP SHA-256 `2e931b6db4e244a7e53de8b71d57e83c391da65c1ba5db087950207a89bb08db`, исходный SHA из ZIP `005015cd9e5d77a6097e950aa995164d11b2ba61`. Распакованные 393 файла совпали побайтно; 30 изменений/21 добавление/0 удалений против main `ca23d1d`. Проверка на известные локальные токены и распространённые форматы credentials не выявила совпадений. Исходный Git object отсутствует локально, в origin и в VM Git, поэтому создан import commit `4730383`. Executable bit deploy script восстановлен из ZIP в `b3e10e8`.
 - A report `e79edad` принят как `43f4db3`: 49 unit tests, build, browser E5 Russian UI (13 screens), service kind 360px, dense review (19 строк) и E2 mock passed. Runtime-код A не менял.
 - C сообщил 74 engine и 74 backend tests passed/6 PG skips. Найдено расхождение manifest SHA/bytes трёх fixtures между CRLF Windows и Git LF; исправление проверяется отдельно.
 - CI на `b3e10e8`: [E4 preview/PG17 success](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36620632022); [E2 failed](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36620632003) после успешных API, OCR, webhook и PG gates: устаревший `getByRole('link', {name: 'Первый запуск'})` в `e2-real-flow.mjs:18`. Дефект теста возвращён A; runtime defect не подтверждён.
 - B read-only preflight: production/preview clean HEAD `37e6aba`, schema `e5_dialog_state`, DB/API healthy, worker/web running, shared `/team/`/`healthz` и оба ready 200, 69G free. Прерванная предыдущая задача ничего на VM не меняла. Чужие M в старых checkout сохранены. Coordinator независимо повторил public prod/preview ready и `/team/` 200.
-- Следующий шаг: принять C/A fixes, повторить CI, опубликовать exact main SHA, затем B выполняет backup/restore и rollout из Git. Подтверждения запуска MAX Android/Web и полной E5 приёмки по-прежнему нет.
+- Следующий шаг после зелёного CI: опубликовать exact main SHA, B выполняет backup/restore и rollout из Git, coordinator проверяет public HTTPS и новый preview UI. Подтверждения запуска MAX Android/Web и полной E5 приёмки по-прежнему нет.
 
 ## E4 checkpoint: DeepSeek, реальный ЕПД и городское сравнение (2026-09-28)
 

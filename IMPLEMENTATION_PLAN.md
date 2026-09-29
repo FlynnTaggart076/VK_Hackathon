@@ -8,12 +8,12 @@
 
 | Владелец | Ветка | Статус | Проверяемый результат |
 |---|---|---|---|
-| A | `agent-a/verify-005015c` | review | 49 unit tests/build и 4 mock browser сценария passed; report `e79edad`. Исправить устаревший локатор real browser CI |
-| C | `agent-c/verify-005015c` | review | 74 engine + 74 backend tests passed; 6 PostgreSQL skips. Зафиксировать Linux-compatible fixture hashes и HTTP contract check |
+| A | `agent-a/verify-005015c` | accepted | 49 unit tests/build и 4 mock browser сценария; reports `e79edad`/`baed1b9`, locator fix `62715f4` принят как `4a0a2af`; полный real browser CI passed |
+| C | `agent-c/verify-005015c` | accepted | 74 engine + 74 backend tests passed; 6 local PostgreSQL skips. Portability fix `8772023` принят как `47190ff`, report `aecd0b0` как `7628118`, engine/HTTP verifiers OK |
 | B | `agent-b/deploy-005015c` | in_progress | Read-only preflight принят: оба clean release `37e6aba`, schema `e5_dialog_state`, healthy и внутренние HTTP 200. Развернуть только после exact accepted main SHA |
-| Координатор | `integration/import-005015c` | in_progress | Принять исправления проверок, дождаться CI, синхронизировать main, передать release B и независимо проверить HTTPS |
+| Координатор | `integration/import-005015c` | in_progress | Кандидат `47190ff` принят по E2/E4 CI; опубликовать final doc-only release в main, передать B и независимо проверить HTTPS |
 
-CI `b3e10e8`: [E4 preview/PG17](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36620632022) success; [E2](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36620632003) прошёл API/OCR/PostgreSQL проверки, затем упал на отсутствующем UI locator «Первый запуск» в `e2-real-flow.mjs`. Новых миграций в поставке нет. До принятия исправленного кандидата на VM остаётся `37e6aba`. Реальный MAX и E5 остаются отдельной приёмкой.
+CI принятого `47190ff`: [E2 Compose/PG17/real browser](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36621394896) и [E4 preview/PG17](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36621395229) success. Координатор независимо повторил engine verifier, HTTP contract (33 операции/25 примеров) и 15 targeted tests. Первичный E2 на `b3e10e8` выявил устаревший локатор условной ссылки «Первый запуск» для уже заполненного профиля; исправлен переход через постоянную ссылку настроек. Новых миграций нет. B обновит оба стенда из финального main SHA; до rollout на VM остаётся `37e6aba`. Реальный MAX и E5 остаются отдельной приёмкой.
 
 ## История E4: запрос владельца на DeepSeek и реальный ЕПД (2026-09-28)
 

@@ -4,7 +4,7 @@
 - Branch: `agent-c/verify-005015c`.
 - Portability fix: `87720230482c65a2da32d30ed35b3111114ae987` (pushed).
 
-The imported service catalog, EPD scope correction, issue rebasing and store revision path passed the available tests. Review of `rebase_issues` and `SqlStore.edit_revision` found no further reproducible blocker in this checkout. The audit's PostgreSQL concern was not reproduced locally because there is no local PostgreSQL; the coordinator's CI covers that gate.
+The imported service catalog, EPD scope correction, issue rebasing and store revision path passed the available tests. Review of `rebase_issues` and `SqlStore.edit_revision` found no further reproducible blocker in this checkout. The audit's PostgreSQL concern was not reproduced locally because there is no local PostgreSQL. Coordinator CI independently exercises PostgreSQL smoke, cohort and webhook paths; it does not run every locally skipped test, including the audit's specific stale migration assertion.
 
 ## Verification
 
