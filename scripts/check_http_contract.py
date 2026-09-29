@@ -36,6 +36,7 @@ REQUIRED_OPERATIONS = {
     ("post", "/api/v1/receipts/manual"), ("post", "/api/v1/receipts/demo"),
     ("get", "/api/v1/receipts/{id}"), ("delete", "/api/v1/receipts/{id}"),
     ("get", "/api/v1/receipts/{id}/city-comparison"),
+    ("get", "/api/v1/preview/receipts/{id}/city-comparison"),
     ("put", "/api/v1/receipts/{id}/draft"),
     ("post", "/api/v1/receipts/{id}/confirm"),
     ("post", "/api/v1/receipts/{id}/retry"),

@@ -269,6 +269,21 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
         '404': {$ref: '#/components/responses/NotFound'}
         '422': {$ref: '#/components/responses/ValidationFailed'}
+  /api/v1/preview/receipts/{id}/city-comparison:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    get:
+      tags: [receipts]
+      operationId: getPreviewCityComparison
+      description: Preview-only fixed synthetic cohort for one confirmed owner receipt. This never reads or changes the real opted-in city cohort.
+      parameters:
+        - {name: service_code, in: query, required: true, schema: {type: string}}
+        - {name: metric, in: query, required: true, schema: {type: string, enum: [charge_amount, tariff]}}
+      responses:
+        '200': {$ref: '#/components/responses/PreviewCityComparison'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
   /api/v1/receipts/{id}/draft:
     parameters: [{$ref: '#/components/parameters/Id'}]
     put:
@@ -517,6 +532,29 @@ components:
         average: {type: [string, 'null']}
         median: {type: [string, 'null']}
         provenance: {type: string, const: confirmed_opted_in_real_receipts}
+    PreviewCityComparisonView:
+      type: object
+      additionalProperties: false
+      required: [status, city, city_label, period, service_code, scope, segment_key, unit, metric, sample_size, average, median, receipt_value, difference_from_average, difference_percent, comparison, explanation, provenance]
+      properties:
+        status: {type: string, enum: [available, insufficient_data, ambiguous_city, ineligible]}
+        city: {type: [string, 'null']}
+        city_label: {type: [string, 'null']}
+        period: {type: [string, 'null']}
+        service_code: {type: string}
+        scope: {type: [string, 'null']}
+        segment_key: {type: [string, 'null']}
+        unit: {type: [string, 'null']}
+        metric: {type: string, enum: [charge_amount, tariff]}
+        sample_size: {type: [integer, 'null'], minimum: 5}
+        average: {type: [string, 'null']}
+        median: {type: [string, 'null']}
+        receipt_value: {type: [string, 'null']}
+        difference_from_average: {type: [string, 'null']}
+        difference_percent: {type: [string, 'null']}
+        comparison: {oneOf: [{type: string, enum: [above, equal, below]}, {type: 'null'}]}
+        explanation: {type: [string, 'null']}
+        provenance: {type: string, const: synthetic_preview_cohort}
     User: {type: object, additionalProperties: false, required: [id], properties: {id: {$ref: '#/components/schemas/Id'}}}
     UserAndProfile:
       type: object
@@ -783,7 +821,7 @@ components:
       properties:
         code:
           type: string
-          enum: [INVALID_REQUEST, INVALID_DOCUMENT, INVALID_PERIOD, AUTH_REQUIRED, INVALID_MAX_AUTH, SESSION_EXPIRED, DEMO_DISABLED, WEBHOOK_FORBIDDEN, NOT_FOUND, REVISION_CONFLICT, IDEMPOTENCY_CONFLICT, INVALID_STATE, RECEIPT_NOT_CONFIRMED, INCOMPARABLE_RECEIPTS, PREVIEW_NOT_READY, SOURCE_EXPIRED, FILE_TOO_LARGE, PAGE_LIMIT_EXCEEDED, IMAGE_TOO_LARGE, UNSUPPORTED_MEDIA_TYPE, VALIDATION_FAILED, WARNINGS_NOT_ACKNOWLEDGED, PRIVACY_NOTICE_REQUIRED, RATE_LIMITED, QUEUE_LIMIT_REACHED, SERVICE_UNAVAILABLE, ENGINE_UNAVAILABLE, PREVIEW_UNAVAILABLE]
+          enum: [INVALID_REQUEST, INVALID_DOCUMENT, INVALID_PERIOD, AUTH_REQUIRED, INVALID_MAX_AUTH, SESSION_EXPIRED, DEMO_DISABLED, PREVIEW_DISABLED, WEBHOOK_FORBIDDEN, NOT_FOUND, REVISION_CONFLICT, IDEMPOTENCY_CONFLICT, INVALID_STATE, RECEIPT_NOT_CONFIRMED, INCOMPARABLE_RECEIPTS, PREVIEW_NOT_READY, SOURCE_EXPIRED, FILE_TOO_LARGE, PAGE_LIMIT_EXCEEDED, IMAGE_TOO_LARGE, UNSUPPORTED_MEDIA_TYPE, VALIDATION_FAILED, WARNINGS_NOT_ACKNOWLEDGED, PRIVACY_NOTICE_REQUIRED, RATE_LIMITED, QUEUE_LIMIT_REACHED, SERVICE_UNAVAILABLE, ENGINE_UNAVAILABLE, PREVIEW_UNAVAILABLE]
         message: {type: string}
         retryable: {type: boolean}
         fields: {type: array, items: {$ref: '#/components/schemas/ErrorField'}}
@@ -835,6 +873,7 @@ components:
     Profile: {description: Updated profile, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/Profile'}}}}
     AggregateConsent: {description: Current aggregate opt-in state, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/AggregateConsentView'}}}}
     CityComparison: {description: Suppressed or aggregate-only city metric, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/CityComparisonView'}}}}
+    PreviewCityComparison: {description: "Fixed synthetic preview metric; never real city statistics", headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/PreviewCityComparisonView'}}}}
     Catalog: {description: Public verified catalog, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/Catalog'}, examples: {synthetic: {externalValue: './examples/catalog.json'}}}}}
     Answer: {description: Answer or structured clarification/unsupported, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/AnswerView'}, examples: {unsupported: {externalValue: './examples/answer-unsupported.json'}, clarification: {externalValue: './examples/answer-clarification.json'}}}}}
     Receipt: {description: Receipt view, headers: {X-Request-ID: {$ref: '#/components/headers/RequestId'}}, content: {application/json: {schema: {$ref: '#/components/schemas/ReceiptView'}, examples: {synthetic: {externalValue: './examples/receipt-confirmed.json'}, manual_required: {externalValue: './examples/receipt-manual-required.json'}}}}}

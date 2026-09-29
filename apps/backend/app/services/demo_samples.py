@@ -12,6 +12,11 @@ FIXTURES = (Path(os.environ["FIXTURE_ROOT"]) if os.getenv("FIXTURE_ROOT") else
             next(parent / "fixtures" / "receipts" for parent in Path(__file__).resolve().parents
                  if (parent / "fixtures" / "receipts" / "manifest.json").is_file()))
 ALLOWED_IDS = {"demo-bill-2026-08.pdf", "demo-bill-2026-09.pdf"}
+CITY_PREVIEW_IDS = {
+    "city-moscow-water-2026-08", "city-moscow-water-2026-09",
+    "city-lyubertsy-water-2026-08", "city-lyubertsy-water-2026-09",
+}
+DEMO_FIXTURES = {"water-2026-08", "water-2026-09"} | CITY_PREVIEW_IDS
 
 
 def dataset_kind(content: bytes, mime: str, demo_sample_id: str | None) -> str:

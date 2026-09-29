@@ -312,7 +312,8 @@ class SqlStore:
             raise
 
     def import_demo(self, user_id: str, key: str, fixture_id: str) -> dict:
-        if fixture_id not in {"water-2026-08", "water-2026-09"}:
+        from app.services.demo_samples import CITY_PREVIEW_IDS, DEMO_FIXTURES
+        if fixture_id not in DEMO_FIXTURES or (fixture_id in CITY_PREVIEW_IDS and self.settings.mode != "preview"):
             raise ApiError(404, "NOT_FOUND", "Демообразец не найден.")
         uid, key_id = uuid.UUID(user_id), uuid.UUID(key)
         fingerprint = hashlib.sha256(f"demo:{fixture_id}".encode()).hexdigest()
