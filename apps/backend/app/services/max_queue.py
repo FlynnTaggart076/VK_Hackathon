@@ -230,10 +230,11 @@ def process_inbox_once(store: SqlStore) -> bool:
         reply = (command_text(item) or chat_consent_text(session, item, store.settings)
                  or question_text(session, item, store))
         if reply:
-            is_start = item.event_type == "bot_started" or (item.text or "").strip().lower() == "/start"
+            command = (item.text or "").strip().lower()
+            show_app_keyboard = item.event_type == "bot_started" or command in {"/start", "/help", "/llm_on"}
             session.add(Outbox(id=uuid.uuid4(), business_key=item.dedup_key,
                                max_user_id=item.max_user_id, text=reply,
-                               attachments=start_keyboard(store.settings) if is_start else [],
+                               attachments=start_keyboard(store.settings) if show_app_keyboard else [],
                                state="queued", attempt=0,
                                run_after=now(), created_at=now(),
                                expires_at=now() + timedelta(hours=24)))
