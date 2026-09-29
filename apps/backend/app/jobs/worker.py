@@ -25,6 +25,7 @@ from sqlalchemy import and_, or_, select
 from app.db.models import Document, Job, Receipt, ReceiptRevision, WorkerHeartbeat
 from app.db.store import SqlStore, aware, now
 from app.main import Settings, empty_bill
+from app.services.demo_samples import DEMO_FIXTURES
 
 
 logger = logging.getLogger(__name__)
@@ -82,7 +83,6 @@ def fixture_root(module_file: Path, configured: str | None) -> Path:
 
 
 FIXTURE_ROOT = fixture_root(Path(__file__), os.environ.get("FIXTURE_ROOT"))
-DEMO_FIXTURES = {"water-2026-08", "water-2026-09"}
 
 
 def heartbeat(store: SqlStore) -> None:

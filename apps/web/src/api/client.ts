@@ -1,4 +1,4 @@
-import type { AggregateConsentView, AnswerContext, AnswerView, ApiErrorBody, Catalog, CityComparisonView, CompareRequest, ComparisonView, ConfirmReceiptRequest, CreateDraftRequest, DraftView, EditDraftRequest, EditReceiptRequest, Job, MeResponse, MetaResponse, Profile, ReceiptExplanation, ReceiptList, ReceiptQueued, ReceiptView, UnexpectedErrorBody, UpdateProfileRequest } from './types';
+import type { AggregateConsentView, AnswerContext, AnswerView, ApiErrorBody, Catalog, CityComparisonView, CompareRequest, ComparisonView, ConfirmReceiptRequest, CreateDraftRequest, DraftView, EditDraftRequest, EditReceiptRequest, Job, MeResponse, MetaResponse, Profile, ReceiptExplanation, ReceiptList, ReceiptQueued, ReceiptView, SyntheticCityComparisonView, UnexpectedErrorBody, UpdateProfileRequest } from './types';
 import { APP_BASE, PREVIEW_MODE } from './appConfig';
 
 export const API_BASE = `${APP_BASE}api/v1`;
@@ -109,4 +109,6 @@ export const api = {
   explanation: (id: string, revision: number, signal?: AbortSignal) => request<ReceiptExplanation>(`/receipts/${encodeURIComponent(id)}/explanation?revision=${revision}`, { signal }),
   cityComparison: (id: string, serviceCode: string, metric: CityComparisonView['metric'], signal?: AbortSignal) =>
     request<CityComparisonView>(`/receipts/${encodeURIComponent(id)}/city-comparison?service_code=${encodeURIComponent(serviceCode)}&metric=${encodeURIComponent(metric)}`, { signal }),
+  previewCityComparison: (id: string, serviceCode: string, metric: SyntheticCityComparisonView['metric'], signal?: AbortSignal) =>
+    request<SyntheticCityComparisonView>(`/preview/receipts/${encodeURIComponent(id)}/city-comparison?service_code=${encodeURIComponent(serviceCode)}&metric=${encodeURIComponent(metric)}`, { signal }),
 };

@@ -273,6 +273,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/preview/receipts/{id}/city-comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** @description Preview-only fixed synthetic cohort for one confirmed owner receipt. This never reads or changes the real opted-in city cohort. */
+        get: operations["getPreviewCityComparison"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/receipts/{id}/draft": {
         parameters: {
             query?: never;
@@ -507,6 +526,29 @@ export interface components {
             median: string | null;
             /** @constant */
             provenance: "confirmed_opted_in_real_receipts";
+        };
+        PreviewCityComparisonView: {
+            /** @enum {string} */
+            status: "available" | "insufficient_data" | "ambiguous_city" | "ineligible";
+            city: string | null;
+            city_label: string | null;
+            period: string | null;
+            service_code: string;
+            scope: string | null;
+            segment_key: string | null;
+            unit: string | null;
+            /** @enum {string} */
+            metric: "charge_amount" | "tariff";
+            sample_size: number | null;
+            average: string | null;
+            median: string | null;
+            receipt_value: string | null;
+            difference_from_average: string | null;
+            difference_percent: string | null;
+            comparison: ("above" | "equal" | "below") | null;
+            explanation: string | null;
+            /** @constant */
+            provenance: "synthetic_preview_cohort";
         };
         User: {
             id: components["schemas"]["Id"];
@@ -758,7 +800,7 @@ export interface components {
         };
         Error: {
             /** @enum {string} */
-            code: "INVALID_REQUEST" | "INVALID_DOCUMENT" | "INVALID_PERIOD" | "AUTH_REQUIRED" | "INVALID_MAX_AUTH" | "SESSION_EXPIRED" | "DEMO_DISABLED" | "WEBHOOK_FORBIDDEN" | "NOT_FOUND" | "REVISION_CONFLICT" | "IDEMPOTENCY_CONFLICT" | "INVALID_STATE" | "RECEIPT_NOT_CONFIRMED" | "INCOMPARABLE_RECEIPTS" | "PREVIEW_NOT_READY" | "SOURCE_EXPIRED" | "FILE_TOO_LARGE" | "PAGE_LIMIT_EXCEEDED" | "IMAGE_TOO_LARGE" | "UNSUPPORTED_MEDIA_TYPE" | "VALIDATION_FAILED" | "WARNINGS_NOT_ACKNOWLEDGED" | "PRIVACY_NOTICE_REQUIRED" | "RATE_LIMITED" | "QUEUE_LIMIT_REACHED" | "SERVICE_UNAVAILABLE" | "ENGINE_UNAVAILABLE" | "PREVIEW_UNAVAILABLE";
+            code: "INVALID_REQUEST" | "INVALID_DOCUMENT" | "INVALID_PERIOD" | "AUTH_REQUIRED" | "INVALID_MAX_AUTH" | "SESSION_EXPIRED" | "DEMO_DISABLED" | "PREVIEW_DISABLED" | "WEBHOOK_FORBIDDEN" | "NOT_FOUND" | "REVISION_CONFLICT" | "IDEMPOTENCY_CONFLICT" | "INVALID_STATE" | "RECEIPT_NOT_CONFIRMED" | "INCOMPARABLE_RECEIPTS" | "PREVIEW_NOT_READY" | "SOURCE_EXPIRED" | "FILE_TOO_LARGE" | "PAGE_LIMIT_EXCEEDED" | "IMAGE_TOO_LARGE" | "UNSUPPORTED_MEDIA_TYPE" | "VALIDATION_FAILED" | "WARNINGS_NOT_ACKNOWLEDGED" | "PRIVACY_NOTICE_REQUIRED" | "RATE_LIMITED" | "QUEUE_LIMIT_REACHED" | "SERVICE_UNAVAILABLE" | "ENGINE_UNAVAILABLE" | "PREVIEW_UNAVAILABLE";
             message: string;
             retryable: boolean;
             fields: components["schemas"]["ErrorField"][];
@@ -1484,6 +1526,16 @@ export interface components {
                 "application/json": components["schemas"]["CityComparisonView"];
             };
         };
+        /** @description Fixed synthetic preview metric; never real city statistics */
+        PreviewCityComparison: {
+            headers: {
+                "X-Request-ID": components["headers"]["RequestId"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["PreviewCityComparisonView"];
+            };
+        };
         /** @description Public verified catalog */
         Catalog: {
             headers: {
@@ -2039,6 +2091,27 @@ export interface operations {
         responses: {
             200: components["responses"]["CityComparison"];
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    getPreviewCityComparison: {
+        parameters: {
+            query: {
+                service_code: string;
+                metric: "charge_amount" | "tariff";
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["PreviewCityComparison"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["ValidationFailed"];
         };

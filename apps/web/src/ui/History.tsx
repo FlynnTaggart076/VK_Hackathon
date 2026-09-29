@@ -60,8 +60,8 @@ export function History({ profile, onConsentChanged }: { profile: Profile; onCon
   }
   return <section className="panel">
     <h2>История документов</h2>
-    <p>В истории доступны ваши документы. Сравнить можно только две подтверждённые квитанции.</p>
-    {PREVIEW_MODE ? <p className="badge">Учебные квитанции не входят в статистику города.</p> : <div className="notice-box">
+    <p>В истории доступны ваши документы. {PREVIEW_MODE ? 'Подтверждённые учебные квитанции можно сравнить между собой или с отдельной синтетической выборкой.' : 'Сравнить можно только две подтверждённые квитанции.'}</p>
+    {PREVIEW_MODE ? <p className="badge">Учебные квитанции не входят в статистику реальных жителей. Их можно сравнить только с синтетической учебной выборкой.</p> : <div className="notice-box">
       <h3>Городская статистика</h3>
       <p>Только подтверждённые реальные квитанции с указанным городом участвуют в обезличенной статистике после отдельного согласия. Согласие можно отозвать здесь.</p>
       <label className="check"><input type="checkbox" checked={consent} disabled={consentBusy} onChange={(event) => setConsent(event.target.checked)} />Разрешаю использовать мои подтверждённые квитанции для городской статистики</label>
@@ -80,7 +80,7 @@ export function History({ profile, onConsentChanged }: { profile: Profile; onCon
       {item.dataset_kind === 'synthetic' && <p className="badge">Синтетический пример</p>}
       {item.document_total_due !== null && <p>Итого по документу: {item.document_total_due} ₽</p>}
       <p>{item.source_available ? 'Исходный файл доступен' : 'Исходный файл недоступен; извлечённые данные сохранены'}</p>
-      <div className="actions"><Link to={`/review?id=${encodeURIComponent(item.id)}`}>Открыть</Link>{item.status === 'confirmed' && <><Link to={`/assistant?receipt=${encodeURIComponent(item.id)}`}>Вопрос по платёжке</Link><Link to={`/city-comparison?receipt=${encodeURIComponent(item.id)}`}>Сравнить с городом</Link></>}{item.status === 'queued' || item.status === 'processing' ? <button type="button" onClick={() => void resume(item)}>Продолжить обработку</button> : null}{item.source_available && <button type="button" onClick={() => void downloadSource(item)}>Исходный файл</button>}<button type="button" onClick={() => setConfirmId(item.id)}>Удалить</button></div>
+      <div className="actions"><Link to={`/review?id=${encodeURIComponent(item.id)}`}>Открыть</Link>{item.status === 'confirmed' && <><Link to={`/assistant?receipt=${encodeURIComponent(item.id)}`}>Вопрос по платёжке</Link><Link to={`/city-comparison?receipt=${encodeURIComponent(item.id)}`}>{PREVIEW_MODE && item.dataset_kind === 'synthetic' ? 'Сравнить с учебной выборкой' : 'Сравнить с городом'}</Link></>}{item.status === 'queued' || item.status === 'processing' ? <button type="button" onClick={() => void resume(item)}>Продолжить обработку</button> : null}{item.source_available && <button type="button" onClick={() => void downloadSource(item)}>Исходный файл</button>}<button type="button" onClick={() => setConfirmId(item.id)}>Удалить</button></div>
       {confirmId === item.id && <div className="notice-box" role="group" aria-label="Подтверждение удаления"><p>Удалить этот документ и связанные данные?</p><div className="actions"><button type="button" disabled={busy} onClick={() => void remove(item.id)}>Да, удалить</button><button type="button" onClick={() => setConfirmId(null)}>Отмена</button></div></div>}
     </li>)}</ul>
     {nextCursor && <button type="button" disabled={busy} onClick={() => void load(nextCursor)}>Следующая страница</button>}
