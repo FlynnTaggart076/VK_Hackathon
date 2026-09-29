@@ -2,7 +2,7 @@ name: E4 isolated browser preview
 
 on:
   push:
-    branches: [integration/e4-preview, integration/e4-deepseek]
+    branches: [integration/e4-preview, integration/e4-deepseek, integration/e4-synthetic-city]
   workflow_dispatch:
 
 jobs:
