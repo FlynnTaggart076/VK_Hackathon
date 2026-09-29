@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiRequestError } from '../api/client';
+import { PREVIEW_MODE } from '../api/appConfig';
 import type { BillData, FieldEvidence, Issue, ReceiptView } from '../api/types';
 import { billErrors, normalizeBill } from './billForm';
 import { ErrorMessage } from './errors';
@@ -225,7 +226,7 @@ export function ReceiptReview() {
         {receipt.issues.some((issue) => issue.severity === 'error') && <p role="alert">Сервер сообщил об ошибках данных. Подтверждение недоступно.</p>}
         <button type="button" disabled={!canConfirm} onClick={() => void confirm()}>Подтвердить проверенные данные</button>
       </section>}
-      {receipt.status === 'confirmed' && <div className="actions"><Link to={`/explanation?id=${encodeURIComponent(receipt.id)}`}>Открыть объяснение</Link><Link to={`/assistant?receipt=${encodeURIComponent(receipt.id)}`}>Вопрос по платёжке</Link><Link to={`/city-comparison?receipt=${encodeURIComponent(receipt.id)}`}>Сравнить с городом</Link></div>}
+      {receipt.status === 'confirmed' && <div className="actions"><Link to={`/explanation?id=${encodeURIComponent(receipt.id)}`}>Открыть объяснение</Link><Link to={`/assistant?receipt=${encodeURIComponent(receipt.id)}`}>Вопрос по платёжке</Link><Link to={`/city-comparison?receipt=${encodeURIComponent(receipt.id)}`}>{PREVIEW_MODE && receipt.dataset_kind === 'synthetic' ? 'Сравнить с учебной выборкой' : 'Сравнить с городом'}</Link></div>}
     </>}
   </section>;
 }
