@@ -32,7 +32,7 @@ COPY knowledge /workspace/knowledge
 
 RUN groupadd --system app && useradd --system --gid app --home /workspace app \
     && mkdir /storage && chown app:app /storage \
-    && chgrp -R app /workspace && chmod -R g+rX /workspace
+    && chgrp -R app /workspace && chmod -R g-w,g+rX /workspace
 USER app
 
 # Fail the build if checkout file modes would hide migrations or runtime data
