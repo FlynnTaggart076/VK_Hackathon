@@ -32,6 +32,7 @@ REQUIRED_OPERATIONS = {
     ("put", "/api/v1/me/profile"), ("put", "/api/v1/me/aggregate-consent"),
     ("get", "/api/v1/catalog"),
     ("post", "/api/v1/assistant/answers"), ("get", "/api/v1/assistant/answers/{id}"),
+    ("post", "/api/v1/assistant/dialog"),
     ("post", "/api/v1/receipts"), ("get", "/api/v1/receipts"),
     ("post", "/api/v1/receipts/manual"), ("post", "/api/v1/receipts/demo"),
     ("get", "/api/v1/receipts/{id}"), ("delete", "/api/v1/receipts/{id}"),

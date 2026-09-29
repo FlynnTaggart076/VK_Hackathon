@@ -10,6 +10,8 @@ services:
       MAX_BOT_TOKEN: ""
       MAX_WEBHOOK_SECRET: ""
       MAX_WEB_APP: ""
+      # The paid HouseScore quota is reserved for production; preview uses cached houses only.
+      HOUSESCORE_API_KEY: ""
   api:
     restart: unless-stopped
     environment: *preview_settings

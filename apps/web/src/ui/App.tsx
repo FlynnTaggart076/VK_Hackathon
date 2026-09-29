@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
-import { Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { api, ApiRequestError, hasSessionToken, setSessionToken } from '../api/client';
 import { PREVIEW_MODE } from '../api/appConfig';
 import { previewAuth } from '../api/previewAuth';
 import { maxAuth, maxInitData } from '../api/maxAuth';
-import type { AnswerContext, AnswerView, Catalog, MetaResponse, Profile, ReceiptView } from '../api/types';
+import type { Catalog, MetaResponse, Profile } from '../api/types';
 import { Onboarding, canUpload } from './Onboarding';
 import { Processing, Upload } from './Upload';
 import { ReceiptReview } from './ReceiptReview';
@@ -13,9 +13,8 @@ import { History } from './History';
 import { Comparison } from './Comparison';
 import { CityComparison } from './CityComparison';
 import { Draft } from './Draft';
-import { ActionList } from './ActionList';
+import { Assistant } from './Assistant';
 import { ErrorMessage } from './errors';
-import { clarificationLabels, recognizedValue, selectedValue, serviceContext, suggestionsFor, type Clarification, type ClarificationField } from './clarification';
 
 const mockEnabled = import.meta.env.DEV && !PREVIEW_MODE && import.meta.env.VITE_ENABLE_MOCK === 'true';
 const screens = [
@@ -96,148 +95,6 @@ function Entry({ meta, sessionExpired, onAuth }: { meta: MetaResponse | null; se
   </section>;
 }
 
-function Assistant({ profile, catalog, meta, onProfileChanged }: { profile: Profile; catalog: Catalog; meta: MetaResponse; onProfileChanged: (value: Profile) => void }) {
-  const [params] = useSearchParams();
-  const receiptId = params.get('receipt');
-  const urlTopic = params.get('topic') ?? '';
-  const [question, setQuestion] = useState('Почему выросла сумма за воду?');
-  const [topicId, setTopicId] = useState(urlTopic);
-  const [clarified, setClarified] = useState<Partial<Record<ClarificationField, string>>>({});
-  const [prompts, setPrompts] = useState<Partial<Record<ClarificationField, Clarification>>>({});
-  const [receipt, setReceipt] = useState<ReceiptView | null>(null);
-  const [serviceCode, setServiceCode] = useState('');
-  const [answer, setAnswer] = useState<AnswerView | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [busy, setBusy] = useState(false);
-  const [privacyAccepted, setPrivacyAccepted] = useState(false);
-  const pending = useRef<AbortController | null>(null);
-  useEffect(() => {
-    return () => pending.current?.abort();
-  }, []);
-  useEffect(() => { setTopicId(urlTopic); }, [urlTopic]);
-  useEffect(() => {
-    let active = true; setReceipt(null); setServiceCode('');
-    if (receiptId) api.receipt(receiptId).then((value) => { if (active) setReceipt(value); })
-      .catch((cause) => { if (active) setError(cause); });
-    return () => { active = false; };
-  }, [receiptId]);
-  const proposedTerritoryId = recognizedValue(clarified.territory_id, suggestionsFor('territory_id', catalog, prompts.territory_id?.options ?? []));
-  const invalidTerritory = !!clarified.territory_id?.trim() && !proposedTerritoryId;
-  const proposedTerritory = proposedTerritoryId || profile.territory_id;
-  const proposedRoleValue = clarified.role ? selectedValue(clarified.role, suggestionsFor('role', catalog, prompts.role?.options ?? [])) : profile.role;
-  const invalidRole = !['owner', 'tenant', 'other'].includes(proposedRoleValue);
-  const proposedRole = invalidRole ? profile.role : proposedRoleValue;
-  const profileWillChange = proposedTerritory !== profile.territory_id || proposedRole !== profile.role;
-  const receiptServices = new Map<string, string[]>();
-  for (const line of receipt?.bill_data.services ?? []) receiptServices.set(line.service_code, [...(receiptServices.get(line.service_code) ?? []), line.raw_name]);
-  async function ask(extra: Partial<Record<ClarificationField, string>> = {}) {
-    if (!question.trim()) return;
-    const values = { ...clarified, ...extra };
-    const normalized = Object.fromEntries(Object.entries(values).map(([field, input]) => [
-      field, selectedValue(input, suggestionsFor(field as ClarificationField, catalog, prompts[field as ClarificationField]?.options ?? [])),
-    ])) as Partial<Record<ClarificationField, string>>;
-    const knownTopic = recognizedValue(values.topic_id, suggestionsFor('topic_id', catalog, prompts.topic_id?.options ?? []));
-    const knownTerritory = recognizedValue(values.territory_id, suggestionsFor('territory_id', catalog, prompts.territory_id?.options ?? []));
-    const knownOrganization = recognizedValue(values.organization_id, suggestionsFor('organization_id', catalog, prompts.organization_id?.options ?? []));
-    if (values.territory_id?.trim() && !knownTerritory) {
-      setError(new Error('Такой территории нет в каталоге. Выберите подсказку или измените территорию в разделе «Первый запуск». Введённый текст сохранён.'));
-      return;
-    }
-    if (normalized.role && !['owner', 'tenant', 'other'].includes(normalized.role)) {
-      setError(new Error('Для роли выберите один из предложенных вариантов. Введённое значение осталось в поле.'));
-      return;
-    }
-    const territory = knownTerritory || profile.territory_id;
-    const role = (normalized.role as AnswerContext['role']) || profile.role;
-    const updateProfile = territory !== profile.territory_id || role !== profile.role;
-    if (updateProfile && !privacyAccepted) {
-      setError(new Error('Чтобы использовать новую роль или территорию, подтвердите уведомление об обработке данных ниже.'));
-      return;
-    }
-    const service = serviceContext(normalized.service_code);
-    const freeText = [
-      values.topic_id?.trim() && !knownTopic ? `Тема словами пользователя: ${values.topic_id.trim()}.` : null,
-      values.organization_id?.trim() && !knownOrganization ? `Организация со слов пользователя: ${values.organization_id.trim()}.` : null,
-      service.freeText ? `Уточнение пользователя по услуге: ${service.freeText}.` : null,
-    ].filter(Boolean).join('\n');
-    const suffix = freeText ? `\n${freeText}` : '';
-    const submittedQuestion = `${question.trim().slice(0, 2000 - suffix.length)}${suffix}`;
-    const context: AnswerContext = {
-      territory_id: territory,
-      role,
-      topic_id: topicId || knownTopic || null,
-      organization_id: knownOrganization,
-      service_code: service.code || serviceCode || null,
-      document_kind: normalized.document_kind || null,
-      receipt_id: receipt?.status === 'confirmed' ? receipt.id : null,
-      receipt_revision: receipt?.status === 'confirmed' ? receipt.revision : null,
-    };
-    setBusy(true); setError(null); setAnswer(null);
-    pending.current?.abort();
-    const controller = new AbortController();
-    pending.current = controller;
-    try {
-      if (updateProfile) {
-        const updated = await api.updateProfile({ role: role!, territory_id: territory,
-          privacy_notice_version: meta.privacy_notice.version, privacy_acknowledged: true }, controller.signal);
-        onProfileChanged(updated);
-        setPrivacyAccepted(false);
-      }
-      const result = await api.answer(submittedQuestion, context, controller.signal);
-      setAnswer(result);
-      if (result.clarification) setPrompts((current) => ({ ...current, [result.clarification!.field]: result.clarification! }));
-    }
-    catch (cause) { if (!(cause instanceof DOMException && cause.name === 'AbortError')) setError(cause); }
-    finally { if (pending.current === controller) { pending.current = null; setBusy(false); } }
-  }
-  return <section className="panel">
-    <h2>Помощник</h2>
-    <form onSubmit={(event) => { event.preventDefault(); void ask(); }}>
-      {receiptId && <div className="notice-box"><p>Документ: {receipt ? `${receipt.bill_data.period ?? 'без периода'} · ревизия ${receipt.revision}` : 'загружаем…'}</p>{receipt && receipt.status !== 'confirmed' && <p className="review-warning">Для вопроса по документу сначала подтвердите его данные.</p>}{receipt?.dataset_kind === 'synthetic' && <p className="badge">Синтетический пример</p>}{receipt?.status === 'confirmed' && <><label htmlFor="answer-service">Услуга</label><select id="answer-service" value={serviceCode} onChange={(event) => setServiceCode(event.target.value)}><option value="">Без выбора услуги</option>{[...receiptServices].map(([code, names]) => <option key={code} value={code}>{names.length === 1 ? names[0] : `${names[0]} · ${names.length} строки`}</option>)}</select>{serviceCode && (receiptServices.get(serviceCode)?.length ?? 0) > 1 && <p className="review-warning">У этой услуги несколько строк. Назовите нужную строку в вопросе.</p>}{PREVIEW_MODE && receipt.dataset_kind === 'synthetic' && <p><Link to={`/city-comparison?receipt=${encodeURIComponent(receipt.id)}`}>Сравнить с учебной выборкой</Link> — отдельное числовое сравнение, без данных реальных жителей.</p>}</>}</div>}
-      <label htmlFor="answer-topic">Тема</label><select id="answer-topic" value={topicId} onChange={(event) => { setTopicId(event.target.value); setClarified((current) => ({ ...current, topic_id: '' })); }}><option value="">Определить по вопросу</option>{catalog?.topics.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
-      <label htmlFor="question">Ваш вопрос</label>
-      <textarea id="question" value={question} onChange={(event) => setQuestion(event.target.value)} maxLength={2000} rows={3} />
-      <button disabled={busy || !question.trim() || !hasSessionToken() || (!!receiptId && (receipt?.status !== 'confirmed' || !canUpload(profile, meta)))}>{busy ? 'Ищем ответ…' : 'Спросить'}</button>
-    </form>
-    {!hasSessionToken() && <p>Войдите на главной, чтобы задать общий вопрос.</p>}
-    {receiptId && !canUpload(profile, meta) && <p className="review-warning">Для вопроса по квитанции подтвердите актуальное уведомление в разделе <Link to="/onboarding">Первый запуск</Link>.</p>}
-    <ErrorMessage error={error} />
-    {answer && <article aria-live="polite" className="answer">
-      <p className="badge">{answer.dataset_kind === 'synthetic' ? 'Синтетический пример' : answer.dataset_kind}</p>
-      <h3>{answer.status === 'unsupported' ? 'Пока нет проверенного ответа' : answer.status === 'needs_clarification' ? 'Нужно уточнение' : 'Ответ'}</h3>
-      <p>{answer.text}</p>
-      {answer.stale && <p className="review-warning">Ответ устарел: проверьте сведения перед действием.</p>}
-      <p>Территория: {catalog.territories.find((item) => item.id === (clarified.territory_id || profile.territory_id))?.label ?? clarified.territory_id ?? 'не выбрана'} · версия знаний {answer.knowledge_version}</p>
-      {answer.sources.map((source) => <p key={source.id}>Источник: {source.title} · {source.territory_id ? catalog.territories.find((item) => item.id === source.territory_id)?.label ?? source.territory_id : 'общий'} · проверен {source.verified_at} · пересмотреть после {source.review_after}{source.is_synthetic && ' · учебный'}{source.url && <a href={source.url} target="_blank" rel="noopener noreferrer"> Открыть</a>}</p>)}
-      <ActionList actions={answer.actions} />
-      {answer.limitations.map((item) => <p key={item}>{item}</p>)}
-      {PREVIEW_MODE && receipt?.status === 'confirmed' && receipt.dataset_kind === 'synthetic' && <p><Link to={`/city-comparison?receipt=${encodeURIComponent(receipt.id)}`}>Проверить по учебной выборке</Link> · числовое сравнение с фиксированными синтетическими значениями.</p>}
-    </article>}
-    {Object.keys(prompts).length > 0 && <form className="notice-box" onSubmit={(event) => { event.preventDefault(); void ask(); }}>
-      <h3>Уточнения</h3>
-      <p className="notice">Можно выбрать подсказку или ввести свой ответ. Уже введённые значения доступны для исправления.</p>
-      {invalidTerritory && <p className="review-warning">Такой территории нет в каталоге. Выберите территорию из подсказок; ваш текст остаётся в поле.</p>}
-      {invalidRole && <p className="review-warning">Для роли выберите собственника, арендатора или другую роль из подсказок; ваш текст остаётся в поле.</p>}
-      {(Object.entries(prompts) as [ClarificationField, Clarification][]).map(([field, prompt]) => {
-        const suggestions = suggestionsFor(field, catalog, prompt.options);
-        return <div key={field} className="clarification-field">
-          <label htmlFor={`clarification-${field}`}>{prompt.prompt || clarificationLabels[field]}</label>
-          <input id={`clarification-${field}`} type="text" list={`suggestions-${field}`} autoComplete="off"
-            value={clarified[field] ?? ''} onChange={(event) => { setClarified((current) => ({ ...current, [field]: event.target.value })); if (field === 'role' || field === 'territory_id') setPrivacyAccepted(false); }}
-            placeholder={`Укажите: ${clarificationLabels[field].toLocaleLowerCase('ru')}`} maxLength={200} />
-          <datalist id={`suggestions-${field}`}>{suggestions.map((option) => <option key={option.value} value={option.label === option.value ? option.value : option.label} />)}</datalist>
-          {prompt.options.length > 0 && <div className="suggestion-buttons">{prompt.options.map((option) => <button key={option.value} type="button" disabled={busy}
-            onClick={() => { setClarified((current) => ({ ...current, [field]: option.value })); if (field === 'role' || field === 'territory_id') setPrivacyAccepted(false); else void ask({ [field]: option.value }); }}>{option.label}</button>)}</div>}
-        </div>;
-      })}
-      {profileWillChange && <div className="notice-box"><p>Новая роль или территория будет сохранена в вашем профиле перед ответом.</p><p>{meta.privacy_notice.text}</p>
-        <label className="check"><input type="checkbox" checked={privacyAccepted} onChange={(event) => setPrivacyAccepted(event.target.checked)} />Я прочитал(а) уведомление и согласен(на) с обработкой данных · версия {meta.privacy_notice.version}</label></div>}
-      <div className="actions"><button type="submit" disabled={busy || !question.trim() || !hasSessionToken() || (profileWillChange && !privacyAccepted)}>{busy ? 'Ищем ответ…' : 'Продолжить с уточнениями'}</button>
-        <button type="button" disabled={busy} onClick={() => { setClarified({}); setPrompts({}); setAnswer(null); }}>Сбросить уточнения</button></div>
-    </form>}
-  </section>;
-}
-
 function Page({ path }: { path: typeof screens[number]['path'] }) {
   const screen = screens.find((item) => item.path === path)!;
   return <section className="panel">
@@ -246,6 +103,13 @@ function Page({ path }: { path: typeof screens[number]['path'] }) {
       <p>Задайте вопрос, разберите платёжку или вернитесь к истории.</p>
       {mockEnabled && <p className="badge">Учебный mock · синтетические данные</p>}
       <div className="actions"><Link to="/assistant">Задать вопрос</Link><Link to="/upload">Разобрать платёжку</Link></div>
+      <h3>Частые вопросы</h3>
+      <div className="actions">
+        <Link to="/assistant?topic=supplier_contacts">Контакты поставщика</Link>
+        <Link to="/assistant?topic=management_contacts">Контакты УК</Link>
+        <Link to="/assistant?topic=meter_readings">Передать показания</Link>
+        <Link to="/assistant?topic=service_issue">Проблема с услугой</Link>
+      </div>
     </> : <><p>{screen.text}</p><p className="notice">Этот экран ожидает реализацию следующего этапа.</p><p>Состояния для реализации: {screen.states}.</p></>}
   </section>;
 }
@@ -315,7 +179,7 @@ export function App() {
         <Route path="/comparison" element={!authenticated ? needsLogin : <Comparison />} />
         <Route path="/city-comparison" element={!authenticated ? needsLogin : <CityComparison />} />
         <Route path="/draft" element={!authenticated ? needsLogin : <Draft catalog={catalog} />} />
-        <Route path="/assistant" element={!authenticated ? needsLogin : profile && catalog && meta ? <Assistant profile={profile} catalog={catalog} meta={meta} onProfileChanged={setProfile} /> : waiting} />
+        <Route path="/assistant" element={!authenticated ? needsLogin : <Assistant />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </main>

@@ -76,6 +76,17 @@ DNS/TLS проверку. Перед отправкой вопроса в мод
 детерминированный ответ. Текущий образ включает Tesseract и реальный engine,
 проверенный в E2/E3 CI.
 
+Поиск контактов по адресу (`e5_dialog_state`, см.
+[change-request-dialog-house-lookup.md](change-request-dialog-house-lookup.md)):
+в `runtime/app.env` production добавить `HOUSESCORE_API_KEY` (ключ HouseScore),
+при необходимости `HOUSESCORE_DAILY_LIMIT` (30) и `HOUSE_LOOKUP_USER_DAILY_LIMIT`
+(5). Запросы к `housescore.ru` и `dominfo.ru` идут из API (`model_egress`) и worker
+(`max_egress`); проверить DNS/TLS так же, как для DeepSeek. Ответы кэшируются в
+томе `source_documents` (`/storage/house_cache`); сохранённые ответы прототипа
+можно скопировать туда вне Git (`docker cp`, затем `chown app:app`). Preview
+получает пустой ключ и работает только с кэшем. Readiness ожидает ревизию
+`e5_dialog_state`, поэтому миграция обязательна перед проверкой.
+
 ## Проверка E1 в CI
 
 [Actions run #6](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36318770691)

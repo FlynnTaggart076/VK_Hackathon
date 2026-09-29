@@ -186,6 +186,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/assistant/dialog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description One step of the server-side dialogue shared with the MAX chat. The server keeps the pending question, offered options, service, city and selected house; a clarification is answered by an option value, its label, its number or plain text. Contact questions look up the house by address in HouseScore and Dominfo (historical supplier candidates, not verified contracts). Nothing is sent to any organization. */
+        post: operations["assistantDialog"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/receipts": {
         parameters: {
             query?: never;
@@ -604,6 +621,9 @@ export interface components {
                 comparison: boolean;
                 engine_stub: boolean;
                 demo_auth: boolean;
+                dialog?: boolean;
+                /** @description HouseScore key configured; cached houses still work without it. */
+                house_lookup?: boolean;
             };
             privacy_notice: {
                 version: string;
@@ -789,6 +809,75 @@ export interface components {
             knowledge_version: string;
             created_at: components["schemas"]["Timestamp"];
             updated_at: components["schemas"]["Timestamp"];
+        };
+        DialogRequest: {
+            /** @description Free text typed by the user. */
+            message?: string | null;
+            /** @description Option value from the previous reply, or a quick start such as topic:supplier_contacts. */
+            choice?: string | null;
+            /** @description Start a new question; city and house stay remembered. */
+            reset?: boolean;
+            receipt_id?: components["schemas"]["Id"] | null;
+            receipt_revision?: number | null;
+        };
+        DialogOption: {
+            value: string;
+            label: string;
+        };
+        DialogLink: {
+            label: string;
+            url: string;
+        };
+        HouseCard: {
+            /** @description Topic-specific hint shown before the card (readings */
+            intro: string | null;
+            address: string;
+            fias_guid: string;
+            service: {
+                /** @enum {string} */
+                code: "heating" | "hot_water" | "cold_water" | "sewerage" | "electricity" | "gas" | "waste" | "management";
+                name: string;
+                /** @enum {string} */
+                status: "candidate" | "verified" | "unknown" | "not_available" | "management";
+                note: string | null;
+            };
+            provider: null | {
+                name: string;
+                inn: string | null;
+                website: string | null;
+                contact_url: string | null;
+                contact_label: string | null;
+            };
+            management: {
+                name: string | null;
+                phone: string | null;
+                email: string | null;
+                fetched_at: string;
+            };
+            source: {
+                url: string | null;
+                reviewed_at: string | null;
+                record_start_at_utc: string | null;
+            };
+            links: components["schemas"]["DialogLink"][];
+            warnings: string[];
+        };
+        DialogReply: {
+            /** @enum {string} */
+            status: "answered" | "needs_input" | "unsupported" | "error";
+            text: string;
+            options: components["schemas"]["DialogOption"][];
+            card: components["schemas"]["HouseCard"] | null;
+            links: components["schemas"]["DialogLink"][];
+            sources: components["schemas"]["sources"];
+            actions: components["schemas"]["actions"];
+            /** @description Pending slot: service, address, house_choice, territory, role, engine_service, document_kind, topic, after_card. */
+            awaiting: string | null;
+            topic_id: string | null;
+            /** @description The reply is the main menu of scenarios. */
+            menu: boolean;
+            /** @enum {string} */
+            dataset_kind: "synthetic" | "user_provided" | "public_reference";
         };
         WebhookAck: {
             /** @constant */
@@ -1939,6 +2028,37 @@ export interface operations {
             200: components["responses"]["Answer"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    assistantDialog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DialogRequest"];
+            };
+        };
+        responses: {
+            /** @description Dialogue reply; unknown or unsupported questions are successful structured results. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestId"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DialogReply"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     listReceipts: {

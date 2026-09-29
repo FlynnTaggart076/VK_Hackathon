@@ -230,8 +230,10 @@ def test_max_model_failure_then_help_is_not_poisoned(tmp_path):
                            headers=headers).status_code == 200
         assert client.post("/integrations/max/webhook", json=event("e4-2", "/help"),
                            headers=headers).status_code == 200
-    with patch("app.services.assistant_adapter.classify", side_effect=ModelUnavailable("timeout")) as model:
+    with patch("app.services.deepseek.extract", side_effect=ModelUnavailable("timeout")) as reader, \
+            patch("app.services.assistant_adapter.classify", side_effect=ModelUnavailable("timeout")) as model:
         assert process_inbox_once(app.state.store)
+    reader.assert_called_once()
     model.assert_called_once()
     assert process_inbox_once(app.state.store)
     with app.state.store.Session() as session:
@@ -264,57 +266,52 @@ def test_max_old_profile_never_sends_question_without_chat_consent(tmp_path):
                              ("old-4", "/llm_off")):
             assert client.post("/integrations/max/webhook", json=event(mid, message),
                                headers=headers).status_code == 200
-    with patch("app.services.assistant_adapter.classify", return_value={
-        "intent": "bill_rise", "topic_id": "bill_change"
-    }) as model:
+    reading = {"intent": "new_question", "topic_id": "bill_change", "service": None, "city": None,
+               "option_index": None}
+    with patch("app.services.deepseek.extract", return_value=reading) as reader, \
+            patch("app.services.assistant_adapter.classify", return_value={
+                "intent": "bill_rise", "topic_id": "bill_change"}) as model:
         assert process_inbox_once(app.state.store)
+        reader.assert_not_called()
         model.assert_not_called()
         assert process_inbox_once(app.state.store)  # consent
         assert process_inbox_once(app.state.store)
-        model.assert_called_once()
+        reader.assert_called_once()
+        model.assert_not_called()  # One model call per turn: the dialogue already read the question.
         assert process_inbox_once(app.state.store)  # revoke
     with app.state.store.Session() as session:
         assert session.get(Profile, uid).chat_llm_consent_at is None
 
 
-def test_max_clarification_followup_preserves_topic_and_service(tmp_path):
-    app = _store(tmp_path, max_bot_token="fixture-token", max_webhook_secret="fixture_secret")
-    uid = uuid.uuid4()
-    with app.state.store.Session.begin() as session:
-        session.add(User(id=uid, max_user_id=123))
-        session.flush()
-        session.add(Profile(user_id=uid, role="owner", territory_id="moscow"))
-        session.add(AssistantAnswer(id=uuid.uuid4(), user_id=uid,
-                                    question="Контакт поставщика по начислению",
-                                    result={"status": "needs_clarification", "text": "Уточните услугу",
-                                            "topic_id": "contact_supplier", "steps": [], "sources": [],
-                                            "actions": [], "clarification": {"field": "service_code",
-                                                                       "prompt": "По какой услуге?", "options": []},
-                                            "limitations": [], "knowledge_version": knowledge().version,
-                                            "receipt_ref": None},
-                                    receipt_id=None, receipt_revision=None, dataset_kind="public_reference",
-                                    created_at=datetime.now(timezone.utc),
-                                    expires_at=datetime.now(timezone.utc)))
-    event = {"update_type": "message_created", "timestamp": 1_700_000_000_000,
-             "message": {"sender": {"user_id": 123},
-                         "recipient": {"chat_id": 456, "chat_type": "dialog"},
-                         "body": {"mid": "e4-followup", "text": "горячая вода"}}}
+def _chat(app, user_id, texts):
+    def event(mid, text):
+        return {"update_type": "message_created", "timestamp": 1_700_000_000_000,
+                "message": {"sender": {"user_id": user_id},
+                            "recipient": {"chat_id": 456, "chat_type": "dialog"},
+                            "body": {"mid": mid, "text": text}}}
+
     with TestClient(app) as client:
-        assert client.post("/integrations/max/webhook", json=event,
-                           headers={"X-Max-Bot-Api-Secret": "fixture_secret"}).status_code == 200
-    seen = {}
-    original = answer_json
+        for index, text in enumerate(texts):
+            assert client.post("/integrations/max/webhook", json=event(f"{user_id}-{index}", text),
+                               headers={"X-Max-Bot-Api-Secret": "fixture_secret"}).status_code == 200
+            assert process_inbox_once(app.state.store)
+    with app.state.store.Session() as session:
+        return [row.text for row in session.scalars(select(Outbox).where(Outbox.max_user_id == user_id)
+                                                      .order_by(Outbox.created_at, Outbox.id))]
 
-    def capture(question, context, *args, **kwargs):
-        seen["question"] = question
-        seen["context"] = dict(context)
-        return original(question, context, *args, **kwargs)
 
-    with patch("app.services.assistant_adapter.answer_json", side_effect=capture):
-        assert process_inbox_once(app.state.store)
-    assert seen["context"]["topic_id"] == "contact_supplier"
-    assert seen["context"]["service_code"] == "hot_water"
-    assert "Контакт поставщика" in seen["question"]
+def test_max_clarification_followup_preserves_topic_and_service(tmp_path):
+    from app.db.models import DialogState
+
+    app = _store(tmp_path, max_bot_token="fixture-token", max_webhook_secret="fixture_secret")
+    replies = _chat(app, 123, ["Контакт поставщика по начислению", "горячая вода"])
+    assert "По какой услуге" in replies[0]
+    assert "адрес дома" in replies[1].lower()
+    with app.state.store.Session() as session:
+        state = session.scalars(select(DialogState)).one().state
+    assert state["topic_id"] == "supplier_contacts"
+    assert state["service"] == "hot_water"
+    assert state["awaiting"] == "address"
 
 
 def test_document_kind_free_text_finishes_clarification(tmp_path):
@@ -331,25 +328,10 @@ def test_document_kind_free_text_finishes_clarification(tmp_path):
         session.add(User(id=uid, max_user_id=223))
         session.flush()
         session.add(Profile(user_id=uid, role="owner", territory_id="moscow"))
-        session.add(AssistantAnswer(id=uuid.uuid4(), user_id=uid, question="Как получить жилищный документ?",
-                                    result={"status": "needs_clarification", "text": "Уточните документ",
-                                            "topic_id": "housing_document", "steps": [], "sources": [],
-                                            "actions": [], "clarification": {"field": "document_kind",
-                                                                       "prompt": "Какой документ?", "options": []},
-                                            "limitations": [], "knowledge_version": knowledge().version,
-                                            "receipt_ref": None},
-                                    receipt_id=None, receipt_revision=None, dataset_kind="public_reference",
-                                    created_at=datetime.now(timezone.utc),
-                                    expires_at=datetime.now(timezone.utc)))
-    event = {"update_type": "message_created", "timestamp": 1_700_000_000_000,
-             "message": {"sender": {"user_id": 223},
-                         "recipient": {"chat_id": 456, "chat_type": "dialog"},
-                         "body": {"mid": "e4-document-followup", "text": "справка о составе семьи"}}}
-    with TestClient(app) as client:
-        assert client.post("/integrations/max/webhook", json=event,
-                           headers={"X-Max-Bot-Api-Secret": "fixture_secret"}).status_code == 200
-    assert process_inbox_once(app.state.store)
+    replies = _chat(app, 223, ["Как получить жилищный документ?", "справка о составе семьи"])
+    assert "документ" in replies[0].lower()
     with app.state.store.Session() as session:
         latest = session.scalar(select(AssistantAnswer).where(AssistantAnswer.user_id == uid)
                                 .order_by(AssistantAnswer.created_at.desc(), AssistantAnswer.id.desc()))
         assert latest.result["status"] != "needs_clarification"
+        assert latest.question == "Как получить жилищный документ?"

@@ -30,14 +30,15 @@ try {
   await page.getByRole('button', { name: 'Сохранить изменения' }).click();
   await page.getByRole('status').filter({ hasText: 'Изменения сохранены' }).waitFor();
   await page.getByRole('link', { name: 'Помощник' }).click();
-  await page.getByLabel('Тема').selectOption('housing_document');
-  await page.getByLabel('Ваш вопрос').fill('Нужна справка');
+  await page.getByRole('button', { name: 'Контакты поставщика' }).click();
+  await page.getByRole('button', { name: 'Электричество' }).click();
+  await page.getByLabel('Ваш вопрос').fill('Учебный город, Примерная улица, 1');
   await page.getByRole('button', { name: 'Спросить' }).click();
-  await page.getByRole('heading', { name: 'Нужно уточнение' }).waitFor();
+  await page.locator('.house-card').waitFor();
   await page.getByLabel('Ваш вопрос').fill('неизвестный вопрос');
   await page.getByRole('button', { name: 'Спросить' }).click();
-  await page.getByRole('heading', { name: 'Пока нет проверенного ответа' }).waitFor();
+  await page.getByText('Не удалось определить тему').last().waitFor();
   const layout = await page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth }));
   if (layout.scrollWidth > layout.width) throw new Error(`Horizontal overflow: ${JSON.stringify(layout)}`);
-  process.stdout.write(JSON.stringify({ flow: 'history-compare-70-40-30-draft-faq-clarification-unknown', layout }) + '\n');
+  process.stdout.write(JSON.stringify({ flow: 'history-compare-70-40-30-draft-chat-contacts-unknown', layout }) + '\n');
 } finally { await browser.close(); }

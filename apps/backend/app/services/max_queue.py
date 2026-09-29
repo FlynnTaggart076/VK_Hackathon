@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import timedelta
@@ -14,9 +15,11 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from app.db.models import AssistantAnswer, Outbox, Profile, User, WebhookInbox
+from app.db.models import DialogState, Outbox, Profile, User, WebhookInbox
 from app.db.store import SqlStore, now
 from app.errors import ApiError
+
+log = logging.getLogger("app.max_queue")
 
 
 @dataclass(frozen=True)
@@ -88,18 +91,28 @@ def enqueue_update(store: SqlStore, update: NormalizedUpdate) -> None:
 def _command_text(item: WebhookInbox) -> str | None:
     if not item.max_user_id:
         return None
-    if item.event_type == "bot_started" or (item.text or "").strip().lower() == "/start":
-        return "Помогу разобраться с начислениями ЖКХ. Откройте мини-приложение, чтобы загрузить квитанцию, или задайте текстовый вопрос. Команда /help — возможности и ограничения."
-    if (item.text or "").strip().lower() == "/help":
-        return "Можно спросить о начислениях и проверить квитанцию в мини-приложении. Файлы и фото загружайте только там. Голосовые сообщения и отправка обращений не поддерживаются."
-    if (item.text or "").strip().lower() == "задать вопрос":
-        return "Напишите текстовый вопрос о начислениях ЖКХ в этом личном диалоге."
+    command = (item.text or "").strip().lower()
+    if item.event_type == "bot_started" or command == "/start":
+        return ("Помогу разобраться с ЖКХ: найду управляющую компанию и поставщиков по адресу дома, подскажу, "
+                "куда передать показания, и объясню квитанцию. Выберите тему кнопкой или напишите вопрос. "
+                "Чтобы разобрать квитанцию, откройте мини-приложение. Команда /help — возможности и ограничения.")
+    if command == "/help":
+        return ("Что я умею:\n"
+                "• контакты УК и поставщиков по адресу дома (открытые данные HouseScore и Dominfo);\n"
+                "• куда передавать показания и куда обращаться при проблемах с услугой;\n"
+                "• объяснение квитанции и роста суммы — после загрузки квитанции в мини-приложении.\n"
+                "Кнопка «Новый вопрос» или /reset начинает заново. Файлы и фото загружайте в мини-приложении. "
+                "Голосовые сообщения и отправка обращений не поддерживаются.")
+    if command == "задать вопрос":
+        return ("Напишите текстовый вопрос о ЖКХ в этом личном диалоге — например, «контакты УК» "
+                "или «куда передать показания воды».")
     if item.attachment_kind:
         return "Загрузите PDF или фото квитанции в мини-приложении. Голосовые сообщения не обрабатываются."
     identity_question = " ".join((item.text or "").strip().lower().strip("?!., ").split())
     if identity_question in {"кто ты", "кто ты такой", "что умеешь", "что ты умеешь", "что ты можешь"}:
-        return ("Я помощник по начислениям ЖКХ в MAX. В чате отвечаю на текстовые вопросы о начислениях, а в "
-                "мини-приложении помогаю разобрать подтверждённую квитанцию и сравнить месяцы. "
+        return ("Я помощник по начислениям ЖКХ в MAX. В чате отвечаю на текстовые вопросы о начислениях и "
+                "нахожу контакты УК и поставщиков по адресу дома, а в мини-приложении помогаю разобрать "
+                "подтверждённую квитанцию и сравнить месяцы. "
                 "Голосовые сообщения и отправка обращений не поддерживаются. "
                 "Чтобы открыть мини-приложение, отправьте /start.")
     return None
@@ -109,27 +122,36 @@ def command_text(item: WebhookInbox) -> str | None:
     result = _command_text(item)
     if result and (item.event_type == "bot_started" or
                    (item.text or "").strip().lower() in {"/start", "/help"}):
-        result += ("\nДля ответов текст вопроса после удаления типичных личных данных "
-                   "может передаваться внешнему сервису DeepSeek. Включить: /llm_on, "
-                   "отозвать согласие: /llm_off. Без согласия доступен локальный справочник. "
-                   "Не присылайте в чат адрес, номер счёта или полный документ.")
+        result += ("\nДля понимания вопросов текст после удаления адреса, телефонов и номеров "
+                   "может передаваться внешнему сервису DeepSeek — только с вашего согласия. Включить: /llm_on, "
+                   "отключить: /llm_off. Адрес дома (без квартиры) используется только для поиска УК и "
+                   "поставщиков в открытых справочниках. Не присылайте номер квартиры, лицевого счёта и документы.")
     return result
+
+
+def _ensure_user(session, max_user_id: int) -> User:
+    user = session.scalar(select(User).where(User.max_user_id == max_user_id).with_for_update())
+    if user is None:
+        user = User(id=uuid.uuid4(), max_user_id=max_user_id, created_at=now())
+        session.add(user)
+        # PostgreSQL may flush independent ORM objects in an order that violates
+        # profiles_user_id_fkey when only scalar IDs (no relationship) are set.
+        session.flush()
+        session.add(Profile(user_id=user.id, role="other", territory_id=None,
+                            onboarding_completed=False))
+        session.flush()
+    return user
 
 
 def chat_consent_text(session, item: WebhookInbox, settings) -> str | None:
     command = (item.text or "").strip().lower()
     if not item.max_user_id or command not in {"/llm_on", "/llm_off"}:
         return None
-    user = session.scalar(select(User).where(User.max_user_id == item.max_user_id).with_for_update())
-    if user is None:
-        user = User(id=uuid.uuid4(), max_user_id=item.max_user_id, created_at=now())
-        session.add(user)
-        session.flush()
-        session.add(Profile(user_id=user.id, role="other", territory_id=None,
-                            onboarding_completed=False))
-        session.flush()
+    user = _ensure_user(session, item.max_user_id)
     profile = session.get(Profile, user.id)
     profile.chat_llm_consent_at = now() if command == "/llm_on" else None
+    for row in session.scalars(select(DialogState).where(DialogState.user_id == user.id)):
+        row.state = {**row.state, "llm_declined": command == "/llm_off", "consent_offered": True}
     return ("Согласие на передачу очищенного текста вопроса DeepSeek сохранено. "
             "Квитанции из мини-приложения требуют отдельного подтверждения правил обработки."
             if command == "/llm_on" else
@@ -142,90 +164,63 @@ def start_keyboard(settings: object) -> list[dict]:
         open_app["web_app"] = settings.max_web_app
     return [{"type": "inline_keyboard", "payload": {"buttons": [
         [{"type": "message", "text": "Задать вопрос"}], [open_app],
+        [{"type": "message", "text": "Контакты поставщика"}, {"type": "message", "text": "Контакты УК"}],
+        [{"type": "message", "text": "Передать показания"}, {"type": "message", "text": "Почему выросла сумма"}],
     ]}}]
 
 
-def question_text(session, item: WebhookInbox, store: SqlStore) -> str | None:
-    """Answer direct chat from the same owner-scoped facts as the mini-app."""
-    if not item.max_user_id or not item.text:
-        return None
-    from app.services.assistant_adapter import answer_json
-    from app.services.assistant_store import knowledge, owner_receipt_pair
-    from app.services.cohort_store import city_comparison
+def reply_keyboard(settings: object, reply: dict) -> list[dict]:
+    """MAX inline keyboard for a dialogue reply: options as message buttons, https links as link buttons."""
+    rows: list[list[dict]] = []
+    short: list[dict] = []
+    for option in reply.get("options", [])[:12]:
+        button = {"type": "message", "text": option["label"][:128]}
+        if len(option["label"]) <= 22:
+            short.append(button)
+            if len(short) == 2:
+                rows.append(short)
+                short = []
+        else:
+            if short:
+                rows.append(short)
+                short = []
+            rows.append([button])
+    if short:
+        rows.append(short)
+    links = [{"type": "link", "text": link["label"][:128], "url": link["url"]}
+             for link in reply.get("links", [])[:3]
+             if isinstance(link.get("url"), str) and link["url"].startswith("https://") and len(link["url"]) <= 2048]
+    if links:
+        rows.append(links)
+    if reply.get("menu"):
+        open_app = {"type": "open_app", "text": "Разобрать платёжку в мини-приложении"}
+        if settings.max_web_app:
+            open_app["web_app"] = settings.max_web_app
+        rows.append([open_app])
+    return [{"type": "inline_keyboard", "payload": {"buttons": rows}}] if rows else []
 
-    user = session.scalar(select(User).where(User.max_user_id == item.max_user_id).with_for_update())
-    if user is None:
-        user = User(id=uuid.uuid4(), max_user_id=item.max_user_id, created_at=now())
-        session.add(user)
-        # PostgreSQL may flush independent ORM objects in an order that violates
-        # profiles_user_id_fkey when only scalar IDs (no relationship) are set.
-        session.flush()
-        session.add(Profile(user_id=user.id, role="other", territory_id=None,
-                            onboarding_completed=False))
-        session.flush()
-    profile = session.get(Profile, user.id)
-    context = {"territory_id": profile.territory_id, "role": profile.role,
-               "topic_id": None, "organization_id": None, "service_code": None,
-               "document_kind": None, "receipt_id": None, "receipt_revision": None}
-    question = item.text
-    prior = session.scalar(select(AssistantAnswer).where(
-        AssistantAnswer.user_id == user.id,
-        AssistantAnswer.created_at >= now() - timedelta(minutes=15),
-    ).order_by(AssistantAnswer.created_at.desc(), AssistantAnswer.id.desc()).limit(1))
-    if prior and prior.result.get("clarification"):
-        clarification = prior.result["clarification"]
-        context["topic_id"] = prior.result.get("topic_id")
-        if clarification["field"] == "service_code":
-            lowered = question.lower()
-            for needle, code in (("горяч", "hot_water"), ("холод", "cold_water"),
-                                 ("отоп", "heating"), ("элект", "electricity"),
-                                 ("водоотвед", "drainage"), ("капремонт", "capital_repair"),
-                                 ("мусор", "waste")):
-                if needle in lowered:
-                    context["service_code"] = code
-                    break
-        elif clarification["field"] == "document_kind":
-            description = " ".join(question.split())[:200]
-            if description:
-                context["document_kind"] = description
-        question = f"{prior.question[:1000]} {question[:900]}"
-    personal, _ = owner_receipt_pair(store, str(user.id), db_session=session)
-    try:
-        result = answer_json(question, context, [],
-                             {"role": profile.role, "territory_id": profile.territory_id},
-                             knowledge(), api_key=store.settings.deepseek_api_key if (
-                                 profile.chat_llm_consent_at is not None or
-                                 profile.privacy_notice_version == store.settings.privacy_notice_version
-                             ) else None,
-                             model=store.settings.deepseek_model, personal_snapshots=personal,
-                             allow_receipt_model=profile.privacy_notice_version ==
-                             store.settings.privacy_notice_version,
-                             city_lookup=lambda rid, code, metric: city_comparison(
-                                 store, str(user.id), rid, code, metric))
-    except Exception:
-        # One malformed external response or exceptional engine record must not poison
-        # the durable inbox and block later commands.
-        result = {"status": "unsupported", "text": "Сейчас не удалось разобрать вопрос. Попробуйте ещё раз.",
-                  "topic_id": None, "steps": [], "sources": [], "actions": [],
-                  "clarification": None, "limitations": ["Временная ошибка ответа."],
-                  "knowledge_version": knowledge().version, "receipt_ref": None}
-    ref = result.get("receipt_ref")
-    kind = personal[0]["dataset_kind"] if ref and personal else (
-        "synthetic" if profile.territory_id == "demo-territory" else "public_reference")
-    session.add(AssistantAnswer(id=uuid.uuid4(), user_id=user.id, question=question,
-                                result=result, receipt_id=uuid.UUID(ref["id"]) if ref else None,
-                                receipt_revision=ref["revision"] if ref else None,
-                                dataset_kind=kind, created_at=now(),
-                                expires_at=now() + timedelta(days=30)))
-    response = result["text"]
-    if result["clarification"]:
-        response += "\n" + result["clarification"]["prompt"]
-    if result["steps"]:
-        response += "\n" + "\n".join(result["steps"])
-    return response[:3900]
+
+def _reply_text(reply: dict) -> str:
+    text = reply["text"]
+    if reply.get("links"):
+        text += "\n\n" + "\n".join(f"{link['label']}: {link['url']}" for link in reply["links"][:3])
+    return text[:3900]
+
+
+def _enqueue_reply(session, item: WebhookInbox, text: str, attachments: list[dict]) -> None:
+    session.add(Outbox(id=uuid.uuid4(), business_key=item.dedup_key,
+                       max_user_id=item.max_user_id, text=text,
+                       attachments=attachments, state="queued", attempt=0,
+                       run_after=now(), created_at=now(),
+                       expires_at=now() + timedelta(hours=24)))
 
 
 def process_inbox_once(store: SqlStore) -> bool:
+    """Commands are answered in one short transaction. Dialogue turns are computed outside any
+    transaction (house lookup and DeepSeek may take seconds) and committed only if the inbox item
+    is still queued, so a slow or failing external service never blocks the queue."""
+    from app.services.dialog_store import commit_turn, compute_turn
+
     with store.Session.begin() as session:
         item = session.scalar(select(WebhookInbox).where(
             WebhookInbox.state == "queued", WebhookInbox.expires_at > now())
@@ -233,17 +228,33 @@ def process_inbox_once(store: SqlStore) -> bool:
                               .with_for_update(skip_locked=True).limit(1))
         if item is None:
             return False
-        reply = (command_text(item) or chat_consent_text(session, item, store.settings)
-                 or question_text(session, item, store))
-        if reply:
-            command = (item.text or "").strip().lower()
-            show_app_keyboard = item.event_type == "bot_started" or command in {"/start", "/help", "/llm_on"}
-            session.add(Outbox(id=uuid.uuid4(), business_key=item.dedup_key,
-                               max_user_id=item.max_user_id, text=reply,
-                               attachments=start_keyboard(store.settings) if show_app_keyboard else [],
-                               state="queued", attempt=0,
-                               run_after=now(), created_at=now(),
-                               expires_at=now() + timedelta(hours=24)))
+        reply = command_text(item) or chat_consent_text(session, item, store.settings)
+        if reply or not item.max_user_id or not item.text:
+            if reply:
+                command = (item.text or "").strip().lower()
+                show_app_keyboard = item.event_type == "bot_started" or command in {"/start", "/help", "/llm_on"}
+                _enqueue_reply(session, item, reply, start_keyboard(store.settings) if show_app_keyboard else [])
+            item.state = "done"
+            return True
+        user_id = str(_ensure_user(session, item.max_user_id).id)
+        item_id, text = item.id, item.text
+    try:
+        turn = compute_turn(store, user_id, "max_chat", text, None)
+        message, attachments = _reply_text(turn.reply), reply_keyboard(store.settings, turn.reply)
+    except Exception:
+        # One malformed external response or exceptional record must not poison the inbox.
+        log.exception("dialogue turn failed")
+        turn = None
+        message = "Сейчас не удалось разобрать вопрос. Попробуйте ещё раз или нажмите «Новый вопрос»."
+        attachments = reply_keyboard(store.settings, {"options": [{"value": "reset", "label": "Новый вопрос"}]})
+    with store.Session.begin() as session:
+        item = session.scalar(select(WebhookInbox).where(WebhookInbox.id == item_id)
+                              .with_for_update(skip_locked=True))
+        if item is None or item.state != "queued":
+            return True  # Another processor finished it meanwhile.
+        if turn is not None and not commit_turn(session, turn):
+            log.info("dialogue state changed concurrently; reply sent without state update")
+        _enqueue_reply(session, item, message, attachments)
         item.state = "done"
     return True
 

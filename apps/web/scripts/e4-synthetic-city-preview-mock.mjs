@@ -143,7 +143,7 @@ async function serve(route) {
 async function importAndConfirm(page, label) {
   await page.getByRole('link', { name: 'Платёжка' }).click();
   await page.getByRole('button', { name: `Загрузить образец · ${label}` }).click();
-  await page.getByRole('link', { name: 'Проверить данные платёжки' }).click();
+  await page.waitForURL(/\/review\?id=/, { timeout: 20000 });
   await page.getByRole('button', { name: 'Подтвердить проверенные данные' }).click();
   await page.getByRole('heading', { name: 'Объяснение платёжки' }).waitFor();
   await page.getByText('Учебная квитанция подтверждена.').waitFor();
@@ -172,7 +172,7 @@ try {
   await september.getByRole('link', { name: 'Вопрос по платёжке' }).click();
   await page.getByLabel('Ваш вопрос').fill('Везде по Москве вырос счёт за холодную воду или только у меня?');
   await page.getByRole('button', { name: 'Спросить' }).click();
-  await page.getByRole('heading', { name: 'Ответ', exact: true }).waitFor();
+  await page.locator('.bubble.bot').nth(1).waitFor();
   await page.getByRole('link', { name: 'Проверить по учебной выборке' }).click();
   step = 'synthetic API error and retry';
   await page.getByLabel('Учебная квитанция прошлого месяца').selectOption(receiptId('2026-08'));

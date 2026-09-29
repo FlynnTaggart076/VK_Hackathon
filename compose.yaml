@@ -35,6 +35,9 @@ services:
       MAX_API_BASE_URL: ${MAX_API_BASE_URL:-https://platform-api2.max.ru}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-flash}
+      HOUSESCORE_API_KEY: ${HOUSESCORE_API_KEY:-}
+      HOUSESCORE_DAILY_LIMIT: ${HOUSESCORE_DAILY_LIMIT:-30}
+      HOUSE_LOOKUP_USER_DAILY_LIMIT: ${HOUSE_LOOKUP_USER_DAILY_LIMIT:-5}
     depends_on:
       db:
         condition: service_healthy

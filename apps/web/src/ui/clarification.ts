@@ -21,8 +21,8 @@ export function suggestionsFor(field: ClarificationField, catalog: Catalog, opti
           : field === 'service_code' ? catalog.service_codes.map((value) => ({ value, label: value }))
             : field === 'role' ? [
               { value: 'owner', label: 'Собственник' },
-              { value: 'tenant', label: 'Арендатор' },
-              { value: 'other', label: 'Другое' },
+              { value: 'tenant', label: 'Наниматель или арендатор' },
+              { value: 'other', label: 'Другая роль' },
             ] : [];
   const unique = new Map<string, Suggestion>();
   for (const suggestion of [...options, ...catalogOptions]) unique.set(suggestion.value, suggestion);

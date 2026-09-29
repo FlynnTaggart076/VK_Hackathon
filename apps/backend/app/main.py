@@ -54,6 +54,10 @@ class Settings:
     pdf_max_pages: int = 3
     image_max_pixels: int = 25_000_000
     privacy_notice_version: str = "2.0"
+    housescore_api_key: str | None = None
+    house_lookup_cache_dir: Path | None = None
+    housescore_daily_limit: int = 30
+    house_lookup_user_daily_limit: int = 5
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -71,7 +75,16 @@ class Settings:
             engine_mode=os.getenv("ENGINE_MODE", "stub"),
             database_url=os.getenv("DATABASE_URL"),
             storage_path=Path(os.getenv("STORAGE_PATH", ".local-storage")),
+            housescore_api_key=os.getenv("HOUSESCORE_API_KEY") or None,
+            house_lookup_cache_dir=Path(os.environ["HOUSE_LOOKUP_CACHE_DIR"])
+            if os.getenv("HOUSE_LOOKUP_CACHE_DIR") else None,
+            housescore_daily_limit=int(os.getenv("HOUSESCORE_DAILY_LIMIT", "30")),
+            house_lookup_user_daily_limit=int(os.getenv("HOUSE_LOOKUP_USER_DAILY_LIMIT", "5")),
         )
+
+    @property
+    def house_cache_dir(self) -> Path:
+        return self.house_lookup_cache_dir or self.storage_path / "house_cache"
 
     def validate(self) -> None:
         if self.mode not in {"dev", "demo", "preview", "production"}:
@@ -103,6 +116,8 @@ class Settings:
         if api_url.scheme != "https" or not api_url.hostname or api_url.username or api_url.password or \
                 api_url.query or api_url.fragment or api_url.path not in {"", "/"}:
             raise ValueError("MAX_API_BASE_URL must be an HTTPS origin")
+        if not 0 <= self.housescore_daily_limit <= 1000 or not 0 <= self.house_lookup_user_daily_limit <= 100:
+            raise ValueError("House lookup limits are out of range")
         if self.demo_auth_enabled and not self.demo_access_code:
             raise ValueError("DEMO_ACCESS_CODE required when demo auth is enabled")
         if self.mode != "dev" and not self.database_url:
@@ -412,7 +427,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                              "receipt_ocr": settings.engine_mode == "real",
                              "comparison": settings.engine_mode == "real" and bool(settings.database_url),
                              "engine_stub": settings.engine_mode == "stub",
-                             "demo_auth": settings.demo_auth_enabled},
+                             "demo_auth": settings.demo_auth_enabled,
+                             "dialog": settings.engine_mode == "real" and bool(settings.database_url),
+                             "house_lookup": bool(settings.housescore_api_key)},
                 "privacy_notice": {"version": settings.privacy_notice_version,
                                    "text": "Исходные документы хранятся 7 дней, подтверждённые данные квитанций — 120 дней. Для ответа выбранный текст вопроса и обезличенные расчётные факты могут передаваться внешнему сервису DeepSeek; исходные документы, адрес и номер счёта не передаются. Городская статистика использует подтверждённые квитанции только после отдельного согласия; его можно отозвать."}}
 
@@ -528,9 +545,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         from housing_engine.dto import ServiceCode, Unit
 
+        # The synthetic training territory is only offered on dev/demo/preview stands.
         return {"territories": [{"id": item["id"], "label": item["label"],
                                   "is_synthetic": item["is_synthetic"]}
-                                 for item in trusted_catalog.territories],
+                                 for item in trusted_catalog.territories
+                                 if settings.mode != "production" or not item["is_synthetic"]],
                 "organizations": [{"id": item["id"], "label": item["name"],
                                    "territory_id": item["territory_id"],
                                    "is_synthetic": item["is_synthetic"]}
@@ -591,8 +610,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         from app.services.cohort_store import city_comparison
 
         snapshots, profile = await run_in_threadpool(receipt_snapshots, store, user_id, refs)
-        if context["role"] != profile["role"] or context["territory_id"] != profile["territory_id"]:
-            raise ApiError(409, "PROFILE_CHANGED", "Профиль изменился; обновите страницу.")
+        # A clarified territory/role applies to this question only; it no longer has to be written
+        # into the profile first (which also reset the aggregate consent).
+        if context["territory_id"] is not None and context["territory_id"] not in {
+                item["id"] for item in trusted_catalog.territories}:
+            raise ApiError(422, "VALIDATION_FAILED", "Неизвестная территория.")
+        if context["role"] is not None and context["role"] not in {"owner", "tenant", "other"}:
+            raise ApiError(422, "VALIDATION_FAILED", "Неизвестная роль.")
         try:
             bundle = await run_in_threadpool(knowledge)
             personal, _ = await run_in_threadpool(owner_receipt_pair, store, user_id,
@@ -614,6 +638,44 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "synthetic" if profile["territory_id"] == "demo-territory" else "public_reference"
         return await run_in_threadpool(save_answer, store, user_id, body["question"],
                                        result, result.get("receipt_ref"), kind)
+
+    @app.post("/api/v1/assistant/dialog")
+    async def assistant_dialog(request: Request, user_id: str = Depends(current_user)):
+        """One step of the shared chat/mini-app dialogue (contacts by address, FAQ, receipts)."""
+        if not settings.database_url or settings.engine_mode != "real":
+            raise ApiError(503, "ENGINE_UNAVAILABLE", "Помощник пока недоступен.", retryable=True)
+        try:
+            body = await request.json()
+        except (ValueError, UnicodeDecodeError):
+            raise ApiError(400, "INVALID_REQUEST", "Некорректный JSON.") from None
+        fields = {"message", "choice", "reset", "receipt_id", "receipt_revision"}
+        if not isinstance(body, dict) or not set(body) <= fields or \
+                not isinstance(body.get("reset", False), bool):
+            raise ApiError(422, "VALIDATION_FAILED", "Проверьте сообщение.")
+        message, choice = body.get("message"), body.get("choice")
+        if message is not None and (not isinstance(message, str) or len(message) > 2000 or
+                                    any(ord(char) < 32 and char not in "\n\t" for char in message)):
+            raise ApiError(422, "VALIDATION_FAILED", "Сообщение должно быть текстом до 2000 символов.")
+        if choice is not None and (not isinstance(choice, str) or not 1 <= len(choice) <= 200 or
+                                   any(ord(char) < 32 for char in choice)):
+            raise ApiError(422, "VALIDATION_FAILED", "Некорректный вариант ответа.")
+        receipt_id, revision = body.get("receipt_id"), body.get("receipt_revision")
+        if (receipt_id is None) != (revision is None):
+            raise ApiError(422, "VALIDATION_FAILED", "Укажите квитанцию и её ревизию вместе.")
+        receipt_ref = None
+        if receipt_id is not None:
+            try:
+                uuid.UUID(receipt_id)
+            except (TypeError, ValueError, AttributeError):
+                raise ApiError(422, "VALIDATION_FAILED", "Некорректный ID квитанции.") from None
+            if type(revision) is not int or revision < 1:
+                raise ApiError(422, "VALIDATION_FAILED", "Некорректная ревизия квитанции.")
+            receipt_ref = {"id": receipt_id, "revision": revision}
+        from app.services.dialog_store import run_web_turn
+
+        if body.get("reset"):
+            choice, message = "reset", None
+        return await run_in_threadpool(run_web_turn, store, user_id, message, choice, receipt_ref)
 
     @app.get("/api/v1/assistant/answers/{answer_id}")
     def read_answer(answer_id: uuid.UUID, user_id: str = Depends(current_user)):

@@ -37,7 +37,7 @@ export function Onboarding({ meta, catalog, profile, onSaved }: {
     <form onSubmit={(event) => void save(event)}>
       <label htmlFor="role">Ваша роль</label>
       <select id="role" value={role} onChange={(event) => { setRole(event.target.value as Profile['role']); setSaved(false); }}>
-        <option value="owner">Собственник</option><option value="tenant">Арендатор</option><option value="other">Другое</option>
+        <option value="owner">Собственник</option><option value="tenant">Наниматель или арендатор</option><option value="other">Другая роль</option>
       </select>
       <label htmlFor="territory">Территория</label>
       <select id="territory" value={territoryId} onChange={(event) => { setTerritoryId(event.target.value); setSaved(false); }}>

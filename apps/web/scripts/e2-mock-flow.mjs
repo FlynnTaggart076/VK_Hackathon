@@ -20,8 +20,7 @@ try {
   await page.getByLabel('Файл платёжки').setInputFiles({ name: 'demo-bill-2026-08.png', mimeType: 'image/png', buffer: fixture });
   await page.getByRole('button', { name: 'Загрузить', exact: true }).click();
   await page.waitForURL(/\/processing\?job=/);
-  await page.getByRole('link', { name: 'Проверить данные платёжки' }).waitFor({ timeout: 20000 });
-  await page.getByRole('link', { name: 'Проверить данные платёжки' }).click();
+  await page.waitForURL(/\/review\?id=/, { timeout: 20000 });
   await page.waitForURL(/\/review\?id=/);
   await page.getByRole('img', { name: 'Страница 1 исходной платёжки' }).waitFor();
   await page.getByRole('textbox', { name: 'Тариф', exact: true }).fill('41,00');

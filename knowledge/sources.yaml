@@ -15,3 +15,19 @@ sources:
     review_after: "2026-12-27T14:46:15Z"
     content_version: "1.0"
     is_synthetic: false
+  - id: gis-zhkh-house-card
+    title: "ГИС ЖКХ: какую информацию о доме можно найти в реестре (УК и ресурсоснабжающие организации)"
+    url: https://cdn.dom.gosuslugi.ru/webhelp/topics/housings/housings_och/r_card-och.html
+    territory_id: null
+    verified_at: "2026-09-29T12:00:00Z"
+    review_after: "2026-12-29T12:00:00Z"
+    content_version: "1.0"
+    is_synthetic: false
+  - id: gis-zhkh-house-search
+    title: "ГИС ЖКХ: как найти дом по адресу"
+    url: https://cdn.dom.gosuslugi.ru/webhelp/topics/housings/housings_och/t_search_adress-och.html
+    territory_id: null
+    verified_at: "2026-09-29T12:00:00Z"
+    review_after: "2026-12-29T12:00:00Z"
+    content_version: "1.0"
+    is_synthetic: false

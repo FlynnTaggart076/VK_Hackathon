@@ -728,4 +728,4 @@ class SqlStore:
             session.execute(text("SELECT 1"))
             version = session.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
             worker = session.get(WorkerHeartbeat, "worker")
-            return version == "e4_city_cohort" and bool(worker and aware(worker.updated_at) > now() - timedelta(seconds=90))
+            return version == "e5_dialog_state" and bool(worker and aware(worker.updated_at) > now() - timedelta(seconds=90))

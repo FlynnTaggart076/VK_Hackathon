@@ -1,7 +1,7 @@
 import { http, HttpResponse } from 'msw';
 import { API_BASE } from '../api/client';
 import { APP_BASE } from '../api/appConfig';
-import type { AnswerView, ApiErrorBody, BillData, Catalog, ComparisonView, DraftView, Job, MetaResponse, Profile, ReceiptExplanation, ReceiptQueued, ReceiptSummary, ReceiptView, UpdateProfileRequest } from '../api/types';
+import type { AnswerView, ApiErrorBody, DialogReply, DialogRequest, BillData, Catalog, ComparisonView, DraftView, Job, MetaResponse, Profile, ReceiptExplanation, ReceiptQueued, ReceiptSummary, ReceiptView, UpdateProfileRequest } from '../api/types';
 
 const requestId = 'b1399c8c-d010-4e0c-b75f-bd312a647fea';
 const receiptId = '10000000-0000-4000-8000-000000000001';
@@ -14,6 +14,20 @@ const identityId = '10000000-0000-4000-8000-000000000005';
 const ambiguousId = '10000000-0000-4000-8000-000000000006';
 const partialCompareId = '10000000-0000-4000-8000-000000000007';
 let removed = new Set<string>();
+// Browser-only imitation of the server dialogue: service -> address -> synthetic house card.
+let mockDialog: { awaiting: string | null; service: string | null } = { awaiting: null, service: null };
+const mockMenu = [
+  { value: 'topic:supplier_contacts', label: 'Контакты поставщика' }, { value: 'topic:management_contacts', label: 'Контакты УК' },
+  { value: 'topic:meter_readings', label: 'Передать показания' }, { value: 'intent:bill_rise', label: 'Почему выросла сумма' },
+];
+const mockServices = [
+  { value: 'service:cold_water', label: 'Холодная вода' }, { value: 'service:hot_water', label: 'Горячая вода' },
+  { value: 'service:electricity', label: 'Электричество' }, { value: 'service:management', label: 'Управляющая компания' },
+];
+function dialogReply(partial: Partial<DialogReply> & Pick<DialogReply, 'status' | 'text'>): DialogReply {
+  return { options: [], card: null, links: [], sources: [], actions: [], awaiting: mockDialog.awaiting, topic_id: null,
+    menu: false, dataset_kind: 'synthetic', ...partial };
+}
 
 function error(status: number, code: ApiErrorBody['error']['code'], message: string): HttpResponse<ApiErrorBody> {
   return HttpResponse.json({
@@ -31,7 +45,7 @@ function authError(request: Request): HttpResponse<ApiErrorBody> | null {
 const newProfile: Profile = { role: 'other', territory_id: null, onboarding_completed: false, aggregate_opt_in: false,
   privacy_notice_version: null, privacy_acknowledged_at: null };
 let profile: Profile = { ...newProfile };
-export function resetMockState(): void { profile = { ...newProfile }; currentReceipt = { ...queuedReceipt }; jobReads = 0; currentDemoId = null; removed = new Set(); mockDraft = null; }
+export function resetMockState(): void { mockDialog = { awaiting: null, service: null }; profile = { ...newProfile }; currentReceipt = { ...queuedReceipt }; jobReads = 0; currentDemoId = null; removed = new Set(); mockDraft = null; }
 const topicLabels: [string, string][] = [
   ['first_bill', 'Первая квитанция'], ['bill_terms', 'Термины квитанции'], ['bill_change', 'Изменение суммы'],
   ['meter_readings', 'Передача показаний'], ['meter_deadline', 'Срок передачи показаний'], ['account_number', 'Лицевой счёт'],
@@ -199,8 +213,16 @@ export const handlers = [
   http.post(`*${API_BASE}/drafts`, async ({ request }) => {
     const denied = authError(request); if (denied) return denied;
     const body = await request.json() as { topic_id: string; receipt_refs: { id: string; revision: number }[]; line_id: string | null; user_question: string };
-    if (!topicLabels.some(([id]) => id === body.topic_id) || !body.user_question?.trim()) return error(422, 'VALIDATION_FAILED', 'Укажите тему и вопрос.');
+    if (!topicLabels.some(([id]) => id === body.topic_id) || (!body.receipt_refs.length && !body.user_question?.trim()))
+      return error(422, 'VALIDATION_FAILED', 'Укажите тему и вопрос.');
     const ref = body.receipt_refs[0];
+    if (!ref) {
+      mockDraft = { id: '60000000-0000-4000-8000-000000000002', revision: 1,
+        text: `Здравствуйте. ${body.user_question.trim()}
+Этот текст является черновиком: проверьте его перед копированием.`,
+        recipient: null, actions: [], receipt_refs: [], stale: false, knowledge_version: 'mock-knowledge-1', created_at: now, updated_at: now };
+      return HttpResponse.json(mockDraft, { status: 201 });
+    }
     const source = samples.find((item) => item.id === ref?.id) ?? (ref?.id === receiptId && currentReceipt.status === 'confirmed' ? {
       id: currentReceipt.id, status: currentReceipt.status, revision: currentReceipt.revision,
       period: currentReceipt.bill_data.period, issuer_name: currentReceipt.bill_data.issuer_name,
@@ -210,7 +232,7 @@ export const handlers = [
     if (!source || removed.has(source.id)) return error(404, 'NOT_FOUND', 'Документ не найден.');
     if (ref.revision !== source.revision) return error(409, 'REVISION_CONFLICT', 'Ревизия документа изменилась.');
     mockDraft = { id: '60000000-0000-4000-8000-000000000001', revision: 1,
-      text: `Учебный черновик. Прошу пояснить начисление за холодную воду за ${source.period}: ${source.document_total_due} ₽ по квитанции. Вопрос: ${body.user_question.trim()}`,
+      text: `Учебный черновик. Прошу пояснить начисление за холодную воду за ${source.period}: ${source.document_total_due} ₽ по квитанции.${body.user_question.trim() ? ` Вопрос: ${body.user_question.trim()}` : ''}`,
       recipient: null, actions: [], receipt_refs: [ref], stale: false, knowledge_version: 'mock-knowledge-1', created_at: now, updated_at: now };
     return HttpResponse.json(mockDraft, { status: 201 });
   }),
@@ -294,6 +316,43 @@ export const handlers = [
       knowledge_version: 'mock-knowledge-1', receipt_ref: null, dataset_kind: 'synthetic',
     };
     return HttpResponse.json(response, { headers: { 'X-Request-ID': requestId } });
+  }),
+  http.post(`*${API_BASE}/assistant/dialog`, async ({ request }) => {
+    const denied = authError(request); if (denied) return denied;
+    const input = await request.json() as DialogRequest;
+    const choice = input.reset ? 'reset' : input.choice ?? null;
+    const text = (input.message ?? '').trim();
+    const lower = text.toLowerCase();
+    let reply: DialogReply;
+    if (choice === 'reset' || (!choice && !text)) {
+      mockDialog = { awaiting: null, service: null };
+      reply = dialogReply({ status: 'needs_input', text: 'Чем помочь? Выберите тему или напишите вопрос. Учебный режим: данные вымышлены.', options: mockMenu, menu: true });
+    } else if (choice?.startsWith('service:') || (mockDialog.awaiting === 'service' && text)) {
+      mockDialog = { awaiting: 'address', service: choice?.slice(8) ?? 'cold_water' };
+      reply = dialogReply({ status: 'needs_input', text: 'Напишите адрес дома: город, улица и номер дома. Квартиру указывать не нужно.', options: [{ value: 'reset', label: 'Новый вопрос' }], awaiting: 'address' });
+    } else if (mockDialog.awaiting === 'address' && /\d/.test(text)) {
+      mockDialog = { awaiting: 'after_card', service: mockDialog.service };
+      const service = mockServices.find((item) => item.value === `service:${mockDialog.service}`)?.label ?? 'Услуга';
+      reply = dialogReply({ status: 'answered', text: `${service} · Учебный город, Примерная улица, д. 1\nУправляющая организация: Учебная УК.`,
+        options: [{ value: 'change_service', label: 'Другая услуга' }, { value: 'change_address', label: 'Другой адрес' }, { value: 'reset', label: 'Новый вопрос' }],
+        awaiting: 'after_card', card: { intro: null, address: 'Учебный город, Примерная улица, д. 1', fias_guid: '00000000-0000-4000-8000-000000000001',
+          service: { code: mockDialog.service === 'management' ? 'management' : 'cold_water', name: service, status: mockDialog.service === 'management' ? 'management' : 'unknown', note: null },
+          provider: null, management: { name: 'Учебная УК', phone: null, email: null, fetched_at: '2026-09-29' },
+          source: { url: null, reviewed_at: null, record_start_at_utc: null }, links: [], warnings: [] } });
+    } else if (choice?.startsWith('topic:') || /поставщик|ук|показан/.test(lower)) {
+      mockDialog = { awaiting: 'service', service: null };
+      reply = dialogReply({ status: 'needs_input', text: 'По какой услуге?', options: mockServices, awaiting: 'service' });
+    } else if (mockDialog.awaiting === 'address') {
+      reply = dialogReply({ status: 'needs_input', text: 'Не вижу номера дома. Напишите улицу и номер дома.', options: [{ value: 'reset', label: 'Новый вопрос' }], awaiting: 'address' });
+    } else {
+      mockDialog = { awaiting: null, service: null };
+      reply = dialogReply({ status: 'unsupported', text: 'Не удалось определить тему. Выберите тему из списка.', options: mockMenu, menu: true });
+    }
+    return HttpResponse.json(reply, { headers: { 'X-Request-ID': requestId } });
+  }),
+  http.post(`*${API_BASE}/receipts/:id/retry`, ({ request }) => {
+    const denied = authError(request); if (denied) return denied;
+    return error(410, 'SOURCE_EXPIRED', 'Исходный файл уже удалён.');
   }),
   http.get(`*${API_BASE}/receipts/:id`, ({ request, params }) => {
     const denied = authError(request); if (denied) return denied;

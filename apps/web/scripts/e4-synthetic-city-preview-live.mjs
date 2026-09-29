@@ -76,8 +76,7 @@ async function importAndConfirm(page, label, period) {
   if (await page.getByLabel('Файл платёжки').count()) throw new Error('Public preview exposed personal-file upload');
   await page.getByRole('button', { name: `Загрузить образец · ${label}` }).click();
   await page.waitForURL(/\/team\/zhkh-preview\/processing\?job=/, { timeout: 20000 });
-  await page.getByRole('link', { name: 'Проверить данные платёжки' }).waitFor({ timeout: 150000 });
-  await page.getByRole('link', { name: 'Проверить данные платёжки' }).click();
+  await page.waitForURL(/\/review\?id=/, { timeout: 150000 });
   await page.waitForURL(/\/team\/zhkh-preview\/review\?id=/);
   await page.getByText('Синтетический пример').first().waitFor();
   if (await page.getByLabel('Период (ГГГГ-ММ)').inputValue() !== period) throw new Error(`Imported sample has an unexpected ${period} period`);

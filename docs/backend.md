@@ -147,3 +147,12 @@ send route. Reads mark a draft stale when a receipt, source or knowledge
 version changes. Deleting a receipt removes associated answers, drafts and
 their draft idempotency records. The demo catalog has no verified local
 recipient, so the draft recipient remains null.
+
+## E5: общий диалог и контакты по адресу (2026-09-29)
+
+- `app/services/dialog.py` — пошаговый диалог для чата MAX и мини-приложения. Состояние (тема, услуга, город, адрес, дом, ожидаемое уточнение, варианты) хранится в `dialog_states`; ответ на уточнение принимается кнопкой, номером или текстом.
+- `app/services/dialog_store.py` — чтение профиля и состояния, вызов поиска и DeepSeek вне транзакции, запись результата с проверкой версии; `POST /api/v1/assistant/dialog`.
+- `app/services/house_lookup.py` — HouseScore + Dominfo, кэш `STORAGE_PATH/house_cache` в формате прототипа, суточные квоты в `external_usage`, бюджет времени 15 с.
+- `max_queue.process_inbox_once` — команды в одной короткой транзакции; ход диалога считается вне транзакции и записывается, только если событие ещё в очереди. Варианты — кнопки `message`, ссылки — кнопки `link`.
+- `/assistant/answers` принимает уточнённую территорию из контекста без записи в профиль (409 `PROFILE_CHANGED` больше нет).
+- Тесты: `tests/test_e5_dialog.py` (ответы проверяются по схеме `DialogReply`), `tests/test_e5_house_lookup.py` (сеть запрещена, синтетические ответы).

@@ -15,7 +15,7 @@ try {
   const fixture = await readFile(new URL('../public/synthetic-receipt.png', import.meta.url));
   await page.getByLabel('Файл платёжки').setInputFiles({ name: 'synthetic.png', mimeType: 'image/png', buffer: fixture });
   await page.getByRole('button', { name: 'Загрузить', exact: true }).click();
-  await page.getByRole('link', { name: 'Проверить данные платёжки' }).click();
+  await page.waitForURL(/\/review\?id=/, { timeout: 20000 });
   await page.getByRole('heading', { name: 'Данные для проверки' }).waitFor();
   await page.evaluate(async () => {
     const { api } = await import('/team/zhkh/src/api/client.ts');

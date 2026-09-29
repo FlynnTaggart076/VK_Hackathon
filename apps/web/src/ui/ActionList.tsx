@@ -6,7 +6,12 @@ const routeByTarget: Record<NonNullable<NextAction['target']>, string> = {
 };
 
 function targetFor(action: NextAction): string | null {
-  if (action.type === 'prepare_draft') return action.receipt_ref ? `/draft?receipt=${encodeURIComponent(action.receipt_ref.id)}` : '/draft';
+  if (action.type === 'prepare_draft') {
+    const query = new URLSearchParams();
+    if (action.receipt_ref) query.set('receipt', action.receipt_ref.id);
+    if (action.topic_id) query.set('topic', action.topic_id);
+    return `/draft${query.size ? `?${query}` : ''}`;
+  }
   if (action.type === 'select_topic' && action.topic_id) return `/assistant?topic=${encodeURIComponent(action.topic_id)}${action.receipt_ref ? `&receipt=${encodeURIComponent(action.receipt_ref.id)}` : ''}`;
   if (action.type === 'navigate' && action.target) {
     if (action.target === 'receipt_detail') return action.receipt_ref ? `/review?id=${encodeURIComponent(action.receipt_ref.id)}` : null;

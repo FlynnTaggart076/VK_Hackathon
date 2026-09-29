@@ -60,8 +60,7 @@ try {
 
   await page.getByRole('button', { name: /Загрузить образец · Вода, август/ }).click();
   await page.waitForURL(/\/processing\?job=/);
-  await page.getByRole('link', { name: 'Проверить данные платёжки' }).waitFor({ timeout: 150000 });
-  await page.getByRole('link', { name: 'Проверить данные платёжки' }).click();
+  await page.waitForURL(/\/review\?id=/, { timeout: 150000 });
   await page.waitForURL(/\/review\?id=/);
   const receiptId = new URL(page.url()).searchParams.get('id');
   if (!receiptId) throw new Error('Review route has no receipt ID');
@@ -97,19 +96,18 @@ try {
   await checkLayout(page, 360);
 
   await page.getByRole('link', { name: 'Помощник' }).click();
-  await page.getByLabel('Тема').selectOption('');
+  await page.getByRole('button', { name: 'Контакты поставщика' }).waitFor();
   await page.getByLabel('Ваш вопрос').fill('xyzzy неизвестное');
   await page.getByRole('button', { name: 'Спросить' }).click();
-  await page.getByRole('heading', { name: 'Пока нет проверенного ответа' }).waitFor();
-  if (await page.locator('article.answer').getByText('Источник:').count())
+  await page.getByText('Не удалось определить тему').last().waitFor();
+  if (await page.locator('.bubble.bot').last().locator('.chat-links a').count())
     throw new Error('Unsupported answer displayed a fabricated source');
 
   await page.getByRole('link', { name: 'Платёжка' }).click();
   await page.getByLabel('Файл платёжки').setInputFiles({ name: 'unknown-layout.pdf', mimeType: 'application/pdf', buffer: unknown });
   await page.getByRole('button', { name: 'Загрузить', exact: true }).click();
   await page.waitForURL(/\/processing\?job=/);
-  await page.getByRole('link', { name: 'Проверить данные платёжки' }).waitFor({ timeout: 150000 });
-  await page.getByRole('link', { name: 'Проверить данные платёжки' }).click();
+  await page.waitForURL(/\/review\?id=/, { timeout: 150000 });
   await page.getByText('нужен ручной ввод').waitFor({ timeout: 15000 });
   await checkLayout(page, 360);
 

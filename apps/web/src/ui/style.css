@@ -47,3 +47,20 @@ fieldset { border: 1px solid #c9d8e1; border-radius: 8px; margin: 16px 0; paddin
 .totals dt { min-width: 0; }.totals dd { margin: 0; text-align: right; }
 .panel { overflow-wrap: anywhere; }
 @media (max-width: 380px) { .app { padding: 10px; } .panel { padding: 14px; } nav a { flex: 1 1 auto; text-align: center; } }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.chat { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+.bubble { max-width: 92%; margin: 0; padding: 10px 12px; border-radius: 12px; }
+.bubble.user { align-self: flex-end; background: #17689f; color: white; white-space: pre-line; }
+.bubble.bot { align-self: flex-start; background: #eef4f8; border: 1px solid #d3e1ea; }
+.bubble.bot.limited { background: #fff8e8; border-color: #ecd9a8; }
+.chat-text { margin: 0; white-space: pre-line; }
+.chat-links { margin: 8px 0 0; padding-left: 18px; }
+.chat-links small { color: #536779; }
+.house-card { display: grid; gap: 6px; margin: 10px 0 0; padding: 10px; background: white; border-radius: 8px; border: 1px solid #d3e1ea; }
+.house-card div { display: grid; grid-template-columns: minmax(0, 11em) minmax(0, 1fr); gap: 8px; }
+.house-card dt { font-weight: 600; } .house-card dd { margin: 0; }
+.chat .suggestion-buttons { margin: 10px 0 0; }
+.chat-form { padding-top: 8px; border-top: 1px solid #d6e0e6; }
+.house-card-wrap .review-warning { margin: 8px 0 0; font-size: .9rem; }
+button.secondary { background: white; color: #134b73; }
+@media (max-width: 480px) { .house-card div { grid-template-columns: 1fr; gap: 2px; } .bubble { max-width: 100%; } }

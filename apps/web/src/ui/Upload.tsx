@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiRequestError } from '../api/client';
 import { PREVIEW_MODE } from '../api/appConfig';
 import type { Catalog, Job, MetaResponse, Profile, ReceiptQueued } from '../api/types';
@@ -62,9 +62,20 @@ export function Upload({ meta, profile, catalog, onQueued }: {
   </section>;
 }
 
+export function retryMessage(error: unknown): string {
+  if (error instanceof ApiRequestError) {
+    if (error.status === 410) return 'Исходный файл уже удалён по сроку хранения. Загрузите платёжку заново.';
+    if (error.status === 409) return 'Документ уже изменился: откройте его из истории.';
+    if (error.status === 429) return 'Сейчас слишком много заданий в очереди. Попробуйте через минуту.';
+  }
+  return 'Не удалось запустить повторную обработку. Попробуйте ещё раз.';
+}
+
 export function Processing({ stub }: { stub: boolean }) {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const jobId = params.get('job');
+  const [retryError, setRetryError] = useState<unknown>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -85,6 +96,24 @@ export function Processing({ stub }: { stub: boolean }) {
     const timer = window.setTimeout(() => setReload((value) => value + 1), 2500);
     return () => window.clearTimeout(timer);
   }, [jobId, job, error]);
+  useEffect(() => {
+    // A finished job goes straight to the review screen; the link below stays as a fallback.
+    if (job?.state === 'succeeded' && job.receipt_id && job.id === jobId && !stub) {
+      navigate(`/review?id=${encodeURIComponent(job.receipt_id)}`, { replace: true });
+    }
+  }, [job, jobId, stub]);
+
+  async function retry() {
+    if (!job?.receipt_id) return;
+    setBusy(true); setRetryError(null);
+    try {
+      const receipt = await api.receipt(job.receipt_id);
+      const queued = await api.retryReceipt(receipt.id, receipt.revision, crypto.randomUUID());
+      setJob(null);
+      setParams({ job: queued.job_id }, { replace: true });
+    } catch (cause) { setRetryError(cause); }
+    finally { setBusy(false); }
+  }
 
   return <section className="panel">
     <h2>Обработка</h2>
@@ -97,7 +126,11 @@ export function Processing({ stub }: { stub: boolean }) {
       {job?.error && <p role="alert">{job.error.message}</p>}
       {stub && <p className="badge">Dev stub: задание завершится без OCR; для платёжки потребуется ручной ввод.</p>}
       {job?.state === 'succeeded' && job.receipt_id && <p><Link to={`/review?id=${encodeURIComponent(job.receipt_id)}`}>Проверить данные платёжки</Link></p>}
-      {job?.state === 'failed' && <p>Проверьте ошибку задания. Повторная обработка доступна после исправления причины на сервере.</p>}
+      {job?.state === 'failed' && <div className="notice-box">
+        <p>Обработка не удалась. Можно запустить её ещё раз или открыть документ из истории и ввести данные вручную.</p>
+        <button type="button" onClick={() => void retry()} disabled={busy}>Повторить обработку</button>
+        {retryError !== null && <p role="alert">{retryMessage(retryError)}</p>}
+      </div>}
       <button type="button" onClick={() => void refresh(jobId)} disabled={busy}>Обновить состояние</button>
       <ErrorMessage error={error} />
     </>}

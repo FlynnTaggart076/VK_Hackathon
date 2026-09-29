@@ -1,4 +1,4 @@
-import type { AggregateConsentView, AnswerContext, AnswerView, ApiErrorBody, Catalog, CityComparisonView, CompareRequest, ComparisonView, ConfirmReceiptRequest, CreateDraftRequest, DraftView, EditDraftRequest, EditReceiptRequest, Job, MeResponse, MetaResponse, Profile, ReceiptExplanation, ReceiptList, ReceiptQueued, ReceiptView, SyntheticCityComparisonView, UnexpectedErrorBody, UpdateProfileRequest } from './types';
+import type { AggregateConsentView, AnswerContext, AnswerView, ApiErrorBody, DialogReply, DialogRequest, Catalog, CityComparisonView, CompareRequest, ComparisonView, ConfirmReceiptRequest, CreateDraftRequest, DraftView, EditDraftRequest, EditReceiptRequest, Job, MeResponse, MetaResponse, Profile, ReceiptExplanation, ReceiptList, ReceiptQueued, ReceiptView, SyntheticCityComparisonView, UnexpectedErrorBody, UpdateProfileRequest } from './types';
 import { APP_BASE, PREVIEW_MODE } from './appConfig';
 
 export const API_BASE = `${APP_BASE}api/v1`;
@@ -79,6 +79,12 @@ export const api = {
   }),
   answer: (question: string, context: AnswerContext, signal?: AbortSignal) => request<AnswerView>('/assistant/answers', {
     method: 'POST', body: JSON.stringify({ question, context }), signal,
+  }),
+  dialog: (body: DialogRequest, signal?: AbortSignal) => request<DialogReply>('/assistant/dialog', {
+    method: 'POST', body: JSON.stringify(body), signal,
+  }),
+  retryReceipt: (id: string, expectedRevision: number, key: string, signal?: AbortSignal) => request<ReceiptQueued>(`/receipts/${encodeURIComponent(id)}/retry`, {
+    method: 'POST', body: JSON.stringify({ expected_revision: expectedRevision }), headers: { 'Idempotency-Key': key }, signal,
   }),
   receipt: (id: string, signal?: AbortSignal) => request<ReceiptView>(`/receipts/${encodeURIComponent(id)}`, { signal }),
   receipts: (cursor?: string | null, limit = 20, signal?: AbortSignal) => request<ReceiptList>(`/receipts?limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { signal }),
