@@ -91,6 +91,27 @@ def test_unknown_delivery_is_not_retried(tmp_path):
         assert row.state == "uncertain" and row.attempt == 1
 
 
+def test_help_and_llm_consent_offer_mini_app_button(tmp_path):
+    url = f"sqlite:///{(tmp_path / 'app-button.sqlite').as_posix()}"
+    Base.metadata.create_all(create_engine(url))
+    settings = Settings(database_url=url, storage_path=tmp_path / "private",
+                        max_webhook_secret="fixture_secret", max_bot_token="fixture-token",
+                        max_web_app="fixture_bot")
+    app = create_app(settings)
+    with TestClient(app) as client:
+        for mid, command in (("help-button", "/help"), ("consent-button", "/llm_on")):
+            assert client.post("/integrations/max/webhook", json=event(mid, text=command),
+                               headers={"X-Max-Bot-Api-Secret": "fixture_secret"}).status_code == 200
+    assert process_inbox_once(app.state.store)
+    assert process_inbox_once(app.state.store)
+    with app.state.store.Session() as session:
+        outgoing = session.scalars(select(Outbox)).all()
+        assert len(outgoing) == 2
+        for row in outgoing:
+            assert row.state == "queued"
+            assert row.attachments == start_keyboard(settings)
+
+
 def test_max_message_wire_body_contains_start_keyboard():
     settings = Settings(max_bot_token="fixture-token", max_web_app="fixture_bot")
     class Opener:
