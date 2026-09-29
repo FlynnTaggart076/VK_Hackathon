@@ -25,8 +25,7 @@ try {
   await page.getByLabel('Файл платёжки').setInputFiles({ name: 'demo-bill-2026-08.pdf', mimeType: 'application/pdf', buffer: fixture });
   await page.getByRole('button', { name: 'Загрузить', exact: true }).click();
   await page.waitForURL(/\/processing\?job=/);
-  await page.getByRole('link', { name: 'Проверить данные платёжки' }).waitFor({ timeout: 150000 });
-  await page.getByRole('link', { name: 'Проверить данные платёжки' }).click();
+  await page.waitForURL(/\/review\?id=/, { timeout: 150000 });
   await page.waitForURL(/\/review\?id=/);
   await page.getByRole('img', { name: 'Страница 1 исходной платёжки' }).waitFor({ timeout: 15000 });
   const receiptId = new URL(page.url()).searchParams.get('id');

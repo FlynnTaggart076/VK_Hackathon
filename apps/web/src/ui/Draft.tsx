@@ -12,9 +12,9 @@ export function Draft({ catalog }: { catalog: Catalog | null }) {
   const [receipt, setReceipt] = useState<ReceiptView | null>(null);
   const [draft, setDraft] = useState<DraftView | null>(null);
   const [text, setText] = useState('');
-  const [topic, setTopic] = useState('');
+  const [topic, setTopic] = useState(params.get('topic') ?? '');
   const [lineId, setLineId] = useState('');
-  const [question, setQuestion] = useState('Почему выросла сумма за воду?');
+  const [question, setQuestion] = useState('');
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
@@ -26,13 +26,13 @@ export function Draft({ catalog }: { catalog: Catalog | null }) {
     return () => { active = false; };
   }, [draftId, receiptId]);
   async function create(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (!receipt || receipt.status !== 'confirmed' || !topic) return;
+    event.preventDefault(); if ((receipt && receipt.status !== 'confirmed') || !topic) return;
     setBusy(true); setError(null); setNotice('');
     try {
       const value = await api.createDraft({ topic_id: topic, organization_id: null,
-        receipt_refs: [{ id: receipt.id, revision: receipt.revision }], line_id: lineId || null,
+        receipt_refs: receipt ? [{ id: receipt.id, revision: receipt.revision }] : [], line_id: receipt ? lineId || null : null,
         user_question: question.trim() }, crypto.randomUUID());
-      setDraft(value); setText(value.text); setParams({ id: value.id, receipt: receipt.id });
+      setDraft(value); setText(value.text); setParams(receipt ? { id: value.id, receipt: receipt.id } : { id: value.id });
     } catch (cause) { setError(cause); }
     finally { setBusy(false); }
   }
@@ -57,7 +57,7 @@ export function Draft({ catalog }: { catalog: Catalog | null }) {
   return <section className="panel">
     <h2>Черновик обращения</h2><p className="notice">Текст можно сохранить и скопировать. Отправка обращения из приложения не выполняется.</p>
     <ErrorMessage error={error} />
-    {!receiptId && !draftId && <p>Выберите подтверждённую квитанцию в <Link to="/history">истории</Link> или после сравнения.</p>}
+    {!receiptId && !draftId && <p>Черновик можно подготовить без квитанции или по подтверждённой квитанции из <Link to="/history">истории</Link>.</p>}
     {receipt && <div className="notice-box"><h3>Факты для сверки</h3>
       {receipt.dataset_kind === 'synthetic' && <p className="badge">Синтетический пример</p>}
       <p>{receipt.bill_data.period ?? 'Период не указан'} · {receipt.bill_data.issuer_name ?? 'Организация не определена'} · ревизия {receipt.revision}</p>
@@ -65,12 +65,12 @@ export function Draft({ catalog }: { catalog: Catalog | null }) {
       {receipt.bill_data.services.map((line) => <p key={line.line_id}>{line.raw_name}: {line.charge_amount ?? 'нет суммы'} ₽</p>)}
       {receipt.status !== 'confirmed' && <p className="review-warning">Создать черновик можно после подтверждения квитанции.</p>}
     </div>}
-    {receipt && !draft && receipt.status === 'confirmed' && <form onSubmit={(event) => void create(event)}>
+    {!draft && !draftId && (!receiptId || receipt?.status === 'confirmed') && <form onSubmit={(event) => void create(event)}>
       {!catalog?.topics.length && <p className="notice">Каталог тем пока не загружен. Обновите страницу позднее.</p>}
       <label htmlFor="draft-topic">Тема</label><select id="draft-topic" value={topic} onChange={(event) => setTopic(event.target.value)} required><option value="">Выберите тему</option>{catalog?.topics.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
-      <label htmlFor="draft-line">Строка квитанции</label><select id="draft-line" value={lineId} onChange={(event) => setLineId(event.target.value)}><option value="">Без строки</option>{receipt.bill_data.services.map((line) => <option key={line.line_id} value={line.line_id}>{line.raw_name}</option>)}</select>
-      <label htmlFor="draft-question">Ваш вопрос</label><textarea id="draft-question" rows={3} maxLength={2000} value={question} onChange={(event) => setQuestion(event.target.value)} />
-      <button disabled={busy || !topic || !question.trim()}>Подготовить черновик</button>
+      {receipt && <><label htmlFor="draft-line">Строка квитанции</label><select id="draft-line" value={lineId} onChange={(event) => setLineId(event.target.value)}><option value="">Без строки</option>{receipt.bill_data.services.map((line) => <option key={line.line_id} value={line.line_id}>{line.raw_name}</option>)}</select></>}
+      <label htmlFor="draft-question">Ваш вопрос</label><textarea id="draft-question" rows={3} maxLength={2000} value={question} placeholder="Например: прошу пояснить начисление за горячую воду" onChange={(event) => setQuestion(event.target.value)} />
+      <button disabled={busy || !topic || (!receipt && !question.trim())}>Подготовить черновик</button>
     </form>}
     {draft && <article className="answer"><h3>Проверьте текст</h3>
       <p>Получатель: {draft.recipient?.label ?? 'не определён; выберите канал самостоятельно'}</p>

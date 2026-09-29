@@ -88,8 +88,7 @@ async function scenario(width, territory) {
     if (await page.getByLabel('Файл платёжки').count()) throw new Error('Raw upload offered in public preview');
     await page.getByRole('button', { name: 'Загрузить образец · Вода, август' }).click();
     await page.waitForURL(/\/team\/zhkh-preview\/processing\?job=/, { timeout: 20000 });
-    await page.getByRole('link', { name: 'Проверить данные платёжки' }).waitFor({ timeout: 150000 });
-    await page.getByRole('link', { name: 'Проверить данные платёжки' }).click();
+    await page.waitForURL(/\/review\?id=/, { timeout: 150000 });
     await page.getByText('Синтетический пример').first().waitFor();
     if (await page.getByLabel('Период (ГГГГ-ММ)').inputValue() !== '2026-08')
       throw new Error('August sample period differs from fixture');
@@ -103,11 +102,10 @@ async function scenario(width, territory) {
     await page.getByText('2026-08').first().waitFor({ timeout: 20000 });
     await page.getByText('Подтверждена', { exact: false }).first().waitFor();
     await page.getByRole('link', { name: 'Помощник' }).click();
-    await page.getByLabel('Тема').selectOption('account_number');
+    await page.getByRole('button', { name: 'Контакты поставщика' }).waitFor({ timeout: 20000 });
     await page.getByLabel('Ваш вопрос').fill('Где найти лицевой счёт?');
     await page.getByRole('button', { name: 'Спросить' }).click();
-    await page.getByRole('heading', { name: 'Ответ', exact: true }).waitFor({ timeout: 20000 });
-    await page.getByText('ГИС ЖКХ: Как перейти к списку лицевых счетов').waitFor();
+    await page.getByText('ГИС ЖКХ: Как перейти к списку лицевых счетов').waitFor({ timeout: 20000 });
     await layout(page, width);
 
     step = `${width}px: fresh context isolation`;

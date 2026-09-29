@@ -36,6 +36,11 @@ export type ComparisonView = Schema['ComparisonView'];
 export type CreateDraftRequest = Schema['CreateDraftRequest'];
 export type EditDraftRequest = Schema['EditDraftRequest'];
 export type DraftView = Schema['DraftView'];
+export type DialogRequest = Schema['DialogRequest'];
+export type DialogReply = Schema['DialogReply'];
+export type DialogOption = Schema['DialogOption'];
+export type DialogLink = Schema['DialogLink'];
+export type HouseCard = Schema['HouseCard'];
 
 export type CityComparisonView = Schema['CityComparisonView'];
 export type AggregateConsentView = Schema['AggregateConsentView'];

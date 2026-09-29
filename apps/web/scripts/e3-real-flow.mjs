@@ -25,8 +25,7 @@ try {
     await page.getByRole('link', { name: 'Платёжка' }).click();
     await page.getByRole('button', { name: `Загрузить образец · ${label}` }).click();
     await page.waitForURL(/\/processing\?job=/);
-    await page.getByRole('link', { name: 'Проверить данные платёжки' }).waitFor({ timeout: 150000 });
-    await page.getByRole('link', { name: 'Проверить данные платёжки' }).click();
+    await page.waitForURL(/\/review\?id=/, { timeout: 150000 });
     await page.waitForURL(/\/review\?id=/);
     const id = new URL(page.url()).searchParams.get('id');
     if (!id) throw new Error('Receipt ID missing');
@@ -62,17 +61,15 @@ try {
   const options = await page.getByLabel('Поздний документ').locator('option').allTextContents();
   if (!options.some((label) => label.includes('2026-09'))) throw new Error('History did not survive reload');
   await page.getByRole('link', { name: 'Помощник' }).click();
-  await page.getByLabel('Тема').selectOption('account_number');
+  await page.getByRole('button', { name: 'Контакты поставщика' }).waitFor();
   await page.getByLabel('Ваш вопрос').fill('Где найти лицевой счёт?');
   await page.getByRole('button', { name: 'Спросить' }).click();
-  await page.getByRole('heading', { name: 'Ответ', exact: true }).waitFor();
   await page.getByText('ГИС ЖКХ: Как перейти к списку лицевых счетов').waitFor();
   const official = page.getByRole('link', { name: 'Открыть инструкцию ГИС ЖКХ' });
   if (!(await official.getAttribute('href'))?.startsWith('https://')) throw new Error('Official source lacks HTTPS link');
-  await page.getByLabel('Тема').selectOption('');
   await page.getByLabel('Ваш вопрос').fill('xyzzy неизвестное');
   await page.getByRole('button', { name: 'Спросить' }).click();
-  await page.getByRole('heading', { name: 'Пока нет проверенного ответа' }).waitFor();
+  await page.getByText('Не удалось определить тему').last().waitFor();
 
   await page.getByRole('link', { name: 'История' }).click();
   await page.getByRole('link', { name: 'Сравнить квитанции' }).click();
