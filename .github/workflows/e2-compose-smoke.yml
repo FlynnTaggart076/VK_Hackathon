@@ -40,6 +40,10 @@ jobs:
           }
           trap on_exit EXIT
           "${compose[@]}" config --quiet
+          # Reproduce the shared VM checkout mode: copied source has no other-read bit.
+          find apps/backend/app apps/backend/migrations packages/housing_engine/src/housing_engine knowledge fixtures/receipts \
+            -type f -exec chmod o-r {} +
+          chmod o-r apps/backend/alembic.ini
           if ! "${compose[@]}" up --build --detach > /tmp/zhkh-e2-build.log 2>&1; then
             build_error="$(tail -n 20 /tmp/zhkh-e2-build.log | tail -c 2200 | tr '\r\n' '  ' | sed -E 's#(postgresql\+psycopg://zhkh:)[^@ ]+#\1***#g')"
             echo "::error title=E2 Compose build::$build_error"
