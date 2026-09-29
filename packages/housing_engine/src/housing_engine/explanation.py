@@ -37,7 +37,7 @@ def _line(index, line) -> ExplanationLine:
                 issues.append(Issue(code="LINE_CALCULATION_OUT_OF_RANGE", severity="warning", path=path, message="Произведение объёма и тарифа не помещается в денежный формат договора; проверьте исходные значения."))
             else:
                 calculated = money(product)
-                formula = f"{line.quantity} × {line.tariff} = {calculated} RUB"
+                formula = f"{line.quantity} × {line.tariff} = {calculated} ₽"
             if line.charge_amount is not None and calculated is not None:
                 difference = money(Decimal(line.charge_amount) - Decimal(calculated))
                 if abs(Decimal(difference)) > MAX_MONEY:
@@ -50,7 +50,7 @@ def _line(index, line) -> ExplanationLine:
     else:
         issues.append(Issue(code="LINE_FORMULA_UNSUPPORTED", severity="info", path=path, message="Для строки доступна только напечатанная сумма; формула не указана."))
     explanation = (
-        f"В квитанции указано {line.charge_amount} RUB. " if line.charge_amount is not None else "Сумма строки не указана. "
+        f"В квитанции указано {line.charge_amount} ₽. " if line.charge_amount is not None else "Сумма строки не указана. "
     ) + (f"Проверка: {formula}." if formula else "Самостоятельный расчёт строки недоступен.")
     return ExplanationLine(
         line_id=line.line_id, title=line.raw_name, explanation=explanation,
@@ -82,13 +82,13 @@ def explain_receipt(request: ExplainRequest, knowledge: KnowledgeBundle) -> Rece
     issues = list(validation.warnings)
     for index, item in enumerate(bill.adjustments):
         period = f" за {item.related_period}" if item.related_period else ""
-        issues.append(Issue(code="ADJUSTMENT_APPLIED", severity="info", path=f"/adjustments/{index}/amount", message=f"Отдельный перерасчёт {item.amount} RUB{period} учтён один раз в текущих начислениях."))
+        issues.append(Issue(code="ADJUSTMENT_APPLIED", severity="info", path=f"/adjustments/{index}/amount", message=f"Отдельный перерасчёт {item.amount} ₽{period} учтён один раз в текущих начислениях."))
     issues.append(Issue(
         code="ARITHMETIC_ONLY", severity="info", path=None,
         message="Объяснение проверяет числа подтверждённой квитанции. Тарифы, нормативы и правомерность начислений внешними источниками не подтверждены.",
     ))
     if arithmetic.reconciliation_status == "matched":
-        summary = f"Текущие начисления {arithmetic.current_charges} RUB; к оплате {arithmetic.calculated_total_due} RUB. Напечатанные итоги сходятся с арифметикой."
+        summary = f"Текущие начисления {arithmetic.current_charges} ₽; к оплате {arithmetic.calculated_total_due} ₽. Напечатанные итоги сходятся с арифметикой."
     elif arithmetic.reconciliation_status == "mismatch":
         summary = "Напечатанные итоги расходятся с арифметическим расчётом; проверьте строки, корректировки и сальдо."
     elif arithmetic.reconciliation_status == "unsupported":

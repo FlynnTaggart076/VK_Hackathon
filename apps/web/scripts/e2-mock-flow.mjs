@@ -34,9 +34,9 @@ try {
   await page.getByRole('button', { name: 'Сохранить исправления' }).click();
   await page.getByText('Ваши правки сохранены в форме').waitFor();
   if (await page.getByRole('textbox', { name: 'Тариф', exact: true }).inputValue() !== '41.00') throw new Error('Draft lost after revision conflict');
-  await page.getByRole('button', { name: 'Применить мои правки к актуальной ревизии' }).click();
+  await page.getByRole('button', { name: 'Применить мои правки к актуальной версии' }).click();
   await page.getByRole('button', { name: 'Сохранить исправления' }).click();
-  await page.getByText('ревизия 3').waitFor();
+  await page.getByText('версия 3').waitFor();
   const saved = await page.evaluate(async () => {
     const { api } = await import('/team/zhkh/src/api/client.ts');
     return api.receipt('10000000-0000-4000-8000-000000000001');

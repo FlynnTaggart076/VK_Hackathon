@@ -241,6 +241,25 @@ webhook `https://flynntaggart075.asuscomm.com/team/zhkh/integrations/max/webhook
 Голос, транскрибация и отправка обращения отсутствуют. В отчёте разделить
 internal VM, external HTTPS, live MAX и CI/synthetic.
 
+## Обновление скриптом
+
+`scripts/deploy_vm_release.sh` выполняет описанный ниже порядок для production и preview одним запуском
+на VM. Он берёт архив релиза (`git archive HEAD | gzip`), создаёт рядом со старыми чистые каталоги
+`deploy-release-<sha7>` и `preview-release-<sha7>`, проверяет `config --quiet`, делает закрытые backup
+(`pg_dump -Fc`, `pg_restore --list`, тестовое восстановление в отдельную БД, архив тома документов),
+собирает образы, запускает одноразовый `migrate` и пересоздаёт только `api`, `worker`, `web`; сначала
+production, затем preview. Старые каталоги остаются для отката, общий Nginx и `runtime*/app.env`
+не затрагиваются, секреты не печатаются.
+
+```sh
+bash deploy_vm_release.sh check  /tmp/release-<sha7>.tar.gz <полный SHA>   # ничего не перезапускает
+bash deploy_vm_release.sh deploy /tmp/release-<sha7>.tar.gz <полный SHA>
+```
+
+Запускать нужно под владельцем `/srv/team/vk-hackathon` (прежние релизы выкладывал `artem`), например `sudo -u artem bash deploy_vm_release.sh ...`.
+При остановке скрипт печатает команды отката. Релиз без новой миграции откатывается запуском
+`up -d --build --no-deps api worker web` из каталога предыдущего релиза.
+
 ## Обновление, backup и restore
 
 Перед миграцией на следующий принятый SHA записать предыдущий SHA, сделать

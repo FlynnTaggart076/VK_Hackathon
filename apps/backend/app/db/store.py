@@ -615,8 +615,10 @@ class SqlStore:
                 (item.get("code"), item.get("path"), item.get("severity"))
                 for item in previous.validation.get("errors", []) + previous.validation.get("warnings", [])
             }
-            extraction_issues = [item for item in issues if (
-                item.get("code"), item.get("path"), item.get("severity")) not in previous_validation]
+            from app.services.revision_logic import rebase_issues
+
+            extraction_issues = rebase_issues(previous.bill_data, bill_data, [item for item in issues if (
+                item.get("code"), item.get("path"), item.get("severity")) not in previous_validation])
             session.add(ReceiptRevision(receipt_id=receipt.id, revision=new_revision,
                                         bill_data=deepcopy(bill_data),
                                         extraction_meta={"field_evidence": deepcopy(evidence),

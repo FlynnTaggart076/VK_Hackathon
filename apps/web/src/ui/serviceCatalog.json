@@ -1,0 +1,13 @@
+{
+  "services": [
+    {"code": "cold_water", "label": "Холодная вода", "units": ["m3"], "default_unit": "m3", "scopes": ["individual", "common_property"], "default_scope": "individual", "segments": []},
+    {"code": "hot_water", "label": "Горячая вода", "units": ["m3", "gcal"], "default_unit": "m3", "scopes": ["individual", "common_property"], "default_scope": "individual", "segments": [{"key": "carrier", "label": "Носитель"}, {"key": "energy", "label": "Энергия"}]},
+    {"code": "drainage", "label": "Водоотведение", "units": ["m3"], "default_unit": "m3", "scopes": ["individual", "common_property"], "default_scope": "individual", "segments": []},
+    {"code": "electricity", "label": "Электроэнергия", "units": ["kwh"], "default_unit": "kwh", "scopes": ["individual", "common_property"], "default_scope": "individual", "segments": [{"key": "day", "label": "День"}, {"key": "night", "label": "Ночь"}]},
+    {"code": "heating", "label": "Отопление", "units": ["gcal", "m2"], "default_unit": "gcal", "scopes": ["individual", "common_property"], "default_scope": "individual", "segments": []},
+    {"code": "maintenance", "label": "Содержание жилья", "units": ["m2"], "default_unit": "m2", "scopes": ["individual", "common_property"], "default_scope": "individual", "segments": []},
+    {"code": "capital_repair", "label": "Капитальный ремонт", "units": ["m2"], "default_unit": "m2", "scopes": ["individual"], "default_scope": "individual", "segments": []},
+    {"code": "waste", "label": "Обращение с ТКО", "units": ["person", "m2"], "default_unit": "person", "scopes": ["individual"], "default_scope": "individual", "segments": []},
+    {"code": "other", "label": "Прочее", "units": ["m3", "kwh", "gcal", "m2", "month", "person", "other"], "default_unit": null, "scopes": ["unspecified", "individual", "common_property"], "default_scope": "unspecified", "segments": []}
+  ]
+}

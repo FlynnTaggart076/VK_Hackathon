@@ -129,6 +129,11 @@ async function serve(route) {
     const value = receipts.get(oneReceipt[1]);
     return value ? ok(value) : fail(404, 'NOT_FOUND', 'Квитанция не найдена.');
   }
+  if (path === 'assistant/dialog' && method === 'POST') {
+    const text = body.message ? 'Для сравнения с учебной выборкой откройте числовой экран квитанции.' : 'Чем помочь? Напишите вопрос по квитанции.';
+    return ok({ status: 'answered', text, options: [], card: null, links: [], sources: [], actions: [], awaiting: null,
+      topic_id: null, menu: false, dataset_kind: 'synthetic' });
+  }
   if (path === 'assistant/answers' && method === 'POST') {
     return ok({ id: '60000000-0000-4000-8000-000000000001', created_at: now, stale: false, stale_reasons: [],
       status: 'answered', text: 'Для сравнения с учебной выборкой откройте числовой экран квитанции.',

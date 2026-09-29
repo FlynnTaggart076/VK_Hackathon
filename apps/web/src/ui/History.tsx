@@ -4,6 +4,11 @@ import { api } from '../api/client';
 import { PREVIEW_MODE } from '../api/appConfig';
 import type { Profile, ReceiptSummary } from '../api/types';
 import { ErrorMessage } from './errors';
+import { datasetKindLabel, formatMoney, formatPeriod, receiptStatusLabel } from './labels';
+
+const statusChip: Record<ReceiptSummary['status'], string> = {
+  queued: 'chip--info', processing: 'chip--info', needs_review: 'chip--warn', confirmed: 'chip--ok', failed: 'chip--warn',
+};
 
 export function History({ profile, onConsentChanged }: { profile: Profile; onConsentChanged: (enabled: boolean) => void }) {
   const navigate = useNavigate();
@@ -45,7 +50,7 @@ export function History({ profile, onConsentChanged }: { profile: Profile; onCon
       const blob = await api.source(item.id);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
-      anchor.href = url; anchor.download = `receipt-${item.period ?? 'source'}`;
+      anchor.href = url; anchor.download = `platezhka-${item.period ?? 'dokument'}`;
       anchor.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (cause) { setError(cause); }
@@ -74,16 +79,17 @@ export function History({ profile, onConsentChanged }: { profile: Profile; onCon
     {error !== null && <button type="button" disabled={busy} onClick={() => void load(cursor)}>Повторить загрузку истории</button>}
     {busy && <p role="status">Загружаем историю…</p>}
     {!busy && !error && items.length === 0 && <p>Документов пока нет.</p>}
-    <ul className="history-list">{items.map((item) => <li key={item.id} className="notice-box">
-      <strong>{item.period ?? 'Период не указан'} · {item.issuer_name ?? 'Организация не определена'}</strong>
-      <p>{item.status === 'confirmed' ? 'Подтверждена' : item.status === 'needs_review' ? 'Требует проверки' : item.status === 'queued' || item.status === 'processing' ? 'Обрабатывается' : 'Ошибка обработки'} · ревизия {item.revision}</p>
-      {item.dataset_kind === 'synthetic' && <p className="badge">Синтетический пример</p>}
-      {item.document_total_due !== null && <p>Итого по документу: {item.document_total_due} ₽</p>}
-      <p>{item.source_available ? 'Исходный файл доступен' : 'Исходный файл недоступен; извлечённые данные сохранены'}</p>
-      <div className="actions"><Link to={`/review?id=${encodeURIComponent(item.id)}`}>Открыть</Link>{item.status === 'confirmed' && <><Link to={`/assistant?receipt=${encodeURIComponent(item.id)}`}>Вопрос по платёжке</Link><Link to={`/city-comparison?receipt=${encodeURIComponent(item.id)}`}>{PREVIEW_MODE && item.dataset_kind === 'synthetic' ? 'Сравнить с учебной выборкой' : 'Сравнить с городом'}</Link></>}{item.status === 'queued' || item.status === 'processing' ? <button type="button" onClick={() => void resume(item)}>Продолжить обработку</button> : null}{item.source_available && <button type="button" onClick={() => void downloadSource(item)}>Исходный файл</button>}<button type="button" onClick={() => setConfirmId(item.id)}>Удалить</button></div>
-      {confirmId === item.id && <div className="notice-box" role="group" aria-label="Подтверждение удаления"><p>Удалить этот документ и связанные данные?</p><div className="actions"><button type="button" disabled={busy} onClick={() => void remove(item.id)}>Да, удалить</button><button type="button" onClick={() => setConfirmId(null)}>Отмена</button></div></div>}
+    <ul className="history-list">{items.map((item) => <li key={item.id} className="notice-box history-item">
+      <div className="head"><strong>{formatPeriod(item.period)} · {item.issuer_name ?? 'Организация не определена'}</strong>
+        <span className={`chip ${statusChip[item.status]}`}>{receiptStatusLabel(item.status)}</span></div>
+      <p className="notice">Период {item.period ?? 'не указан'} · версия {item.revision}</p>
+      {item.dataset_kind === 'synthetic' && <p className="badge">{datasetKindLabel(item.dataset_kind)}</p>}
+      {item.document_total_due !== null && <p>Итого по документу: {formatMoney(item.document_total_due)}</p>}
+      <p className="notice">{item.source_available ? 'Исходный файл доступен' : 'Исходный файл недоступен; извлечённые данные сохранены'}</p>
+      <div className="actions"><Link to={`/review?id=${encodeURIComponent(item.id)}`}>Открыть</Link>{item.status === 'confirmed' && <><Link to={`/assistant?receipt=${encodeURIComponent(item.id)}`}>Вопрос по платёжке</Link><Link to={`/city-comparison?receipt=${encodeURIComponent(item.id)}`}>{PREVIEW_MODE && item.dataset_kind === 'synthetic' ? 'Сравнить с учебной выборкой' : 'Сравнить с городом'}</Link></>}{item.status === 'queued' || item.status === 'processing' ? <button type="button" onClick={() => void resume(item)}>Продолжить обработку</button> : null}{item.source_available && <button type="button" className="secondary" onClick={() => void downloadSource(item)}>Исходный файл</button>}<button type="button" className="danger" onClick={() => setConfirmId(item.id)}>Удалить</button></div>
+      {confirmId === item.id && <div className="notice-box" role="group" aria-label="Подтверждение удаления"><p>Удалить этот документ и связанные данные?</p><div className="actions"><button type="button" className="danger" disabled={busy} onClick={() => void remove(item.id)}>Да, удалить</button><button type="button" className="secondary" onClick={() => setConfirmId(null)}>Отмена</button></div></div>}
     </li>)}</ul>
-    {nextCursor && <button type="button" disabled={busy} onClick={() => void load(nextCursor)}>Следующая страница</button>}
-    {cursor && <button type="button" disabled={busy} onClick={() => void load(null)}>К началу</button>}
+    {nextCursor && <button type="button" className="secondary" disabled={busy} onClick={() => void load(nextCursor)}>Следующая страница</button>}
+    {cursor && <button type="button" className="secondary" disabled={busy} onClick={() => void load(null)}>К началу</button>}
   </section>;
 }

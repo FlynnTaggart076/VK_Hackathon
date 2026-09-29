@@ -43,7 +43,8 @@ def _number(value: str, *, amount: bool = False) -> str | None:
 
 def _classify(name: str) -> tuple[str, str, str]:
     upper = name.upper()
-    scope = "common_property" if "ОДН" in upper else "individual"
+    # «ОДН» as a separate word only: «ХОЛОДНОЕ» and «ОДНОТАРИФНЫЙ» contain the same letters.
+    scope = "common_property" if re.search(r"(?<![А-ЯЁA-Z])ОДН(?![А-ЯЁA-Z])", upper) else "individual"
     if "ВЗНОС НА КАПИТАЛЬНЫЙ" in upper:
         return "capital_repair", scope, "Капитальный ремонт"
     if "СОДЕРЖАНИЕ ЖИЛОГО" in upper:
@@ -215,7 +216,7 @@ def parse_epd_text(text: str, receipt_id: UUID, *, engine_version: str = "0.1.0"
         if not product and quantity is not None and tariff is not None and charge is not None:
             issues.append(Issue(code="EPD_FORMULA_UNSUPPORTED", severity="warning", path=f"/services/{index}", message="Начисление не равно простому произведению объёма и тарифа."))
         if label == "Другая услуга":
-            issues.append(Issue(code="SERVICE_UNMAPPED", severity="warning", path=f"/services/{index}/service_code", message="Название услуги сохранено как other."))
+            issues.append(Issue(code="SERVICE_UNMAPPED", severity="warning", path=f"/services/{index}/service_code", message="Название услуги не опознано и сохранено как «Прочее»; выберите вид услуги вручную."))
         services.append({
             "line_id": line_id, "raw_name": raw_name, "service_code": code, "scope": scope,
             "unit": unit, "unit_label": unit_label, "quantity": quantity, "tariff": tariff,

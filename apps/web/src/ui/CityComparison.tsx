@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { PREVIEW_MODE } from '../api/appConfig';
 import type { CityComparisonView, ReceiptSummary, ReceiptView, SyntheticCityComparisonView } from '../api/types';
 import { ErrorMessage } from './errors';
+import { formatMoney, metricLabel, serviceLabel, unitLabel, unitText } from './labels';
 
 export function publishableCityResult(result: CityComparisonView | null): boolean {
   return !!result && result.provenance === 'confirmed_opted_in_real_receipts' && result.status === 'available' && result.sample_size !== null && result.sample_size >= 5 &&
@@ -38,8 +39,8 @@ function CohortResult({ title, result }: { title: string; result: CityComparison
   return <div className="notice-box">
     <h3>{title}</h3>
     {publishable ? <>
-      <p>{result.city} · {result.period} · {result.service_code} · {result.metric === 'tariff' ? 'тариф' : 'начисление по услуге'}{result.unit && ` · ${result.unit}`}</p>
-      <dl className="totals"><div><dt>Среднее</dt><dd>{result.average} ₽</dd></div><div><dt>Медиана</dt><dd>{result.median} ₽</dd></div><div><dt>Квитанций в выборке</dt><dd>{result.sample_size}</dd></div></dl>
+      <p>{result.city} · {result.period} · {serviceLabel(result.service_code)} · {metricLabel(result.metric)}{result.unit && ` · ${unitLabel(result.unit)}`}</p>
+      <dl className="totals"><div><dt>Среднее</dt><dd>{formatMoney(result.average)}</dd></div><div><dt>Медиана</dt><dd>{formatMoney(result.median)}</dd></div><div><dt>Квитанций в выборке</dt><dd>{result.sample_size}</dd></div></dl>
       <p className="notice">Источник: подтверждённые реальные квитанции участников, которые дали отдельное согласие.</p>
     </> : <p role="status">{result.provenance !== 'confirmed_opted_in_real_receipts' ? 'Источник городской статистики не подтверждён. Числа скрыты.'
       : result.status === 'ambiguous_city' ? 'Город определён неоднозначно. Сравнение недоступно.'
@@ -51,12 +52,12 @@ function CohortResult({ title, result }: { title: string; result: CityComparison
 function PreviewResult({ title, result }: { title: string; result: SyntheticCityComparisonView | null }) {
   if (!result) return null;
   const publishable = publishablePreviewResult(result);
-  const unit = result.metric === 'tariff' && result.unit ? `₽ за ${result.unit}` : '₽';
+  const unit = result.metric === 'tariff' && result.unit ? `₽ за ${unitLabel(result.unit)}` : '₽';
   return <div className="notice-box">
     <h3>{title}</h3>
     <p className="badge">Синтетическая учебная выборка — не данные жителей Москвы/МО</p>
     {publishable ? <>
-      <p>{result.city_label} · {result.period} · {result.service_code} · {result.metric === 'tariff' ? 'тариф' : 'начисление по услуге'} · {result.unit}</p>
+      <p>{result.city_label} · {result.period} · {serviceLabel(result.service_code)} · {metricLabel(result.metric)} · {unitLabel(result.unit)}</p>
       <dl className="totals"><div><dt>В вашей учебной квитанции</dt><dd>{result.receipt_value} {unit}</dd></div>
         <div><dt>Среднее в учебной выборке</dt><dd>{result.average} {unit}</dd></div>
         <div><dt>Медиана учебной выборки</dt><dd>{result.median} {unit}</dd></div>
@@ -188,8 +189,8 @@ export function CityComparison() {
         <button type="submit" disabled={busy || !serviceCode || duplicateService}>{busy ? 'Сравниваем…' : syntheticPreview ? 'Показать учебное сравнение' : 'Показать статистику'}</button>
       </form>}
       {serviceCode && <div className="notice-box"><h3>В вашей квитанции</h3>{receipt.bill_data.services.filter((line) => line.service_code === serviceCode).map((line) =>
-        <p key={line.line_id}>{line.raw_name}: {metric === 'tariff' ? (line.tariff === null ? 'тариф не указан' : `${line.tariff} ₽${line.unit_label ? ` за ${line.unit_label}` : ''}`)
-          : (line.charge_amount === null ? 'начисление не указано' : `${line.charge_amount} ₽`)}</p>)}</div>}
+        <p key={line.line_id}>{line.raw_name}: {metric === 'tariff' ? (line.tariff === null ? 'тариф не указан' : `${line.tariff} ₽${unitText(line.unit, line.unit_label) ? ` за ${unitText(line.unit, line.unit_label)}` : ''}`)
+          : (line.charge_amount === null ? 'начисление не указано' : formatMoney(line.charge_amount))}</p>)}</div>}
     </>}
     <CohortResult title="Выбранный месяц" result={currentResult} />
     <CohortResult title="Ранний месяц" result={olderResult} />

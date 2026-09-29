@@ -23,7 +23,7 @@ try {
   });
   const transientRecord = watchDevEntry(transient);
   await transient.goto(base, { waitUntil: 'domcontentloaded' });
-  await transient.getByRole('button', { name: 'Повторить загрузку API' }).waitFor();
+  await transient.getByRole('button', { name: 'Повторить загрузку данных' }).waitFor();
   const initialAttempts = attempts;
   recovered = true;
   await waitForDevEntry(transient, transientRecord, 'transient-test');
@@ -39,7 +39,7 @@ try {
   });
   const persistentRecord = watchDevEntry(persistent);
   await persistent.goto(base, { waitUntil: 'domcontentloaded' });
-  await persistent.getByRole('button', { name: 'Повторить загрузку API' }).waitFor();
+  await persistent.getByRole('button', { name: 'Повторить загрузку данных' }).waitFor();
   const initialPermanentAttempts = permanentAttempts;
   let diagnosed = false;
   let diagnosis = '';

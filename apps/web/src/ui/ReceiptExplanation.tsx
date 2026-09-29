@@ -4,8 +4,10 @@ import { api } from '../api/client';
 import { PREVIEW_MODE } from '../api/appConfig';
 import type { ReceiptExplanation as Explanation, ReceiptView } from '../api/types';
 import { ErrorMessage } from './errors';
+import { datasetKindLabel, formatMoney, formatPeriod, reconciliationFieldLabel, reconciliationLabel } from './labels';
 
-function amount(value: string | null): string { return value === null ? 'Неизвестно' : `${value} ₽`; }
+const amount = formatMoney;
+const reconciliationChip = { matched: 'chip--ok', mismatch: 'chip--warn', incomplete: 'chip--warn', unsupported: 'chip--info' } as const;
 
 export function ReceiptExplanation() {
   const [params] = useSearchParams();
@@ -28,29 +30,33 @@ export function ReceiptExplanation() {
   }, [id, reload]);
   return <section className="panel"><h2>Объяснение платёжки</h2>
     {!id && <p>Документ не выбран. <Link to="/upload">Загрузить платёжку</Link></p>}
-    {loading && <p role="status">Получаем подтверждённую ревизию и объяснение…</p>}
+    {loading && <p role="status">Получаем подтверждённую версию и объяснение…</p>}
     <ErrorMessage error={error} />
     {id && error !== null && <button type="button" onClick={() => setReload((value) => value + 1)}>Повторить</button>}
     {receipt && receipt.status !== 'confirmed' && <p role="status">Документ ещё не подтверждён. <Link to={`/review?id=${encodeURIComponent(receipt.id)}`}>Проверить данные</Link></p>}
-    {receipt?.status === 'confirmed' && !explanation && !loading && !error && <p>Объяснение для текущей ревизии пока отсутствует.</p>}
+    {receipt?.status === 'confirmed' && !explanation && !loading && !error && <p>Объяснение для текущей версии пока отсутствует.</p>}
     {explanation && <>
-      <p className="badge">{receipt?.dataset_kind === 'synthetic' ? 'Синтетический пример' : 'Загруженный пользователем файл'} · ревизия {explanation.receipt_ref.revision}</p>
+      <div className="chips">
+        <span className="chip">{datasetKindLabel(receipt?.dataset_kind)}</span>
+        <span className="chip">Версия {explanation.receipt_ref.revision}</span>
+        {receipt && <span className="chip">{formatPeriod(receipt.bill_data.period)}</span>}
+      </div>
       <p>{explanation.summary}</p>
-      <dl className="totals"><dt>Начислено за период</dt><dd>{amount(explanation.current_charges)}</dd>
+      <dl className="totals card"><dt>Начислено за период</dt><dd>{amount(explanation.current_charges)}</dd>
         <dt>К оплате по документу</dt><dd>{amount(explanation.document_total_due)}</dd>
         <dt>Расчётный остаток</dt><dd>{amount(explanation.calculated_closing_balance)}</dd>
         <dt>Расчётный итог к оплате</dt><dd>{amount(explanation.calculated_total_due)}</dd>
         <dt>Разница, которую не удалось объяснить</dt><dd>{amount(explanation.unexplained_difference)}</dd></dl>
-      <p>Сверка: {explanation.reconciliation_status === 'matched' ? 'совпадает' : explanation.reconciliation_status === 'mismatch' ? 'есть различие' : explanation.reconciliation_status === 'incomplete' ? 'неполные данные' : 'формула не поддерживается'}.</p>
+      <p>Сверка: <span className={`chip ${reconciliationChip[explanation.reconciliation_status]}`}>{reconciliationLabel(explanation.reconciliation_status)}</span></p>
       <h3>Строки</h3>
       {!explanation.lines.length && <p>Разбор отдельных строк пока не доступен.</p>}
       {explanation.lines.map((line) => <article className="notice-box" key={line.line_id}><h4>{line.title}</h4><p>{line.explanation}</p>
-        {line.formula_text && <p>Формула сервера: {line.formula_text}</p>}
+        {line.formula_text && <p className="notice">Формула сервера: {line.formula_text}</p>}
         <p>Рассчитано: {amount(line.calculated_amount)}; разница: {amount(line.difference)}.</p>
         {line.issues.map((issue, index) => <p key={`${issue.code}-${index}`} className="review-warning">{issue.message}</p>)}
       </article>)}
       {explanation.balance_components.length > 0 && <><h3>Состав остатка</h3><dl className="totals">{explanation.balance_components.map((item) => <div key={item.code}><dt>{item.label}</dt><dd>{amount(item.amount)}</dd></div>)}</dl></>}
-      {explanation.reconciliation_checks.length > 0 && <><h3>Проверки</h3><ul>{explanation.reconciliation_checks.map((item, index) => <li key={index}>{item.field}: документ {amount(item.document_value)}, расчёт {amount(item.calculated_value)}, разница {amount(item.difference)} · {item.status}</li>)}</ul></>}
+      {explanation.reconciliation_checks.length > 0 && <><h3>Проверки</h3><ul>{explanation.reconciliation_checks.map((item, index) => <li key={index}>{reconciliationFieldLabel(item.field)}: документ {amount(item.document_value)}, расчёт {amount(item.calculated_value)}, разница {amount(item.difference)} · {reconciliationLabel(item.status).toLowerCase()}</li>)}</ul></>}
       {explanation.issues.length > 0 && <><h3>Ограничения и предупреждения</h3><ul>{explanation.issues.map((item, index) => <li key={`${item.code}-${index}`}>{item.message}</li>)}</ul></>}
       <h3>Источники</h3>
       {!explanation.sources.length && <p>Внешние источники для этого расчёта не указаны; цифры берутся из подтверждённой платёжки.</p>}

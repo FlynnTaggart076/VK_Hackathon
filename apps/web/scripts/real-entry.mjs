@@ -49,7 +49,7 @@ async function failure(page, record, stage, reason) {
 
 export async function waitForDevEntry(page, record, stage) {
   const login = page.getByRole('button', { name: 'Войти в dev' });
-  const retry = page.getByRole('button', { name: 'Повторить загрузку API' });
+  const retry = page.getByRole('button', { name: 'Повторить загрузку данных' });
   try {
     await Promise.any([login.waitFor({ state: 'visible', timeout: 15000 }), retry.waitFor({ state: 'visible', timeout: 15000 })]);
   } catch { await failure(page, record, stage, 'neither dev login nor API retry appeared within 15 s'); }

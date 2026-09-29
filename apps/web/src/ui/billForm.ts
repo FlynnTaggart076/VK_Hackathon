@@ -3,9 +3,15 @@ import type { BillData } from '../api/types';
 const money = /^-?(?:0|[1-9][0-9]{0,8})\.[0-9]{2}$/;
 const decimal = /^-?(?:0|[1-9][0-9]{0,8})(?:\.[0-9]{1,6})?$/;
 
+/**
+ * Accepts what people type or paste: spaces and non-breaking spaces between digit groups,
+ * a comma as the decimal mark, the typographic minus. «-0.00» becomes «0.00» so that
+ * the server does not report a false mismatch. Values that are still invalid are returned as typed.
+ */
 export function normalizeNumber(value: string | null, kind: 'money' | 'decimal'): string | null {
   if (value === null || !value.trim()) return null;
-  const input = value.trim().replace(',', '.');
+  let input = value.replace(/[\s  ]/g, '').replace(/−/g, '-').replace(/,/g, '.');
+  if (/^-0(?:\.0*)?$/.test(input)) input = input.slice(1);
   if (kind === 'decimal') return input;
   if (/^-?(?:0|[1-9][0-9]{0,8})$/.test(input)) return `${input}.00`;
   if (/^-?(?:0|[1-9][0-9]{0,8})\.[0-9]$/.test(input)) return `${input}0`;

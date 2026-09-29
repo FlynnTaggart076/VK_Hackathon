@@ -112,7 +112,7 @@ export function Assistant() {
     <h2>Помощник</h2>
     <p className="notice">Найду управляющую компанию и поставщиков по адресу дома, подскажу, куда передать показания, и объясню квитанцию. Ничего никуда не отправляю.</p>
     {receiptId && <div className="notice-box">
-      <p>Документ: {receipt ? `${receipt.bill_data.period ?? 'без периода'} · ревизия ${receipt.revision}` : 'загружаем…'}</p>
+      <p>Документ: {receipt ? `${receipt.bill_data.period ?? 'без периода'} · версия ${receipt.revision}` : 'загружаем…'}</p>
       {receipt && receipt.status !== 'confirmed' && <p className="review-warning">Вопросы по документу доступны после подтверждения его данных. <Link to={`/review?id=${encodeURIComponent(receipt.id)}`}>Проверить данные</Link></p>}
       {receipt?.dataset_kind === 'synthetic' && <p className="badge">Синтетический пример</p>}
       {PREVIEW_MODE && confirmed?.dataset_kind === 'synthetic' && <p><Link to={`/city-comparison?receipt=${encodeURIComponent(confirmed.id)}`}>Сравнить с учебной выборкой</Link> — отдельное числовое сравнение, без данных реальных жителей.</p>}

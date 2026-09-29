@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import type { Catalog, DraftView, ReceiptView } from '../api/types';
 import { ErrorMessage } from './errors';
 import { ActionList } from './ActionList';
+import { datasetKindLabel, formatMoney } from './labels';
 
 export function Draft({ catalog }: { catalog: Catalog | null }) {
   const [params, setParams] = useSearchParams();
@@ -59,10 +60,10 @@ export function Draft({ catalog }: { catalog: Catalog | null }) {
     <ErrorMessage error={error} />
     {!receiptId && !draftId && <p>Черновик можно подготовить без квитанции или по подтверждённой квитанции из <Link to="/history">истории</Link>.</p>}
     {receipt && <div className="notice-box"><h3>Факты для сверки</h3>
-      {receipt.dataset_kind === 'synthetic' && <p className="badge">Синтетический пример</p>}
-      <p>{receipt.bill_data.period ?? 'Период не указан'} · {receipt.bill_data.issuer_name ?? 'Организация не определена'} · ревизия {receipt.revision}</p>
-      <p>Итого по документу: {receipt.bill_data.document_total_due ?? 'нет данных'} ₽</p>
-      {receipt.bill_data.services.map((line) => <p key={line.line_id}>{line.raw_name}: {line.charge_amount ?? 'нет суммы'} ₽</p>)}
+      {receipt.dataset_kind === 'synthetic' && <p className="badge">{datasetKindLabel(receipt.dataset_kind)}</p>}
+      <p>{receipt.bill_data.period ?? 'Период не указан'} · {receipt.bill_data.issuer_name ?? 'Организация не определена'} · версия {receipt.revision}</p>
+      <p>Итого по документу: {receipt.bill_data.document_total_due === null ? 'нет данных' : formatMoney(receipt.bill_data.document_total_due)}</p>
+      {receipt.bill_data.services.map((line) => <p key={line.line_id}>{line.raw_name}: {line.charge_amount === null ? 'нет суммы' : formatMoney(line.charge_amount)}</p>)}
       {receipt.status !== 'confirmed' && <p className="review-warning">Создать черновик можно после подтверждения квитанции.</p>}
     </div>}
     {!draft && !draftId && (!receiptId || receipt?.status === 'confirmed') && <form onSubmit={(event) => void create(event)}>

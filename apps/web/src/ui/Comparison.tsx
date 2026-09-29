@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import type { ComparisonView, ReceiptSummary } from '../api/types';
 import { ErrorMessage } from './errors';
 import { ActionList } from './ActionList';
+import { datasetKindLabel, formatMoney, lineMatchLabel } from './labels';
 
 export function Comparison() {
   const [items, setItems] = useState<ReceiptSummary[]>([]);
@@ -38,7 +39,7 @@ export function Comparison() {
     catch (cause) { setError(cause); }
     finally { setBusy(false); }
   }
-  const label = (item: ReceiptSummary) => `${item.period ?? 'без периода'} · ${item.issuer_name ?? 'без организации'} · рев. ${item.revision}`;
+  const label = (item: ReceiptSummary) => `${item.period ?? 'без периода'} · ${item.issuer_name ?? 'без организации'} · версия ${item.revision}`;
   return <section className="panel">
     <h2>Сравнение квитанций</h2>
     <p>Денежные разницы и причины возвращает сервер. Проверьте документы перед выводом.</p>
@@ -50,12 +51,12 @@ export function Comparison() {
     </form>
     <ErrorMessage error={error} />
     {result && <article aria-live="polite" className="answer">
-      {result.dataset_kind === 'synthetic' && <p className="badge">Синтетический пример</p>}
+      {result.dataset_kind === 'synthetic' && <p className="badge">{datasetKindLabel(result.dataset_kind)}</p>}
       <h3>{result.status === 'complete' ? 'Сравнение готово' : result.status === 'partial' ? 'Частичное сравнение' : 'Подтвердите совпадение документов'}</h3>
       <p>{result.older.period ?? 'Период не указан'} → {result.newer.period ?? 'Период не указан'}</p>
       {result.status === 'needs_identity_confirmation' ? <div className="notice-box"><p>Лицевой счёт или адрес не совпадает либо отсутствует. Итоговые разницы скрыты до вашего подтверждения.</p><label className="check"><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} />Я сверил исходные документы и подтверждаю, что их можно сравнить</label><button type="button" disabled={!acknowledged || busy} onClick={() => void compare(true)}>Продолжить сравнение</button></div> : <>
-        <dl className="totals"><div><dt>Разница начислений</dt><dd>{result.delta_current_charges ?? 'не определена'} ₽</dd></div><div><dt>Разница перерасчётов</dt><dd>{result.delta_adjustments ?? 'не определена'} ₽</dd></div><div><dt>Разница к оплате</dt><dd>{result.delta_total_due ?? 'не определена'} ₽</dd></div></dl>
-        {result.lines.map((line, index) => <div className="notice-box" key={`${line.older_line_id}-${line.newer_line_id}-${index}`}><h4>{line.label}</h4><p>{line.match_status === 'matched' ? 'Сопоставлена' : line.match_status === 'ambiguous' ? 'Сопоставление неоднозначно' : line.match_status === 'incompatible' ? 'Несовместимая строка' : line.match_status === 'added' ? 'Новая строка' : 'Строка отсутствует в новом документе'}</p><p>{line.explanation}</p><dl className="totals"><div><dt>Разница строки</dt><dd>{line.delta ?? 'не определена'} ₽</dd></div><div><dt>Влияние объёма</dt><dd>{line.quantity_effect ?? 'не определено'} ₽</dd></div><div><dt>Влияние тарифа</dt><dd>{line.tariff_effect ?? 'не определено'} ₽</dd></div></dl></div>)}
+        <dl className="totals"><div><dt>Разница начислений</dt><dd>{result.delta_current_charges === null ? 'не определена' : formatMoney(result.delta_current_charges)}</dd></div><div><dt>Разница перерасчётов</dt><dd>{result.delta_adjustments === null ? 'не определена' : formatMoney(result.delta_adjustments)}</dd></div><div><dt>Разница к оплате</dt><dd>{result.delta_total_due === null ? 'не определена' : formatMoney(result.delta_total_due)}</dd></div></dl>
+        {result.lines.map((line, index) => <div className="notice-box" key={`${line.older_line_id}-${line.newer_line_id}-${index}`}><h4>{line.label}</h4><p>{lineMatchLabel(line.match_status)}</p><p>{line.explanation}</p><dl className="totals"><div><dt>Разница строки</dt><dd>{line.delta === null ? 'не определена' : formatMoney(line.delta)}</dd></div><div><dt>Влияние объёма</dt><dd>{line.quantity_effect === null ? 'не определено' : formatMoney(line.quantity_effect)}</dd></div><div><dt>Влияние тарифа</dt><dd>{line.tariff_effect === null ? 'не определено' : formatMoney(line.tariff_effect)}</dd></div></dl></div>)}
       </>}
       {result.issues.map((issue, index) => <p className="review-warning" key={`${issue.code}-${index}`}>{issue.message}</p>)}
       <ActionList actions={result.actions} />

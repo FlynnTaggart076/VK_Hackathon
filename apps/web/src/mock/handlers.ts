@@ -63,10 +63,10 @@ const catalog: Catalog = {
 };
 
 const bill: BillData = {
-  schema_version: '1.0', period: '2026-08', currency: 'RUB', issuer_name: 'Demo Housing Organization',
-  provider_id: null, account_number: '000123', address_text: 'Demo City, Example Street 1, Flat 1',
+  schema_version: '1.0', period: '2026-08', currency: 'RUB', issuer_name: 'Учебная управляющая организация',
+  provider_id: null, account_number: '000123', address_text: 'Учебный город, Примерная улица, дом 1, квартира 1',
   template_id: 'demo-bill-v1', template_version: '1.0',
-  services: [{ line_id: '20000000-0000-4000-8000-000000000001', raw_name: 'Cold water (m3)', service_code: 'cold_water',
+  services: [{ line_id: '20000000-0000-4000-8000-000000000001', raw_name: 'Холодная вода', service_code: 'cold_water',
     scope: 'individual', unit: 'm3', unit_label: null, quantity: '5.000000', tariff: '40.000000', charge_amount: '200.00',
     supplier_key: null, segment_key: null, calculation_kind: 'simple_product' }],
   adjustments: [], settlement: { formula_kind: 'signed_balance_v1', opening_balance: '0.00', payments_credited: '0.00',
@@ -91,7 +91,7 @@ const meta: MetaResponse = {
   api_version: '1.0', engine_version: 'mock-engine-1', knowledge_version: 'mock-knowledge-1', mode: 'dev',
   limits: { upload_max_bytes: 10485760, pdf_max_pages: 3, receipt_retention_days: 30, source_retention_days: 7 },
   features: { voice: false, external_submission: false, receipt_ocr: true, comparison: true, engine_stub: false, demo_auth: true },
-  privacy_notice: { version: 'mock-1', text: 'Учебные данные. Не загружайте настоящие документы.' },
+  privacy_notice: { version: '1.0', text: 'Учебные данные. Не загружайте настоящие документы.' },
 };
 const queuedReceipt: ReceiptView = {
   ...partialReceipt, id: receiptId, status: 'queued', extraction_outcome: null,
@@ -112,7 +112,7 @@ let currentReceipt: ReceiptView = { ...queuedReceipt };
 let jobReads = 0;
 let currentDemoId: string | null = null;
 const sampleSummary = (id: string, period: string, amount: string): ReceiptSummary => ({
-  id, status: 'confirmed', revision: 3, period, issuer_name: 'Demo Housing Organization',
+  id, status: 'confirmed', revision: 3, period, issuer_name: 'Учебная управляющая организация',
   document_total_due: amount, dataset_kind: 'synthetic', created_at: now, source_available: true,
 });
 const samples: ReceiptSummary[] = [
@@ -306,7 +306,7 @@ export const handlers = [
       text: unsupported ? 'Для этого вопроса пока нет проверенной карточки.' : needsService ? 'Уточните услугу, чтобы выбрать поставщика.' : needsOrganization ? 'Уточните организацию для учебного сценария.' : needsDocument ? 'По слову «справка» нельзя определить порядок получения документа.' : 'Это учебный ответ. Проверьте объём и тариф в двух платёжках; вывод о правильности начисления здесь не делается.',
       topic_id: unsupported ? null : input.context.topic_id || 'bill_change', steps: [],
       sources: unsupported || needsClarification ? [] : [{ id: 'mock-source', title: 'Учебная карточка темы', url: null,
-        territory_id: 'demo-territory', verified_at: now, review_after: '2026-10-27T10:00:00Z', content_version: 'mock-1', is_synthetic: true }],
+        territory_id: 'demo-territory', verified_at: now, review_after: '2026-10-27T10:00:00Z', content_version: '1.0', is_synthetic: true }],
       actions: [], clarification: probeField ? { field: probeField, prompt: `Уточните поле ${probeField}`, options: probeField === 'territory_id' ? [{ value: 'moscow', label: 'Москва' }] : probeField === 'role' ? [{ value: 'owner', label: 'Собственник' }] : probeField === 'organization_id' ? [{ value: 'org-demo', label: 'УК Пример' }] : [] }
         : needsService ? { field: 'service_code', prompt: 'По какой услуге возник вопрос?', options: [] }
         : needsOrganization ? { field: 'organization_id', prompt: 'Какая организация указана?', options: [] }

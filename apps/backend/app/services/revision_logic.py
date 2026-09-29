@@ -50,6 +50,33 @@ def _pointer(parts: list[str]) -> str:
     return "/" + "/".join(part.replace("~", "~0").replace("/", "~1") for part in parts)
 
 
+def rebase_issues(old: dict, new: dict, issues: list[dict]) -> list[dict]:
+    """Keep only the extraction issues that still describe the edited bill.
+
+    Paths are followed by stable line IDs, so deleting or reordering lines never moves an
+    issue onto another line. An issue is dropped when its line was removed, when the user
+    changed exactly the value it points to (for example the service code of an unrecognised
+    line), and when it is an extraction error: a saved manual edit supersedes a failed parse,
+    and the bill is validated again anyway.
+    """
+    kept: list[dict] = []
+    for item in issues:
+        if item.get("severity") == "error":
+            continue
+        path = item.get("path")
+        if not path:
+            kept.append(item)
+            continue
+        parts = [part.replace("~1", "/").replace("~0", "~") for part in path.split("/")[1:]]
+        mapped = _map_path(parts, old, new)
+        if not mapped:
+            continue
+        if len(parts) >= 3 and _at(old, parts) != _at(new, mapped):
+            continue
+        kept.append(dict(item, path=_pointer(mapped)))
+    return kept
+
+
 def rebase_evidence(old: dict, new: dict, evidence: list[dict]) -> list[dict]:
     old_by_new: dict[str, object] = {}
     for path in _leaf_paths(old):

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP, localcontext
 
 from .dto import BillData, Issue, ValidationResult
+from .service_catalog import service_warnings
 
 
 CENT = Decimal("0.01")
@@ -135,6 +136,7 @@ def validate_bill(bill: BillData) -> ValidationResult:
             warning("IDENTITY_INCOMPLETE", f"/{name}", "Реквизит отсутствует; сравнение потребует дополнительной проверки.")
     if bill.document_total_due is None:
         warning("TOTAL_DUE_UNKNOWN", "/document_total_due", "Сумма к оплате не указана.")
+    warnings.extend(service_warnings(bill))
 
     math = calculate_bill(bill)
     for check in math.checks:

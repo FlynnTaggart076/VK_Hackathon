@@ -77,11 +77,11 @@ try {
   const conflict = page.waitForResponse((response) => response.url().includes(`/receipts/${receiptId}/draft`) && response.status() === 409);
   await page.getByRole('button', { name: 'Сохранить исправления' }).click();
   await conflict;
-  await page.getByRole('button', { name: 'Применить мои правки к актуальной ревизии' }).waitFor();
+  await page.getByRole('button', { name: 'Применить мои правки к актуальной версии' }).waitFor();
   if (await issuer.inputValue() !== `${originalIssuer} (мой ввод)`) throw new Error('409 discarded unsaved local edit');
-  await page.getByRole('button', { name: 'Применить мои правки к актуальной ревизии' }).click();
+  await page.getByRole('button', { name: 'Применить мои правки к актуальной версии' }).click();
   await page.getByRole('button', { name: 'Сохранить исправления' }).click();
-  await page.getByText('ревизия 3').first().waitFor();
+  await page.getByText('версия 3').first().waitFor();
   if (await issuer.inputValue() !== `${originalIssuer} (мой ввод)`) throw new Error('Conflict resolution saved different value');
 
   await checkLayout(page, 360);

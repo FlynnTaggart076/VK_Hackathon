@@ -5,6 +5,7 @@ import { PREVIEW_MODE } from '../api/appConfig';
 import type { Catalog, Job, MetaResponse, Profile, ReceiptQueued } from '../api/types';
 import { canUpload } from './Onboarding';
 import { ErrorMessage } from './errors';
+import { jobStageLabel, jobStateLabel } from './labels';
 
 export function Upload({ meta, profile, catalog, onQueued }: {
   meta: MetaResponse; profile: Profile | null; catalog: Catalog | null; onQueued: (value: ReceiptQueued) => void;
@@ -40,17 +41,19 @@ export function Upload({ meta, profile, catalog, onQueued }: {
     <h2>Загрузка платёжки</h2>
     {PREVIEW_MODE ? <p className="review-warning">Публичный учебный стенд: не загружайте личные квитанции. Для проверки выберите синтетический образец ниже.</p> :
       <p>PDF, JPEG или PNG; до {Math.floor(meta.limits.upload_max_bytes / 1024 / 1024)} МБ и {meta.limits.pdf_max_pages} страниц PDF.</p>}
-    {meta.features.engine_stub && <p className="badge">Dev stub: файл будет поставлен в очередь, OCR пока не выполняется.</p>}
+    {meta.features.engine_stub && <p className="badge">Учебный режим: файл встанет в очередь, распознавание пока не выполняется.</p>}
     {!canUpload(profile, meta) ? <>
       <p role="status">Перед загрузкой заполните профиль и подтвердите актуальное уведомление. Общий вопрос можно задать после входа без загрузки документа.</p>
       <Link to="/onboarding">Перейти к первому запуску</Link>
     </> : !PREVIEW_MODE && <form onSubmit={(event) => void submit(event)}>
-      <label htmlFor="receipt-file">Файл платёжки</label>
-      <input id="receipt-file" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={(event) => {
-        setFile(event.target.files?.[0] ?? null); setKey(event.target.files?.[0] ? crypto.randomUUID() : null); setError(null);
-      }} />
+      <div className="upload-drop">
+        <input id="receipt-file" className="sr-only" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={(event) => {
+          setFile(event.target.files?.[0] ?? null); setKey(event.target.files?.[0] ? crypto.randomUUID() : null); setError(null);
+        }} />
+        <label htmlFor="receipt-file" className="btn secondary file-button">Выбрать файл платёжки</label>
+        <p className="notice">{file ? `Выбран файл: ${file.name}` : 'Файл не выбран'}</p>
+      </div>
       <button type="submit" disabled={busy || !file}>{busy ? 'Загружаем…' : 'Загрузить'}</button>
-      {file && <p>Выбран файл: {file.name}</p>}
       <ErrorMessage error={error} />
       {error !== null && <p className="notice">{error instanceof ApiRequestError && error.status === 413
         ? 'Выберите файл меньшего размера в пределах указанного лимита.'
@@ -58,7 +61,7 @@ export function Upload({ meta, profile, catalog, onQueued }: {
           ? 'Выберите файл заново, чтобы начать новую загрузку.'
           : 'После сетевого сбоя можно повторить тот же файл.'}</p>}
     </form>}
-    {canUpload(profile, meta) && !!catalog?.demo_receipts.length && <div className="notice-box"><h3>Учебные образцы</h3><p>Синтетические документы выдаются после входа и обрабатываются сервером. Проверьте цифры перед подтверждением.</p><div className="actions">{catalog.demo_receipts.map((sample) => <button key={sample.fixture_id} type="button" disabled={busy} onClick={() => void uploadDemo(sample.fixture_id)}>Загрузить образец · {sample.label}</button>)}</div></div>}
+    {canUpload(profile, meta) && !!catalog?.demo_receipts.length && <div className="notice-box"><h3>Учебные образцы</h3><p>Синтетические документы выдаются после входа и обрабатываются сервером. Проверьте цифры перед подтверждением.</p><div className="sample-list">{catalog.demo_receipts.map((sample) => <button key={sample.fixture_id} type="button" disabled={busy} onClick={() => void uploadDemo(sample.fixture_id)}>Загрузить образец · {sample.label}</button>)}</div></div>}
   </section>;
 }
 
@@ -121,10 +124,10 @@ export function Processing({ stub }: { stub: boolean }) {
     {jobId && <>
       <p>Номер задания: {jobId}</p>
       {busy && <p role="status">Получаем состояние…</p>}
-      {job && <p role="status">Состояние: {job.state === 'queued' ? 'в очереди' : job.state === 'running' ? 'обработка выполняется' : job.state === 'failed' ? 'ошибка обработки' : stub ? 'dev обработка завершена без распознавания; требуется ручной ввод' : 'обработка завершена'}.</p>}
-      {job?.stage && <p>Шаг: {job.stage}</p>}
+      {job && <p role="status">Состояние: {job.state === 'succeeded' && stub ? 'учебная обработка завершена без распознавания; нужен ручной ввод' : jobStateLabel(job.state).toLowerCase()}.</p>}
+      {job?.stage && <p>Шаг: {jobStageLabel(job.stage).toLowerCase()}</p>}
       {job?.error && <p role="alert">{job.error.message}</p>}
-      {stub && <p className="badge">Dev stub: задание завершится без OCR; для платёжки потребуется ручной ввод.</p>}
+      {stub && <p className="badge">Учебный режим: обработка завершится без распознавания; данные платёжки нужно будет ввести вручную.</p>}
       {job?.state === 'succeeded' && job.receipt_id && <p><Link to={`/review?id=${encodeURIComponent(job.receipt_id)}`}>Проверить данные платёжки</Link></p>}
       {job?.state === 'failed' && <div className="notice-box">
         <p>Обработка не удалась. Можно запустить её ещё раз или открыть документ из истории и ввести данные вручную.</p>

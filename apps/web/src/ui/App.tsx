@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import { api, ApiRequestError, hasSessionToken, setSessionToken } from '../api/client';
 import { PREVIEW_MODE } from '../api/appConfig';
 import { previewAuth } from '../api/previewAuth';
@@ -17,9 +18,19 @@ import { Assistant } from './Assistant';
 import { ErrorMessage } from './errors';
 
 const mockEnabled = import.meta.env.DEV && !PREVIEW_MODE && import.meta.env.VITE_ENABLE_MOCK === 'true';
-const screens = [
-  { path: '/', title: 'Главная', text: 'Вопросы, платёжки, история и учебные примеры.', states: 'пустая история, demo-пометка' },
-] as const;
+
+const icons: Record<string, ReactNode> = {
+  home: <path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />,
+  chat: <path d="M4 5h16v11H9l-5 4z" />,
+  receipt: <><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" /><path d="M9 8h6M9 12h6" /></>,
+  history: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+};
+const tabs = [
+  { to: '/', label: 'Главная', icon: 'home', paths: ['/'] },
+  { to: '/assistant', label: 'Помощник', icon: 'chat', paths: ['/assistant', '/draft'] },
+  { to: '/upload', label: 'Платёжка', icon: 'receipt', paths: ['/upload', '/processing', '/review', '/explanation'] },
+  { to: '/history', label: 'История', icon: 'history', paths: ['/history', '/comparison', '/city-comparison'] },
+];
 
 function Entry({ meta, sessionExpired, onAuth }: { meta: MetaResponse | null; sessionExpired: boolean; onAuth: (profile: Profile) => void }) {
   const [busy, setBusy] = useState(false);
@@ -74,7 +85,7 @@ function Entry({ meta, sessionExpired, onAuth }: { meta: MetaResponse | null; se
       {error && <button type="button" disabled={busy} onClick={() => void enterPreview()}>Повторить учебный вход</button>}
       {busy && <p role="status">Открываем учебный стенд…</p>}
     </> : <p>В рабочей версии вход происходит в MAX после проверки стартовых данных сервером.</p>}
-    {meta && <p>API {meta.api_version} · База знаний {meta.knowledge_version ?? 'ещё не подключена'}</p>}
+    {import.meta.env.DEV && meta && <p className="notice">Версия интерфейса обмена {meta.api_version} · база знаний {meta.knowledge_version ?? 'ещё не подключена'}</p>}
     {PREVIEW_MODE ? null : mockEnabled ? <button type="button" onClick={() => void enterDemo()} disabled={busy}>{busy ? 'Входим…' : 'Войти в учебный mock'}</button> :
       import.meta.env.DEV && meta?.features.demo_auth ? <form onSubmit={(event) => void enterDemo(event)}>
         <p className="badge">Локальный dev вход. Код задаётся при запуске backend и не сохраняется в браузере.</p>
@@ -95,23 +106,32 @@ function Entry({ meta, sessionExpired, onAuth }: { meta: MetaResponse | null; se
   </section>;
 }
 
-function Page({ path }: { path: typeof screens[number]['path'] }) {
-  const screen = screens.find((item) => item.path === path)!;
+function Home() {
   return <section className="panel">
-    <h2>{screen.title}</h2>
-    {path === '/' ? <>
-      <p>Задайте вопрос, разберите платёжку или вернитесь к истории.</p>
-      {mockEnabled && <p className="badge">Учебный mock · синтетические данные</p>}
-      <div className="actions"><Link to="/assistant">Задать вопрос</Link><Link to="/upload">Разобрать платёжку</Link></div>
-      <h3>Частые вопросы</h3>
-      <div className="actions">
-        <Link to="/assistant?topic=supplier_contacts">Контакты поставщика</Link>
-        <Link to="/assistant?topic=management_contacts">Контакты УК</Link>
-        <Link to="/assistant?topic=meter_readings">Передать показания</Link>
-        <Link to="/assistant?topic=service_issue">Проблема с услугой</Link>
-      </div>
-    </> : <><p>{screen.text}</p><p className="notice">Этот экран ожидает реализацию следующего этапа.</p><p>Состояния для реализации: {screen.states}.</p></>}
+    <h2>Главная</h2>
+    <p>Разберите платёжку по шагам или задайте вопрос о ЖКХ. Ничего никуда не отправляется.</p>
+    {mockEnabled && <p className="badge">Учебный режим · синтетические данные</p>}
+    <div className="actions"><Link className="btn" to="/upload">Разобрать платёжку</Link><Link to="/assistant">Задать вопрос</Link></div>
+    <h3>Частые вопросы</h3>
+    <div className="actions">
+      <Link to="/assistant?topic=supplier_contacts">Контакты поставщика</Link>
+      <Link to="/assistant?topic=management_contacts">Контакты УК</Link>
+      <Link to="/assistant?topic=meter_readings">Передать показания</Link>
+      <Link to="/assistant?topic=service_issue">Проблема с услугой</Link>
+    </div>
   </section>;
+}
+
+function TabBar() {
+  const { pathname } = useLocation();
+  return <nav className="tabbar" aria-label="Основная навигация"><div className="tabbar-inner">
+    {tabs.map((tab) => {
+      const active = tab.paths.includes(pathname);
+      return <Link key={tab.to} to={tab.to} aria-current={active ? 'page' : undefined}>
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">{icons[tab.icon]}</svg>{tab.label}
+      </Link>;
+    })}
+  </div></nav>;
 }
 
 export function App() {
@@ -126,8 +146,9 @@ export function App() {
   const [loadingSession, setLoadingSession] = useState(false);
   const [reloadMeta, setReloadMeta] = useState(0);
   const [reloadSession, setReloadSession] = useState(0);
-  const location = useLocation();
   const navigate = useNavigate();
+  const location = useLocation();
+  useEffect(() => { window.WebApp?.ready?.(); }, []);
   useEffect(() => {
     const controller = new AbortController();
     setMetaError(null);
@@ -158,18 +179,20 @@ export function App() {
   </> : <p role="status">Получаем данные первого запуска…</p>}</section>;
   return <div className="app">
     <a className="skip" href="#content">К содержимому</a>
-    <header><h1>Помощник ЖКХ</h1><p>Первые вопросы о платёжке и следующий шаг</p></header>
+    <header className="app-header"><h1>Помощник ЖКХ</h1><p>Разберём платёжку по шагам</p></header>
     {PREVIEW_MODE && <aside className="preview-banner" role="note"><strong>Публичный учебный стенд · синтетические данные</strong><span>Не загружайте личные квитанции и персональные данные. Обращения отсюда никому не отправляются.</span></aside>}
-    <nav aria-label="Основная навигация"><Link to="/">Главная</Link><Link to="/onboarding">Первый запуск</Link><Link to="/assistant">Помощник</Link><Link to="/upload">Платёжка</Link><Link to="/history">История</Link></nav>
     <main id="content" tabIndex={-1}>
-      {metaError !== null && <><ErrorMessage error={metaError} /><button type="button" onClick={() => setReloadMeta((value) => value + 1)}>Повторить загрузку API</button></>}
+      {metaError !== null && <><ErrorMessage error={metaError} /><button type="button" onClick={() => setReloadMeta((value) => value + 1)}>Повторить загрузку данных</button></>}
       {sessionError !== null && <ErrorMessage error={sessionError} />}
       {guestRenewed && <p className="notice" role="status">Создан новый виртуальный гость: прежняя учебная история в этой вкладке недоступна.</p>}
       {!authenticated && <Entry meta={meta} sessionExpired={sessionExpired} onAuth={(value) => { setProfile(value); if (PREVIEW_MODE && sessionExpired) setGuestRenewed(true); setSessionExpired(false); setAuthenticated(true); }} />}
-      {location.pathname === '/' && authenticated && meta && !canUpload(profile, meta) && <p className="notice">Перед загрузкой платёжки завершите <Link to="/onboarding">первый запуск</Link>.</p>}
+      {authenticated && !!meta && !!profile && !canUpload(profile, meta) && location.pathname !== '/onboarding' && <div className="notice-box">
+        <p><strong>Чтобы загружать платёжки,</strong> укажите роль и территорию и подтвердите уведомление.</p>
+        <div className="actions"><Link className="btn" to="/onboarding">Первый запуск</Link></div>
+      </div>}
       {loadingSession && waiting}
       <Routes>
-        {screens.map(({ path }) => <Route key={path} path={path} element={<Page path={path} />} />)}
+        <Route path="/" element={<Home />} />
         <Route path="/onboarding" element={!authenticated ? needsLogin : meta && catalog && profile ? <Onboarding meta={meta} catalog={catalog} profile={profile} onSaved={setProfile} /> : waiting} />
         <Route path="/upload" element={!authenticated ? needsLogin : meta ? <Upload meta={meta} profile={profile} catalog={catalog} onQueued={(value) => navigate(`/processing?job=${encodeURIComponent(value.job_id)}`)} /> : waiting} />
         <Route path="/processing" element={!authenticated ? needsLogin : <Processing stub={!!meta?.features.engine_stub} />} />
@@ -183,6 +206,8 @@ export function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </main>
-    <footer>{PREVIEW_MODE ? 'Учебная версия. Используйте только синтетические примеры.' : 'Интерфейс разработки. Распознавание и ответы проверяйте по доступным возможностям API.'}</footer>
+    <footer>{PREVIEW_MODE ? 'Учебная версия. Используйте только синтетические примеры.' : 'Цифры из квитанции проверяйте по оригиналу. Приложение не заменяет консультацию специалиста.'}
+      {authenticated && <> <Link to="/onboarding">Изменить роль и территорию</Link></>}</footer>
+    <TabBar />
   </div>;
 }

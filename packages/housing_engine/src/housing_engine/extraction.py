@@ -222,7 +222,7 @@ def _parse(text: str, receipt_id, source: str, positions: dict[str, tuple[int, t
         unit_label = unit_match.group(1) if unit_match else None
         known = raw_name.casefold() == "cold water (m3)"
         if not known:
-            parser_issues.append(Issue(code="SERVICE_UNMAPPED", severity="warning", path=f"/services/{index}/service_code", message="Неизвестное название услуги сохранено как other; проверьте его вручную."))
+            parser_issues.append(Issue(code="SERVICE_UNMAPPED", severity="warning", path=f"/services/{index}/service_code", message="Название услуги не опознано и сохранено как «Прочее»; выберите вид услуги вручную."))
         services.append({
             "line_id": line_id, "raw_name": raw_name, "service_code": "cold_water" if known else "other",
             "scope": "individual" if known else "unspecified", "unit": "m3" if unit_label == "m3" else ("other" if unit_label else None), "unit_label": None if unit_label == "m3" else unit_label,
@@ -242,7 +242,7 @@ def _parse(text: str, receipt_id, source: str, positions: dict[str, tuple[int, t
         index = len(adjustments)
         adjustments.append({
             "adjustment_id": uuid5(receipt_id, f"demo-bill-v1:adjustment:{index}"),
-            "label": "Adjustment", "amount": match.group("amount"),
+            "label": "Перерасчёт", "amount": match.group("amount"),
             "service_line_id": services[0]["line_id"] if services else None,
             "related_period": match.group("period"),
         })

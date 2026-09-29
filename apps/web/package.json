@@ -20,7 +20,9 @@
     "test:browser:e4:synthetic-city-preview-mock": "node scripts/e4-synthetic-city-preview-mock.mjs",
     "test:browser:e4:synthetic-city-preview-live": "node scripts/e4-synthetic-city-preview-live.mjs",
     "test:browser:e4:dense-review": "node scripts/e4-dense-review-mock.mjs",
-    "test:browser:e4:bridge-sim": "node scripts/e4-bridge-sim.mjs"
+    "test:browser:e4:bridge-sim": "node scripts/e4-bridge-sim.mjs",
+    "test:browser:e5:russian": "node scripts/e5-russian-ui-mock.mjs",
+    "test:browser:e5:service-kind": "node scripts/e5-service-kind-mock.mjs"
   },
   "dependencies": {
     "react": "19.3.0",

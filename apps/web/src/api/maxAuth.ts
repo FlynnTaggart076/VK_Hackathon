@@ -5,7 +5,7 @@ import type { AuthResponse } from './types';
 // object is display data and must never be used as proof of identity.
 declare global {
   interface Window {
-    WebApp?: { initData?: string; platform?: string; openLink?: (url: string) => void };
+    WebApp?: { initData?: string; platform?: string; openLink?: (url: string) => void; ready?: () => void };
   }
 }
 

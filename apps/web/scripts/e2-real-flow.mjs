@@ -37,7 +37,7 @@ try {
   const reviewedIssuer = `${originalIssuer} (reviewed)`;
   await issuer.fill(reviewedIssuer);
   await page.getByRole('button', { name: 'Сохранить исправления' }).click();
-  await page.getByText('ревизия 2').waitFor({ timeout: 15000 });
+  await page.getByText('версия 2').waitFor({ timeout: 15000 });
   if (await issuer.inputValue() !== reviewedIssuer) throw new Error('Saved issuer differs from form');
   const warnings = page.getByLabel(/Принимаю предупреждение/);
   for (let index = 0, count = await warnings.count(); index < count; index++) await warnings.nth(index).check();
