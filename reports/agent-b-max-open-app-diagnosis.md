@@ -1,0 +1,14 @@
+# B: MAX Android mini-app button diagnosis, 2026-09-29
+
+Production release under inspection: `b9032d549b560e93ebfbd3276ba0de8e63289d90`. The owner sees the inline “Разобрать платёжку” button after `/help`, but reports an error when tapping it. The exact error text or screenshot is still pending. This was a read-only investigation; no VM, MAX subscription, bot settings, or code was changed.
+
+## Verified facts
+
+- `start_keyboard()` emits an `inline_keyboard` `open_app` button with `web_app=MAX_WEB_APP`. The production runtime value is the public bot username `t614_hakaton_max_bot`. Authenticated read-only `GET /me` returns the same username, and the stored production outbox attachment for the button has exactly that `web_app` value. The MAX API accepted and sent the `/help` message; the owner sees its button.
+- The [MAX keyboard documentation](https://dev.max.ru/docs-api/use-cases/sending-messages/keyboard) defines `open_app` as the button that launches a mini-app. The [MAX Bot API schema](https://github.com/max-messenger-bot/max-bot-api-schemas/blob/main/schema_2026_07_01.json) describes `web_app` as the target bot username or bot link; `contact_id` is optional. The emitted payload matches this contract. No code defect was found in the button format.
+- Public `https://flynntaggart075.asuscomm.com/team/zhkh/` returned HTTP 200 with normal TLS verification, zero redirects, and no CSP or `X-Frame-Options` response header that blocks opening. The MAX Bridge script `https://st.max.ru/js/max-web-app.js` returned HTTP 200 with verified TLS from the diagnostic client. These checks do not reproduce the Android MAX WebView.
+- The [official mini-app setup instructions](https://dev.max.ru/docs/webapps/introduction) require the HTTPS mini-app URL to be registered in the bot's MAX Partner settings before it can launch. The project's organizer FAQ assigns this registration to organizers through its Testograf URL form. `GET /me` exposes the bot identity but no mini-app registration state. Neither our MAX API read access nor the public HTTP check can prove that registration is complete. The missing persistent launch button previously reported by the owner is consistent with an unregistered app, but is not conclusive on its own.
+
+## Decision and next verification
+
+No code change is justified by the available evidence. Confirm that the organizers received and bound the exact production URL `https://flynntaggart075.asuscomm.com/team/zhkh/` to `t614_hakaton_max_bot`, then retry the inline button in Android MAX. If it still fails, capture the exact error screen/text and time; distinguish a platform launch error from our page's MAX sign-in/error state. A signed MAX Web/Android launch remains unaccepted. Do not submit the preview URL or change the shared VM ingress to address this symptom.
