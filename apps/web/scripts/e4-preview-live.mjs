@@ -76,7 +76,7 @@ async function scenario(width, territory) {
       throw new Error('Reload did not restore the same guest');
 
     step = `${width}px: onboarding ${territory}`;
-    await page.getByRole('link', { name: 'Первый запуск' }).click();
+    await page.getByRole('link', { name: 'Изменить роль и территорию' }).click();
     await page.getByLabel('Ваша роль').selectOption('tenant');
     await page.getByLabel('Территория').selectOption({ label: territory });
     await page.getByRole('checkbox').check();

@@ -42,7 +42,7 @@ try {
   if (!interrupted) throw new Error('Transport interruption was not exercised');
   await page.unrouteAll();
 
-  await page.getByRole('link', { name: 'Первый запуск' }).click();
+  await page.getByRole('link', { name: 'Изменить роль и территорию' }).click();
   await page.getByLabel('Ваша роль').selectOption('tenant');
   await page.getByLabel('Территория').selectOption('demo-territory');
   await page.getByRole('checkbox').check();

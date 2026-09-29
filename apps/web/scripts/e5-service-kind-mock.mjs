@@ -14,6 +14,11 @@ try {
   await page.getByLabel('Территория').selectOption('demo-territory');
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'Сохранить' }).click();
+  await page.getByRole('status').filter({ hasText: 'Профиль сохранён' }).waitFor();
+  await page.getByRole('link', { name: 'Главная' }).click();
+  if (await page.getByRole('link', { name: 'Первый запуск' }).count()) fail('Completed profile still shows first-run prompt');
+  await page.getByRole('link', { name: 'Изменить роль и территорию' }).click();
+  await page.getByRole('heading', { name: 'Первый запуск' }).waitFor();
   await page.getByRole('link', { name: 'Платёжка' }).click();
   const fixture = await readFile(new URL('../public/synthetic-receipt.png', import.meta.url));
   await page.getByLabel('Файл платёжки').setInputFiles({ name: 'demo-bill-2026-08.png', mimeType: 'image/png', buffer: fixture });

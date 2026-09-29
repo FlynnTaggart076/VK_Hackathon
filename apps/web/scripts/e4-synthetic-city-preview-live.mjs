@@ -104,7 +104,7 @@ try {
   if (!firstToken || observed.previewAuth !== 1)
     throw new Error('Virtual guest was not established once');
   step = 'Moscow onboarding';
-  await page.getByRole('link', { name: 'Первый запуск' }).click();
+  await page.getByRole('link', { name: 'Изменить роль и территорию' }).click();
   await page.getByLabel('Ваша роль').selectOption('tenant');
   await page.getByLabel('Территория').selectOption('moscow');
   await page.getByRole('checkbox').check();
@@ -152,7 +152,7 @@ try {
   const secondToken = await oblastPage.evaluate(() => sessionStorage.getItem('zhkh-preview-session'));
   if (!secondToken || secondToken === firstToken || observed.previewAuth !== 2)
     throw new Error('Independent virtual guest was not established');
-  await oblastPage.getByRole('link', { name: 'Первый запуск' }).click();
+  await oblastPage.getByRole('link', { name: 'Изменить роль и территорию' }).click();
   await oblastPage.getByLabel('Ваша роль').selectOption('tenant');
   await oblastPage.getByLabel('Территория').selectOption('moscow-oblast');
   await oblastPage.getByRole('checkbox').check();
