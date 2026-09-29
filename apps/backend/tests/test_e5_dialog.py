@@ -211,34 +211,33 @@ def test_dialogs_are_isolated_between_users(app):
         assert len(session.scalars(select(DialogState)).all()) == 2
 
 
-def test_consent_button_enables_model_reading_but_never_for_addresses(app, tmp_path):
-    url = f"sqlite:///{(tmp_path / 'consent.sqlite').as_posix()}"
+def test_router_reads_free_text_by_default_but_never_addresses(app, tmp_path):
+    url = f"sqlite:///{(tmp_path / 'router.sqlite').as_posix()}"
     Base.metadata.create_all(create_engine(url))
-    consent_app = create_app(Settings(database_url=url, storage_path=tmp_path / "p2", engine_mode="real",
-                                      demo_auth_enabled=True, demo_access_code="code",
-                                      deepseek_api_key="fixture-key", house_lookup_cache_dir=tmp_path / "c2"))
-    reading = {"intent": "new_question", "topic_id": "supplier_contacts", "service": "electricity",
-               "city": None, "option_index": None}
-    with TestClient(consent_app) as client, \
+    router_app = create_app(Settings(database_url=url, storage_path=tmp_path / "p2", engine_mode="real",
+                                     demo_auth_enabled=True, demo_access_code="code",
+                                     deepseek_api_key="fixture-key", house_lookup_cache_dir=tmp_path / "c2"))
+    decision = {"kind": "run", "action": {"function": "supplier_contacts", "params": {"service": "electricity"}}}
+    with TestClient(router_app) as client, \
             patch("app.services.house_lookup.lookup_for", return_value=FakeLookup()), \
-            patch("app.services.deepseek.extract", return_value=reading) as reader, \
+            patch("app.services.deepseek.route", return_value=decision) as router, \
             patch("app.services.assistant_adapter.classify", side_effect=AssertionError("no second call")), \
             patch("app.services.assistant_adapter.phrase", side_effect=AssertionError("no phrasing")):
         say = login(client)
         reply = say("Привет")
-        assert "Включить умные ответы" in labels(reply)
-        reader.assert_not_called()
-        say("Включить умные ответы")
-        with consent_app.state.store.Session() as session:
-            assert session.scalars(select(Profile)).one().chat_llm_consent_at is not None
-        reply = say("кому звонить по электричеству")
-        reader.assert_called_once()
+        assert "Включить умные ответы" not in labels(reply)  # No consent step any more.
+        router.assert_not_called()
+        reply = say("кто подаёт нам свет в квартиру")
+        router.assert_called_once()
         assert reply["awaiting"] == "address"
         say("Москва, ул. Примерная, д. 12")
-        reader.assert_called_once()  # The address turn never goes to the model.
+        router.assert_called_once()  # The address turn never goes to the model.
         say("Без нейросети")
-        with consent_app.state.store.Session() as session:
-            assert session.scalars(select(Profile)).one().chat_llm_consent_at is None
+        with router_app.state.store.Session() as session:
+            profile = session.scalars(select(Profile)).one()
+            assert profile.chat_llm_opt_out_at is not None
+        say("кто подаёт нам газ")
+        router.assert_called_once()  # Opted out.
     assert "Примерная" not in _redact("Москва, ул. Примерная, д. 12, кв. 5")
 
 

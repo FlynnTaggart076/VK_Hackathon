@@ -7,7 +7,7 @@
     "territory_id": "demo-territory",
     "onboarding_completed": true,
     "aggregate_opt_in": false,
-    "privacy_notice_version": "2.0",
+    "privacy_notice_version": "3.0",
     "privacy_acknowledged_at": "2026-09-27T10:00:00Z"
   }
 }

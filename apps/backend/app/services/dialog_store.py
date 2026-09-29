@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -9,7 +10,9 @@ from datetime import timedelta
 from app.db.models import AssistantAnswer, DialogState, Profile
 from app.db.store import SqlStore, now
 from app.errors import ApiError
-from app.services.dialog import CHANNELS, MEMORY_TTL, SERVICE_NAMES, DialogDeps, public_reply, step
+from app.services.dialog import CHANNELS, MEMORY_TTL, DialogDeps, public_reply, step
+
+log = logging.getLogger("app.dialog")
 
 
 @dataclass
@@ -24,20 +27,20 @@ class Turn:
     dataset_kind: str = "public_reference"
 
 
-def _consent(profile: Profile, state: dict | None, settings) -> bool:
-    if (state or {}).get("llm_declined"):
-        return False
-    return profile.chat_llm_consent_at is not None or \
-        profile.privacy_notice_version == settings.privacy_notice_version
+def llm_enabled(profile: Profile, state: dict | None, settings) -> bool:
+    """DeepSeek reads free text by default; /llm_off or «Без нейросети» turns it off."""
+    return bool(settings.deepseek_api_key) and profile.chat_llm_opt_out_at is None and \
+        not (state or {}).get("llm_declined")
 
 
 def compute_turn(store: SqlStore, user_id: str, channel: str, text: str | None, choice: str | None,
-                 receipt_ref: dict | None = None, *, lookup=None, extract=None) -> Turn:
+                 receipt_ref: dict | None = None, *, lookup=None, route=None) -> Turn:
     """Read state and profile, run one dialogue step. No database transaction is held meanwhile."""
     from app.services.assistant_adapter import answer_json
     from app.services.assistant_store import knowledge, owner_receipt_pair, receipt_snapshots
+    from app.services.capabilities import validate_decision
     from app.services.cohort_store import city_comparison
-    from app.services.deepseek import extract as model_extract
+    from app.services.deepseek import route as model_route
     from app.services.house_lookup import lookup_for
 
     if channel not in CHANNELS:
@@ -56,33 +59,35 @@ def compute_turn(store: SqlStore, user_id: str, channel: str, text: str | None, 
     if receipt_ref is not None:
         snapshots, _ = receipt_snapshots(store, user_id, [receipt_ref])
     personal, _ = owner_receipt_pair(store, user_id, receipt_ref["id"] if receipt_ref else None)
-    consent = _consent(profile, raw_state, settings)
-    api_key = settings.deepseek_api_key if consent else None
-    privacy_ok = profile.privacy_notice_version == settings.privacy_notice_version
     bundle = knowledge()
 
     def answer(question: str, context: dict, intent: str | None) -> dict:
+        # The router is the only model call of a turn: no classify()/phrase() here.
         return answer_json(question, context, snapshots,
                            {"role": profile.role, "territory_id": profile.territory_id}, bundle,
-                           api_key=api_key, model=settings.deepseek_model,
-                           personal_snapshots=personal,
-                           allow_receipt_model=privacy_ok,
+                           api_key=None, model=settings.deepseek_model, personal_snapshots=personal,
+                           allow_receipt_model=False,
                            city_lookup=lambda rid, code, metric: city_comparison(store, user_id, rid, code, metric),
                            intent=intent)
 
-    if extract is None and api_key:
-        def extract(message: str, summary: dict) -> dict:
-            return model_extract(message, summary, bundle.topics, dict(SERVICE_NAMES), api_key,
-                                 settings.deepseek_model)
+    if route is None and llm_enabled(profile, raw_state, settings):
+        def route(message: str, summary: dict, history: list) -> dict | None:
+            decision = validate_decision(model_route(message, summary, history, settings.deepseek_api_key,
+                                                     settings.deepseek_model), message)
+            if decision is None:
+                log.warning("router decision rejected")
+            else:
+                log.info("router kind=%s function=%s", decision["kind"],
+                         (decision.get("action") or {}).get("function"))
+            return decision
+    periods = sorted({item["bill_data"].get("period") for item in (snapshots or personal)
+                      if item["bill_data"].get("period")})
     deps = DialogDeps(knowledge=bundle, answer=answer,
                       lookup=lookup if lookup is not None else lookup_for(store),
-                      extract=extract if api_key else None,
-                      llm_offer=bool(settings.deepseek_api_key) and not consent and
-                      not (raw_state or {}).get("llm_declined"),
-                      user_scope=user_id)
+                      route=route, user_scope=user_id,
+                      facts={"confirmed_receipt_months": periods,
+                             "receipt_upload_allowed_here": channel == "web"})
     state, reply = step(raw_state, text, choice, deps)
-    if "consent" in deps.effects:
-        state["llm_declined"] = not deps.effects["consent"]
     record = reply.get("_answer")
     kind = "public_reference"
     if record and record["result"].get("receipt_ref"):
@@ -111,7 +116,9 @@ def commit_turn(session, turn: Turn) -> bool:
     if "consent" in turn.effects:
         profile = session.get(Profile, turn.user_id)
         if profile is not None:
-            profile.chat_llm_consent_at = moment if turn.effects["consent"] else None
+            enabled = turn.effects["consent"]
+            profile.chat_llm_consent_at = moment if enabled else None
+            profile.chat_llm_opt_out_at = None if enabled else moment
     if turn.answer is not None:
         result = turn.answer["result"]
         ref = result.get("receipt_ref")

@@ -4,7 +4,9 @@ The server keeps the slots (topic, service, city, house address, pending questio
 options) in `dialog_states`, so a clarification answer — a button, a number or plain text such as
 «Москва» — always continues the pending question instead of starting a new one. Contact questions
 go through the house lookup (HouseScore + Dominfo); other questions use the local knowledge engine
-and the receipt facts. DeepSeek only helps to read free text and to phrase answers, with consent.
+and the receipt facts. Button taps and recognized slot answers are handled here without a model;
+any other free text goes to the DeepSeek router, which picks a catalog function or asks with buttons
+(app/services/capabilities.py). Without the model the rule-based path below answers instead.
 """
 
 from __future__ import annotations
@@ -17,8 +19,9 @@ from datetime import datetime, timedelta, timezone
 from typing import Callable
 
 from app.services.assistant_adapter import _fallback_intent
+from app.services.capabilities import catalog, decode
 from app.services.house_lookup import (
-    SERVICE_NAMES, LookupUnavailable, build_service_card, choose_house, clean_address,
+    ENGINE_SERVICE, SERVICE_NAMES, LookupUnavailable, build_service_card, choose_house, clean_address,
     query_house_number, render_card_text,
 )
 
@@ -26,6 +29,7 @@ log = logging.getLogger("app.dialog")
 
 CHANNELS = frozenset({"max_chat", "web"})
 FLOW_TTL = timedelta(minutes=30)
+HISTORY_TURNS = 3
 MEMORY_TTL = timedelta(days=30)
 CONTACT_TOPICS = ("supplier_contacts", "management_contacts", "meter_readings", "meter_deadline", "service_issue")
 
@@ -49,7 +53,6 @@ MENU = (
     ("topic:new_resident", "Я переехал(а)"),
 )
 BACK = ("reset", "Новый вопрос")
-CONSENT_OPTIONS = (("consent:on", "Включить умные ответы"), ("consent:off", "Без нейросети"))
 GLOBAL_WORDS = {
     "новый вопрос": "reset", "меню": "reset", "/reset": "reset", "/menu": "reset", "заново": "reset",
     "начать заново": "reset", "сброс": "reset", "отмена": "reset", "главное меню": "reset",
@@ -57,6 +60,7 @@ GLOBAL_WORDS = {
     "другая услуга": "change_service", "сменить услугу": "change_service",
     "включить умные ответы": "consent:on", "/llm_on": "consent:on",
     "без нейросети": "consent:off", "/llm_off": "consent:off",
+    "другое напишу сам": "free_text",
     "попробовать ещё раз": "retry_lookup", "попробовать еще раз": "retry_lookup",
 }
 SMALLTALK = {"привет", "здравствуйте", "добрый день", "добрый вечер", "доброе утро", "спасибо",
@@ -269,14 +273,14 @@ def empty_state() -> dict:
             "options": [], "candidates": [], "prompt": None,
             "context": {"territory_id": None, "role": None, "service_code": None, "document_kind": None},
             "memory": {"city": None, "territory_id": None, "address": None, "house": None},
-            "consent_offered": False, "llm_declined": False, "flow_at": None, "memory_at": None}
+            "llm_declined": False, "history": [], "flow_at": None, "memory_at": None}
 
 
 def _fresh_flow(state: dict) -> dict:
     fresh = empty_state()
     fresh["memory"] = deepcopy(state.get("memory") or fresh["memory"])
-    fresh["consent_offered"] = bool(state.get("consent_offered"))
     fresh["llm_declined"] = bool(state.get("llm_declined"))
+    fresh["history"] = list(state.get("history") or [])[-HISTORY_TURNS:]
     fresh["memory_at"] = state.get("memory_at")
     return fresh
 
@@ -303,8 +307,9 @@ class DialogDeps:
     knowledge: object
     answer: Callable[[str, dict, str | None], dict]
     lookup: object | None = None
-    extract: Callable[[str, dict], dict] | None = None
-    llm_offer: bool = False
+    # route(text, state_summary, history) -> validated decision or None; None when the model is off.
+    route: Callable[[str, dict, list], dict | None] | None = None
+    facts: dict = field(default_factory=dict)  # Non-personal context for the router (receipt months).
     user_scope: str | None = None
     effects: dict = field(default_factory=dict)
 
@@ -463,14 +468,17 @@ def _continue_contacts(state: dict, deps: DialogDeps) -> dict:
     return reply
 
 
-def _start_contacts(state: dict, deps: DialogDeps, topic: str, text: str | None) -> dict:
+def _start_contacts(state: dict, deps: DialogDeps, topic: str, text: str | None,
+                    service: str | None = None) -> dict:
     state["flow"] = "contacts"
     state["topic_id"] = topic
     state["question"] = text
+    if service and not (topic != "management_contacts" and service == "management"):
+        state["service"] = service
     if text:
-        service = find_service(text)
-        if service and not (topic != "management_contacts" and service == "management"):
-            state["service"] = service
+        found = find_service(text)
+        if found and state["service"] is None and not (topic != "management_contacts" and found == "management"):
+            state["service"] = found
         address = find_address(text)
         if address:
             _set_address(state, address)
@@ -545,26 +553,19 @@ def _render_answer(state: dict, question: str, result: dict) -> dict:
     return reply
 
 
-def _faq(state: dict, deps: DialogDeps, llm: dict | None = None, intent: str | None = None) -> dict:
+def _faq(state: dict, deps: DialogDeps, intent: str | None = None) -> dict:
     state["flow"] = "faq"
     question = state["question"] or "Вопрос по ЖКХ"
     context = {"territory_id": state["context"]["territory_id"] or state["memory"].get("territory_id"),
                "role": state["context"]["role"], "topic_id": state["topic_id"], "organization_id": None,
                "service_code": state["context"]["service_code"], "document_kind": state["context"]["document_kind"]}
-    if intent is None and llm is not None:
-        intent = _fallback_intent(question)  # The turn was already read by the model; skip classify().
+    if intent is None:
+        intent = "faq" if state["topic_id"] else _fallback_intent(question)
     result = deps.answer(question, context, intent)
-    unclear = (result["status"] == "unsupported" and not result.get("topic_id")) or (
-        result["status"] == "needs_clarification" and (result.get("clarification") or {}).get("field") == "topic_id")
-    if unclear and llm and llm.get("topic_id") and state["topic_id"] is None:
-        if llm["topic_id"] in CONTACT_TOPICS:
-            return _start_contacts(state, deps, llm["topic_id"], state["question"])
-        context["topic_id"] = llm["topic_id"]
-        result = deps.answer(question, context, "faq")
     return _render_answer(state, question, result)
 
 
-def _new_question(state: dict, deps: DialogDeps, text: str, llm: dict | None) -> dict:
+def _new_question(state: dict, deps: DialogDeps, text: str) -> dict:
     fresh = _fresh_flow(state)
     state.clear()
     state.update(fresh)
@@ -579,8 +580,6 @@ def _new_question(state: dict, deps: DialogDeps, text: str, llm: dict | None) ->
     if topic is None and len(_norm(text).split()) <= 3 and find_service(text):
         # A bare service name (often a tap on an old keyboard) means «who supplies it».
         topic = "management_contacts" if find_service(text) == "management" else "supplier_contacts"
-    if topic is None and llm and llm.get("topic_id") in CONTACT_TOPICS and llm.get("intent") != "smalltalk":
-        topic = llm["topic_id"]
     if topic:
         return _start_contacts(state, deps, topic, text)
     address = find_address(text)
@@ -595,7 +594,7 @@ def _new_question(state: dict, deps: DialogDeps, text: str, llm: dict | None) ->
         return _ask(state, "topic", f"Что найти {where}?", [
             ("topic:management_contacts", "Контакты УК"), ("topic:supplier_contacts", "Поставщик услуги"),
             ("topic:meter_readings", "Куда передать показания"), BACK])
-    return _faq(state, deps, llm)
+    return _faq(state, deps)
 
 
 def _set_city_only(state: dict, city: tuple) -> None:
@@ -608,19 +607,112 @@ def _set_city_only(state: dict, city: tuple) -> None:
     state["candidates"] = []
 
 
-def _llm_read(state: dict, deps: DialogDeps, text: str) -> dict | None:
-    if deps.extract is None or state.get("awaiting") in {"address", "house_choice"} or find_address(text):
-        return None
-    summary = {"awaiting": state.get("awaiting"), "topic_id": state.get("topic_id"),
-               "options": [item["label"] for item in state.get("options", [])][:10],
-               "known": {"service": state.get("service"), "city": state["memory"].get("city")}}
+def _action(action_id: str, kind: str, label: str, target: str | None, topic_id: str | None = None) -> dict:
+    return {"id": action_id, "type": kind, "label": label, "url": None, "topic_id": topic_id,
+            "organization_id": None, "source_id": None, "target": target, "receipt_ref": None, "requires": []}
+
+
+_NAVIGATION = {
+    "receipt_upload": ("Загрузите PDF или фото квитанции на вкладке «Платёжка»: я распознаю строки, вы проверите "
+                       "цифры и подтвердите данные. После этого объясню начисления.",
+                       _action("upload-receipt", "navigate", "Загрузить квитанцию", "receipt_upload")),
+    "receipt_history": ("Загруженные квитанции — на вкладке «История»: там их можно открыть, сравнить или удалить.",
+                        _action("open-history", "navigate", "Открыть историю", "receipt_history")),
+    "compare_receipts": ("Выберите две подтверждённые квитанции — покажу разницу по строкам, влияние объёма и "
+                         "тарифа, перерасчёты и оплаты.",
+                         _action("compare-receipts", "navigate", "Сравнить квитанции", "comparison")),
+    "prepare_draft": ("Подготовлю редактируемый текст запроса расшифровки начисления. Приложение его не "
+                      "отправляет — скопируйте текст и отправьте в УК самостоятельно.",
+                      _action("prepare-draft", "prepare_draft", "Подготовить обращение", None, "request_breakdown")),
+}
+
+
+def _run(state: dict, deps: DialogDeps, action: dict, question: str) -> dict:
+    """Execute a validated catalog action with existing deterministic code."""
+    function, params = action["function"], action["params"]
+    fresh = _fresh_flow(state)
+    state.clear()
+    state.update(fresh)
+    state["question"] = question[:2000]
+    service = params.get("service")
+    topic = params.get("topic") if function == "faq" else function
+    if topic in CONTACT_TOPICS:
+        return _start_contacts(state, deps, topic, question, service)
+    if function in {"bill_rise", "city_comparison"}:
+        if service:
+            state["context"]["service_code"] = ENGINE_SERVICE.get(service)
+        return _faq(state, deps, intent=function)
+    if function in _NAVIGATION:
+        text, next_action = _NAVIGATION[function]
+        state["awaiting"] = None
+        state["options"] = [_option(*BACK)]
+        return _reply("answered", text, list(state["options"]), actions=[dict(next_action)])
+    if function == "faq" and topic:
+        state["topic_id"] = topic
+        return _faq(state, deps)
+    return _menu_reply(state)
+
+
+def _route_state(state: dict, deps: DialogDeps) -> dict:
+    memory = state["memory"]
+    return {"awaiting": state.get("awaiting"),
+            "pending_question": state.get("prompt") if state.get("awaiting") else None,
+            "buttons_shown": [item["label"] for item in state.get("options", [])][:10],
+            "topic": state.get("topic_id"), "service": state.get("service"),
+            "city": memory.get("city"), "house_known": bool(memory.get("house")), **deps.facts}
+
+
+def _routed(state: dict, deps: DialogDeps, text: str) -> dict:
+    """Free text the rules do not recognize: let the DeepSeek router decide, else the rule-based path."""
     try:
-        return deps.extract(text, summary)
-    except Exception:  # ModelUnavailable or any transport failure: deterministic path continues.
-        return None
+        decision = deps.route(text, _route_state(state, deps), list(state.get("history") or []))
+    except Exception:  # Model unavailable or invalid output: the rule-based path answers.
+        decision = None
+    if decision is None:
+        return _new_question(state, deps, text)
+    kind = decision["kind"]
+    if kind == "run":
+        return _run(state, deps, decision["action"], text)
+    if kind == "clarify":
+        fresh = _fresh_flow(state)
+        state.clear()
+        state.update(fresh)
+        state["question"] = text[:2000]
+        return _ask(state, "choice", decision["text"], decision["options"] + [
+            _option("free_text", "Другое — напишу сам"), _option(*BACK)])
+    if kind == "answer":
+        state["awaiting"] = None
+        state["options"] = decision["options"] + [_option(*BACK)]
+        return _reply("answered", decision["text"], list(state["options"]))
+    return _menu_reply(state, decision["text"] or "Я помогаю только с вопросами ЖКХ. Выберите тему или "
+                                                  "напишите вопрос о квитанции, УК или услугах.")
+
+
+def _remember(state: dict, user_text: str, reply: dict) -> None:
+    """Keep the last exchanges (already stripped of address and numbers) for the router's memory."""
+    from app.services.deepseek import _redact
+
+    buttons = [item["label"] for item in reply.get("options", [])][:6]
+    assistant = _redact(" ".join(reply.get("text", "").split()))[:400]
+    if buttons:
+        assistant += " Кнопки: " + ", ".join(buttons)
+    history = list(state.get("history") or [])
+    history.append({"user": _redact(" ".join(user_text.split()))[:300], "assistant": assistant})
+    state["history"] = history[-HISTORY_TURNS:]
+
+
+GLOBAL_LABELS = {"reset": "Новый вопрос", "change_address": "Другой адрес", "change_service": "Другая услуга",
+                 "free_text": "Другое — напишу сам", "retry_lookup": "Попробовать ещё раз",
+                 "consent:on": "Включить нейросеть", "consent:off": "Без нейросети"}
+STATIC_LABELS = {_norm(label): value for value, label in (
+    *MENU, *((f"service:{code}", label) for code, label in SERVICE_OPTIONS), *WATER_OPTIONS,
+    ("change_service", "Другая услуга"), ("change_address", "Другой адрес"))}
 
 
 def _apply_option(state: dict, deps: DialogDeps, value: str) -> dict:
+    if value.startswith("act:"):
+        action = decode(value)
+        return _run(state, deps, action, state.get("question") or "") if action else _menu_reply(state)
     kind, _, argument = value.partition(":")
     if kind == "topic":
         if argument in CONTACT_TOPICS:
@@ -644,6 +736,9 @@ def _apply_option(state: dict, deps: DialogDeps, value: str) -> dict:
         state["question"] = "Почему выросла сумма в квитанции?"
         return _faq(state, deps, intent=argument)
     if kind == "service":
+        if state.get("flow") != "contacts":  # A service button outside a contact question: «who supplies it».
+            return _run(state, deps, {"function": "management_contacts" if argument == "management"
+                                      else "supplier_contacts", "params": {"service": argument}}, "")
         state["service"] = argument
         return _continue_contacts(state, deps)
     if kind == "house":
@@ -675,11 +770,11 @@ def _global(state: dict, deps: DialogDeps, action: str) -> dict:
     if action.startswith("consent:"):
         enabled = action == "consent:on"
         deps.effects["consent"] = enabled
-        state["consent_offered"] = True
+        state["llm_declined"] = not enabled
         state["options"] = [item for item in state.get("options", []) if not item["value"].startswith("consent:")]
-        note = ("Умные ответы включены: текст вопроса без адреса, телефонов и номеров передаётся DeepSeek. "
+        note = ("Нейросеть включена: текст вопросов без адреса, телефонов и номеров передаётся DeepSeek. "
                 "Отключить: «Без нейросети» или /llm_off." if enabled else
-                "Хорошо, отвечаю без нейросети — по локальному справочнику и открытым данным.")
+                "Хорошо, отвечаю без нейросети — по кнопкам, справочнику и открытым данным. Включить снова: /llm_on.")
         if state.get("awaiting") and state.get("prompt"):
             reply = _reply("needs_input", note + "\n\n" + state["prompt"], list(state["options"]),
                            awaiting=state["awaiting"], topic_id=state["topic_id"])
@@ -701,20 +796,26 @@ def _global(state: dict, deps: DialogDeps, action: str) -> dict:
             state["topic_id"] = "supplier_contacts"
         state["service"] = None
         return _continue_contacts(state, deps)
+    if action == "free_text":
+        return _reply("needs_input", "Напишите одним сообщением, что именно нужно, — я подскажу.",
+                      list(state.get("options") or []), awaiting=state.get("awaiting"))
     if action == "retry_lookup":
         if state.get("flow") == "contacts":
             return _continue_contacts(state, deps)
     return _menu_reply(state)
 
 
-def _answer_pending(state: dict, deps: DialogDeps, text: str, llm: dict | None) -> dict | None:
+def _reask(reply: dict) -> dict:
+    reply["_reask"] = True  # The rules did not understand; the router may read it instead.
+    return reply
+
+
+def _answer_pending(state: dict, deps: DialogDeps, text: str) -> dict | None:
     """Interpret free text as the answer to the pending question; None means «a new question»."""
     awaiting = state.get("awaiting")
-    if llm and llm.get("option_index") and state.get("options") and llm.get("intent") in {None, "answer"}:
-        return _apply_option(state, deps, state["options"][llm["option_index"] - 1]["value"])
     new_topic = detect_contact_topic(text)
     if awaiting == "service":
-        service = find_service(text) or (llm or {}).get("service")
+        service = find_service(text)
         if service:
             state["service"] = service
             address = find_address(text)
@@ -723,9 +824,9 @@ def _answer_pending(state: dict, deps: DialogDeps, text: str, llm: dict | None) 
             return _continue_contacts(state, deps)
         if mentions_water(text) and not new_topic:
             return _ask(state, "service", "Какая именно вода?", list(WATER_OPTIONS) + [BACK])
-        return None if new_topic or len(_norm(text).split()) > 2 else _ask(
+        return None if new_topic or len(_norm(text).split()) > 2 else _reask(_ask(
             state, "service", "Не понял услугу. Выберите её кнопкой или напишите, например: «холодная вода», «свет».",
-            [(f"service:{code}", label) for code, label in SERVICE_OPTIONS])
+            [(f"service:{code}", label) for code, label in SERVICE_OPTIONS]))
     if awaiting in {"address", "house_choice"}:
         other_service = find_service(text) not in {None, state.get("service")} or mentions_water(text)
         if new_topic and (new_topic != state["topic_id"] or other_service) and find_address(text) is None:
@@ -748,8 +849,8 @@ def _answer_pending(state: dict, deps: DialogDeps, text: str, llm: dict | None) 
             state["memory"]["address"] = clean_address(text)  # Street without a number: ask for the number.
             return _continue_contacts(state, deps)
         if awaiting == "address" and new_topic == state["topic_id"]:
-            return _ask(state, "address", "Чтобы найти контакты, нужен адрес дома: город, улица и номер дома.",
-                        state["options"])
+            return _reask(_ask(state, "address", "Чтобы найти контакты, нужен адрес дома: город, улица и номер дома.",
+                               state["options"]))
         return None
     if awaiting == "after_card":
         service = find_service(text)
@@ -769,8 +870,6 @@ def _answer_pending(state: dict, deps: DialogDeps, text: str, llm: dict | None) 
         return None
     if awaiting == "territory":
         city = find_city(text)
-        if city is None and llm and llm.get("city"):
-            city = find_city(llm["city"]) or (llm["city"], None, 0)
         if city is not None:
             state["memory"]["city"] = city[0]
             if city[1]:
@@ -784,8 +883,8 @@ def _answer_pending(state: dict, deps: DialogDeps, text: str, llm: dict | None) 
                           "проверенные сведения есть для Москвы и Московской области. Порядок зависит от региона: "
                           "уточните его в МФЦ или на официальном портале вашего региона.",
                           list(state["options"]), topic_id=state["topic_id"])
-        return None if new_topic or len(_norm(text).split()) > 3 else _ask(
-            state, "territory", "Не узнал город. Напишите город или выберите регион кнопкой.", state["options"])
+        return None if new_topic or len(_norm(text).split()) > 3 else _reask(_ask(
+            state, "territory", "Не узнал город. Напишите город или выберите регион кнопкой.", state["options"]))
     if awaiting == "role":
         words = _norm(text)
         role = ("owner" if re.search(r"собствен|владел|хозя", words) else
@@ -794,14 +893,14 @@ def _answer_pending(state: dict, deps: DialogDeps, text: str, llm: dict | None) 
         if role:
             state["context"]["role"] = role
             return _faq(state, deps)
-        return None if len(_norm(text).split()) > 2 else _ask(state, "role", "Выберите роль кнопкой.", state["options"])
+        return None if len(_norm(text).split()) > 2 else _reask(_ask(state, "role", "Выберите роль кнопкой.", state["options"]))
     if awaiting == "engine_service":
         service = find_service(text)
         mapped = {"sewerage": "drainage", "gas": "other", "management": "maintenance"}.get(service, service)
         if mapped:
             state["context"]["service_code"] = mapped
             return _faq(state, deps)
-        return None if len(_norm(text).split()) > 2 else _ask(state, "engine_service", "Выберите услугу кнопкой.", state["options"])
+        return None if len(_norm(text).split()) > 2 else _reask(_ask(state, "engine_service", "Выберите услугу кнопкой.", state["options"]))
     if awaiting == "document_kind":
         if new_topic or len(text) > 200:
             return None
@@ -817,6 +916,7 @@ def step(raw_state: dict | None, text: str | None, choice: str | None, deps: Dia
     state = normalize_state(raw_state, moment)
     raw = (choice or text or "").strip()[:2000]
     key = _norm(raw)
+    said = raw
     if not raw:
         if state.get("awaiting") and state.get("prompt"):
             reply = _reply("needs_input", state["prompt"], list(state["options"]),
@@ -829,37 +929,46 @@ def step(raw_state: dict | None, text: str | None, choice: str | None, deps: Dia
     else:
         option = _match_option(state, raw)
         if option is not None:
+            said = option["label"]
             action = option["value"]
             reply = _global(state, deps, action) if action in GLOBAL_WORDS.values() else \
                 _apply_option(state, deps, action)
-        elif choice is not None and ":" in choice and choice.split(":", 1)[0] in {"topic", "intent"}:
+        elif choice is not None and ":" in choice and choice.split(":", 1)[0] in {"topic", "intent", "act"}:
             reply = _apply_option(state, deps, choice)  # Quick start from the mini-app, e.g. ?topic=
+        elif key in STATIC_LABELS:
+            # A known button label typed or tapped on an older keyboard: no model needed.
+            reply = _apply_option(state, deps, STATIC_LABELS[key])
         elif key in SMALLTALK:
             reply = _menu_reply(state, "Пожалуйста! Чем ещё помочь?" if key.startswith("спасибо") else
                                 "Здравствуйте! Чем помочь? Выберите тему или напишите вопрос.")
         else:
-            llm = _llm_read(state, deps, raw)
-            if llm and llm.get("intent") == "reset":
-                reply = _global(state, deps, "reset")
-            elif llm and llm.get("intent") == "smalltalk" and not detect_contact_topic(raw):
-                reply = _menu_reply(state, "Чем помочь? Выберите тему или напишите вопрос.")
-            else:
-                reply = _answer_pending(state, deps, raw, llm) if state.get("awaiting") else None
-                if reply is None:
-                    reply = _new_question(state, deps, raw, llm)
-    if deps.llm_offer and not state.get("consent_offered") and reply.get("status") != "error":
-        state["consent_offered"] = True
-        reply["text"] += ("\n\nМогу понимать вопросы точнее с помощью нейросети DeepSeek: ей передаётся только "
-                          "текст вопроса без адреса, телефонов и номеров. Включить?")
-        reply["options"] = reply["options"] + [_option(*item) for item in CONSENT_OPTIONS]
-        state["options"] = state["options"] + [_option(*item) for item in CONSENT_OPTIONS]
+            reply = _answer_pending(state, deps, raw) if state.get("awaiting") else None
+            if reply is not None and reply.get("_reask") and deps.route is not None:
+                reply = None
+            if reply is None:
+                reply = _routed(state, deps, raw) if deps.route is not None else _new_question(state, deps, raw)
     if not state.get("prompt") or not state.get("awaiting"):
         state["prompt"] = reply["text"] if state.get("awaiting") else None
+    if raw:
+        _remember(state, GLOBAL_LABELS.get(said) or (
+            _choice_label(said, deps) if said.startswith(("act:", "topic:", "intent:", "service:")) else said), reply)
     stamp = moment.isoformat()
     state["flow_at"] = stamp
     state["memory_at"] = stamp
     reply["awaiting"] = state.get("awaiting")
     return state, reply
+
+
+def _choice_label(value: str, deps: DialogDeps) -> str:
+    """Readable text of a quick-start value for the router's memory."""
+    labels = {item[0]: item[1] for item in (*MENU, *((f"service:{code}", label) for code, label in SERVICE_OPTIONS))}
+    if value in labels:
+        return labels[value]
+    action = decode(value) if value.startswith("act:") else None
+    if action:
+        return catalog()["functions"][action["function"]]["title"]
+    topic = value.partition(":")[2]
+    return next((item["title"] for item in deps.knowledge.topics if item["id"] == topic), value)
 
 
 def public_reply(reply: dict) -> dict:

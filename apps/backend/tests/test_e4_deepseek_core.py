@@ -60,7 +60,7 @@ def test_owner_pair_requires_exact_previous_month_account_provider_and_owner(tmp
         session.flush()
         for uid in (a, b):
             session.add(Profile(user_id=uid, role="owner", territory_id="moscow",
-                                onboarding_completed=True, privacy_notice_version="2.0"))
+                                onboarding_completed=True, privacy_notice_version="3.0"))
         session.flush()
         _insert(session, a, "2026-06")
         latest = _insert(session, a, "2026-08")
@@ -69,7 +69,7 @@ def test_owner_pair_requires_exact_previous_month_account_provider_and_owner(tmp
         _insert(session, b, "2026-07")
     pair, profile = owner_receipt_pair(app.state.store, str(a))
     assert [item["id"] for item in pair] == [latest]
-    assert profile["privacy_notice_version"] == "2.0"
+    assert profile["privacy_notice_version"] == "3.0"
     with app.state.store.Session.begin() as session:
         previous = _insert(session, a, "2026-07")
     pair, _ = owner_receipt_pair(app.state.store, str(a))
@@ -216,8 +216,7 @@ def test_max_model_failure_then_help_is_not_poisoned(tmp_path):
     with app.state.store.Session.begin() as session:
         session.add(User(id=uid, max_user_id=123))
         session.flush()
-        session.add(Profile(user_id=uid, role="other", territory_id=None,
-                            privacy_notice_version="1.0", chat_llm_consent_at=datetime.now(timezone.utc)))
+        session.add(Profile(user_id=uid, role="other", territory_id=None, privacy_notice_version="1.0"))
     headers = {"X-Max-Bot-Api-Secret": "fixture_secret"}
 
     def event(mid, text):
@@ -230,28 +229,26 @@ def test_max_model_failure_then_help_is_not_poisoned(tmp_path):
                            headers=headers).status_code == 200
         assert client.post("/integrations/max/webhook", json=event("e4-2", "/help"),
                            headers=headers).status_code == 200
-    with patch("app.services.deepseek.extract", side_effect=ModelUnavailable("timeout")) as reader, \
-            patch("app.services.assistant_adapter.classify", side_effect=ModelUnavailable("timeout")) as model:
+    with patch("app.services.deepseek.route", side_effect=ModelUnavailable("timeout")) as router, \
+            patch("app.services.assistant_adapter.classify", side_effect=AssertionError("single model call")):
         assert process_inbox_once(app.state.store)
-    reader.assert_called_once()
-    model.assert_called_once()
+    router.assert_called_once()
     assert process_inbox_once(app.state.store)
     with app.state.store.Session() as session:
         answers = session.scalars(select(AssistantAnswer)).all()
         outgoing = session.scalars(select(Outbox)).all()
-    assert len(answers) == 1 and len(outgoing) == 2
+    assert len(answers) == 1 and len(outgoing) == 2  # The rule-based path answered despite the failure.
     assert any("DeepSeek" in item.text for item in outgoing)
 
 
-def test_max_old_profile_never_sends_question_without_chat_consent(tmp_path):
+def test_max_deepseek_is_on_by_default_and_llm_off_opts_out(tmp_path):
     app = _store(tmp_path, max_bot_token="fixture-token", max_webhook_secret="fixture_secret",
                  deepseek_api_key="fixture-key")
     uid = uuid.uuid4()
     with app.state.store.Session.begin() as session:
         session.add(User(id=uid, max_user_id=123))
         session.flush()
-        session.add(Profile(user_id=uid, role="owner", territory_id="moscow",
-                            privacy_notice_version="1.0"))
+        session.add(Profile(user_id=uid, role="owner", territory_id="moscow", privacy_notice_version="1.0"))
 
     def event(mid, text):
         return {"update_type": "message_created", "timestamp": 1_700_000_000_000,
@@ -261,26 +258,23 @@ def test_max_old_profile_never_sends_question_without_chat_consent(tmp_path):
 
     headers = {"X-Max-Bot-Api-Secret": "fixture_secret"}
     with TestClient(app) as client:
-        for mid, message in (("old-1", "Почему вырос счёт?"),
-                             ("old-2", "/llm_on"), ("old-3", "Почему вырос счёт?"),
-                             ("old-4", "/llm_off")):
+        for mid, message in (("d-1", "Почему вырос счёт?"), ("d-2", "/llm_off"),
+                             ("d-3", "Почему вырос счёт?"), ("d-4", "/llm_on"), ("d-5", "Почему вырос счёт?")):
             assert client.post("/integrations/max/webhook", json=event(mid, message),
                                headers=headers).status_code == 200
-    reading = {"intent": "new_question", "topic_id": "bill_change", "service": None, "city": None,
-               "option_index": None}
-    with patch("app.services.deepseek.extract", return_value=reading) as reader, \
-            patch("app.services.assistant_adapter.classify", return_value={
-                "intent": "bill_rise", "topic_id": "bill_change"}) as model:
+    decision = {"kind": "run", "action": {"function": "bill_rise", "params": {}}, "text": "", "options": []}
+    with patch("app.services.deepseek.route", return_value=decision) as router:
         assert process_inbox_once(app.state.store)
-        reader.assert_not_called()
-        model.assert_not_called()
-        assert process_inbox_once(app.state.store)  # consent
+        router.assert_called_once()  # On by default, no consent step.
+        assert process_inbox_once(app.state.store)  # /llm_off
         assert process_inbox_once(app.state.store)
-        reader.assert_called_once()
-        model.assert_not_called()  # One model call per turn: the dialogue already read the question.
-        assert process_inbox_once(app.state.store)  # revoke
+        router.assert_called_once()  # Opted out: the rules answer, nothing goes to the model.
+        assert process_inbox_once(app.state.store)  # /llm_on
+        assert process_inbox_once(app.state.store)
+        assert router.call_count == 2
     with app.state.store.Session() as session:
-        assert session.get(Profile, uid).chat_llm_consent_at is None
+        profile = session.get(Profile, uid)
+        assert profile.chat_llm_opt_out_at is None and profile.chat_llm_consent_at is not None
 
 
 def _chat(app, user_id, texts):

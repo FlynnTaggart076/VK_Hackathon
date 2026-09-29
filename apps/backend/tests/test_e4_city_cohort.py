@@ -40,7 +40,7 @@ def _seed(store, index: int, period="2026-08", amount="100.00", *,
         session.add(User(id=uid, max_user_id=10000 + index))
         session.flush()
         session.add(Profile(user_id=uid, role="owner", territory_id="moscow",
-                            onboarding_completed=True, privacy_notice_version="2.0"))
+                            onboarding_completed=True, privacy_notice_version="3.0"))
         session.add(Receipt(id=rid, user_id=uid, status="confirmed", current_revision=1,
                             dataset_kind=dataset_kind, extraction_outcome="recognized",
                             created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc)))

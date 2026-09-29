@@ -122,10 +122,10 @@ def command_text(item: WebhookInbox) -> str | None:
     result = _command_text(item)
     if result and (item.event_type == "bot_started" or
                    (item.text or "").strip().lower() in {"/start", "/help"}):
-        result += ("\nДля понимания вопросов текст после удаления адреса, телефонов и номеров "
-                   "может передаваться внешнему сервису DeepSeek — только с вашего согласия. Включить: /llm_on, "
-                   "отключить: /llm_off. Адрес дома (без квартиры) используется только для поиска УК и "
-                   "поставщиков в открытых справочниках. Не присылайте номер квартиры, лицевого счёта и документы.")
+        result += ("\nВопросы своими словами понимает нейросеть DeepSeek: ей передаётся текст вопроса без "
+                   "адреса, телефонов и номеров. Отключить: /llm_off, включить снова: /llm_on. Адрес дома "
+                   "(без квартиры) используется только для поиска УК и поставщиков в открытых справочниках. "
+                   "Не присылайте номер квартиры, лицевого счёта и документы.")
     return result
 
 
@@ -149,13 +149,15 @@ def chat_consent_text(session, item: WebhookInbox, settings) -> str | None:
         return None
     user = _ensure_user(session, item.max_user_id)
     profile = session.get(Profile, user.id)
-    profile.chat_llm_consent_at = now() if command == "/llm_on" else None
+    enabled = command == "/llm_on"
+    profile.chat_llm_consent_at = now() if enabled else None
+    profile.chat_llm_opt_out_at = None if enabled else now()
     for row in session.scalars(select(DialogState).where(DialogState.user_id == user.id)):
-        row.state = {**row.state, "llm_declined": command == "/llm_off", "consent_offered": True}
-    return ("Согласие на передачу очищенного текста вопроса DeepSeek сохранено. "
-            "Квитанции из мини-приложения требуют отдельного подтверждения правил обработки."
-            if command == "/llm_on" else
-            "Согласие на передачу текста вопроса DeepSeek отозвано.")
+        row.state = {**row.state, "llm_declined": not enabled}
+    return ("Нейросеть снова включена: я понимаю вопросы своими словами. Отключить — /llm_off."
+            if enabled else
+            "Нейросеть отключена: текст вопросов больше не передаётся DeepSeek. Отвечаю по кнопкам и "
+            "справочнику. Включить снова — /llm_on.")
 
 
 def start_keyboard(settings: object) -> list[dict]:

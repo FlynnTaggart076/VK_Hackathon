@@ -53,7 +53,7 @@ class Settings:
     upload_max_bytes: int = 10_485_760
     pdf_max_pages: int = 3
     image_max_pixels: int = 25_000_000
-    privacy_notice_version: str = "2.0"
+    privacy_notice_version: str = "3.0"
     housescore_api_key: str | None = None
     house_lookup_cache_dir: Path | None = None
     housescore_daily_limit: int = 30
@@ -431,7 +431,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                              "dialog": settings.engine_mode == "real" and bool(settings.database_url),
                              "house_lookup": bool(settings.housescore_api_key)},
                 "privacy_notice": {"version": settings.privacy_notice_version,
-                                   "text": "Исходные документы хранятся 7 дней, подтверждённые данные квитанций — 120 дней. Для ответа выбранный текст вопроса и обезличенные расчётные факты могут передаваться внешнему сервису DeepSeek; исходные документы, адрес и номер счёта не передаются. Городская статистика использует подтверждённые квитанции только после отдельного согласия; его можно отозвать."}}
+                                   "text": "Исходные документы хранятся 7 дней, подтверждённые данные квитанций — 120 дней. Текст ваших вопросов помощнику без адреса, телефонов и номеров передаётся внешнему сервису DeepSeek, чтобы понять вопрос; отключить можно кнопкой «Без нейросети» или командой /llm_off. Исходные документы, адрес и номер счёта в DeepSeek не передаются. Адрес дома без квартиры используется только для поиска управляющей организации и поставщиков в открытых справочниках HouseScore и Dominfo. Городская статистика использует подтверждённые квитанции только после отдельного согласия; его можно отозвать."}}
 
     @app.post("/api/v1/auth/demo")
     async def auth_demo(request: Request):

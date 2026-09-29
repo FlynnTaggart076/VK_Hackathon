@@ -63,6 +63,7 @@ export function Assistant() {
   const pending = useRef<AbortController | null>(null);
   const counter = useRef(0);
   const bottom = useRef<HTMLDivElement | null>(null);
+  const input = useRef<HTMLTextAreaElement | null>(null);
 
   const confirmed = receipt?.status === 'confirmed' ? receipt : null;
 
@@ -128,7 +129,7 @@ export function Assistant() {
           {message.reply?.dataset_kind === 'synthetic' && <p className="badge">Учебные данные</p>}
           {message.reply && message.id === latest && message.reply.options.length > 0 && <div className="suggestion-buttons" role="group" aria-label="Варианты ответа">
             {message.reply.options.map((option) => <button key={option.value} type="button" disabled={busy}
-              onClick={() => void send({ choice: option.value }, option.label)}>{option.label}</button>)}
+              onClick={() => { if (option.value === 'free_text') { input.current?.focus(); return; } void send({ choice: option.value }, option.label); }}>{option.label}</button>)}
           </div>}
         </article>)}
       {PREVIEW_MODE && confirmed?.dataset_kind === 'synthetic' && messages.some((item) => item.role === 'user') &&
@@ -142,7 +143,7 @@ export function Assistant() {
     {!hasSessionToken() && <p>Войдите на главной, чтобы задать вопрос.</p>}
     <form className="chat-form" onSubmit={submit}>
       <label htmlFor="question">Ваш вопрос</label>
-      <textarea id="question" value={question} rows={2} maxLength={2000} placeholder="Например: контакты УК, куда передать показания воды"
+      <textarea id="question" ref={input} value={question} rows={2} maxLength={2000} placeholder="Спросите своими словами, например: пришёл большой счёт за воду"
         onChange={(event) => setQuestion(event.target.value)}
         onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
       <div className="actions">

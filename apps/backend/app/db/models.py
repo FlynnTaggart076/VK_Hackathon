@@ -36,6 +36,7 @@ class Profile(Base):
     privacy_notice_version: Mapped[str | None] = mapped_column(String(50))
     privacy_acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     chat_llm_consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    chat_llm_opt_out_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     aggregate_opt_in: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
