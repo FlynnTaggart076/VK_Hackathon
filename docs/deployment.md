@@ -14,6 +14,14 @@
 `docker compose config` и не сбрасывайте это правило. Детали backup/restore и
 сохранённых параллельных изменений — в `reports/agent-b-restart-policy.md`.
 
+При первой попытке обновления VM checkout передал исходникам mode `0660`;
+старый Dockerfile копировал их в образ как `root:root`, и непривилегированный
+`app` не смог прочитать `alembic.ini`. Новый Dockerfile после COPY даёт группе
+`app` права чтения `/workspace` и проверяет доступ к миграции, knowledge и
+fixtures при сборке. Не исправляйте этот сбой запуском миграции от root или
+изменением прав приватного runtime env. Доказательства rollback и теста image
+с mode `0660` — `reports/agent-b-vm-permissions.md`.
+
 ## Историческая E1 проверка
 
 ## Локальная схема
