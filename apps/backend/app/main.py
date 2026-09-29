@@ -302,7 +302,8 @@ class MemoryStore:
             return result
 
     def import_demo(self, user_id: str, key: str, fixture_id: str) -> dict:
-        if fixture_id not in {"water-2026-08", "water-2026-09"}:
+        from app.services.demo_samples import CITY_PREVIEW_IDS, DEMO_FIXTURES
+        if fixture_id not in DEMO_FIXTURES or (fixture_id in CITY_PREVIEW_IDS and self.settings.mode != "preview"):
             raise ApiError(404, "NOT_FOUND", "Демообразец не найден.")
         fingerprint = hashlib.sha256(f"demo:{fixture_id}".encode()).hexdigest()
         idem_key = (user_id, "POST /api/v1/receipts/demo", key)
@@ -541,6 +542,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "demo_receipts": [
                     {"fixture_id": "water-2026-08", "label": "Вода, август", "description": "Синтетическая квитанция"},
                     {"fixture_id": "water-2026-09", "label": "Вода, сентябрь", "description": "Синтетическая квитанция"},
+                    *([
+                        {"fixture_id": "city-moscow-water-2026-08", "label": "Москва · август 2026", "description": "Учебная квитанция для сравнения с искусственной выборкой"},
+                        {"fixture_id": "city-moscow-water-2026-09", "label": "Москва · сентябрь 2026", "description": "Учебная квитанция для сравнения с искусственной выборкой"},
+                        {"fixture_id": "city-lyubertsy-water-2026-08", "label": "Люберцы · август 2026", "description": "Учебная квитанция для сравнения с искусственной выборкой"},
+                        {"fixture_id": "city-lyubertsy-water-2026-09", "label": "Люберцы · сентябрь 2026", "description": "Учебная квитанция для сравнения с искусственной выборкой"},
+                    ] if settings.mode == "preview" else []),
                 ]}
 
     @app.post("/api/v1/assistant/answers")
@@ -745,6 +752,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         return await run_in_threadpool(city_comparison, store, user_id, str(receipt_id),
                                        service_code, metric)
+
+    @app.get("/api/v1/preview/receipts/{receipt_id}/city-comparison")
+    async def preview_city_comparison_http(receipt_id: uuid.UUID, service_code: str, metric: str,
+                                           user_id: str = Depends(current_user)):
+        if settings.mode != "preview" or not settings.preview_auth_enabled or not isinstance(store, SqlStore):
+            raise ApiError(403, "PREVIEW_DISABLED", "Учебное сравнение доступно только в preview.")
+        from app.services.preview_city import preview_city_comparison
+
+        return await run_in_threadpool(preview_city_comparison, store, user_id,
+                                       str(receipt_id), service_code, metric)
 
     @app.post("/api/v1/receipts", status_code=202)
     async def upload_receipt(file: UploadFile, idempotency_key: str = Header(alias="Idempotency-Key"),

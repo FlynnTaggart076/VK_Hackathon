@@ -59,6 +59,8 @@ jobs:
             sleep 3
           done
           test "$ready" = 200
+          "${compose[@]}" run --rm --no-deps -v "$GITHUB_WORKSPACE:/repo:ro" \
+            worker sh -c 'TEST_PREVIEW_POSTGRES_URL="$DATABASE_URL" PYTHONPATH=/workspace python -m pytest -q /repo/apps/backend/tests/test_e4_preview_city.py'
           "${compose[@]}" exec -T web nginx -t
           "${compose[@]}" exec -T api python - <<'PY'
           import uuid
