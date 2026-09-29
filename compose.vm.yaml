@@ -1,4 +1,6 @@
 services:
+  db:
+    restart: unless-stopped
   migrate:
     environment: &production_settings
       APP_MODE: production
@@ -9,16 +11,19 @@ services:
       MAX_WEBHOOK_SECRET: ${MAX_WEBHOOK_SECRET:?set MAX_WEBHOOK_SECRET in private runtime/app.env}
       MAX_WEB_APP: ${MAX_WEB_APP:?set MAX_WEB_APP in private runtime/app.env}
   api:
+    restart: unless-stopped
     environment: *production_settings
     networks:
       private: {}
       model_egress: {}
   worker:
+    restart: unless-stopped
     environment: *production_settings
     networks:
       private: {}
       max_egress: {}
   web:
+    restart: unless-stopped
     networks:
       private: {}
       edge:

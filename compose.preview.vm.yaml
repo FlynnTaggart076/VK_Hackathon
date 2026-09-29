@@ -11,6 +11,7 @@ services:
       MAX_WEBHOOK_SECRET: ""
       MAX_WEB_APP: ""
   api:
+    restart: unless-stopped
     environment: *preview_settings
     networks:
       private: {}
@@ -18,14 +19,17 @@ services:
     mem_limit: 1024m
     cpus: 1.5
   worker:
+    restart: unless-stopped
     environment: *preview_settings
     networks: [private]
     mem_limit: 2048m
     cpus: 1.5
   db:
+    restart: unless-stopped
     mem_limit: 512m
     cpus: 0.5
   web:
+    restart: unless-stopped
     build:
       args:
         VITE_APP_BASE: /team/zhkh-preview/
