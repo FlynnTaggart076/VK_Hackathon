@@ -1,16 +1,16 @@
 # Помощник ЖКХ в MAX — E4 кандидат с DeepSeek
 
-Код новой версии с DeepSeek, разбором ЕПД и городским сравнением прошёл
-[E2 Compose/PG17](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36481270712)
-и [E4 preview/PG17](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36481270745)
-на раннем integration SHA `9293b21`; окончательный [E2 Compose/PG17](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36532214441)
-и [E4 preview/PG17](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36532214212)
-прошли на integration `345edd9`. Production
-`https://flynntaggart075.asuscomm.com/team/zhkh/` и отдельный preview
-`https://flynntaggart075.asuscomm.com/team/zhkh-preview/` развёрнуты из SHA
-`32a09a12daad87c5137577ac5cd7ee505d51c554`. Публичный HTTPS и учебный
-браузерный сценарий проверены; реальный MAX Web/Android клиент ещё не принят.
-Организаторы должны привязать mini-app к боту после подачи production URL.
+Текущий release `b9032d549b560e93ebfbd3276ba0de8e63289d90` развёрнут на VM:
+production — `https://flynntaggart075.asuscomm.com/team/zhkh/`, отдельный
+учебный preview — `https://flynntaggart075.asuscomm.com/team/zhkh-preview/`.
+Код прошёл [E2 Compose/PG17](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36540202114)
+и [E4 preview/PG17](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36540202219)
+на integration `fab4485`; release отличается только документацией. Публичный
+preview проверен в Chrome на 360/1280 px с реальным API, отдельными гостями и
+учебными квитанциями Москвы/Люберец за два месяца. MAX Android чат ранее
+подтверждён владельцем, но новую кнопку и открытие mini-app в MAX нужно принять
+отдельно. Для постоянной кнопки владелец/организаторы привязывают production URL
+в настройках бота на платформе MAX.
 
 Каталог и демонстрационные квитанции синтетические. Локальный текстовый ЕПД
 Московской области извлечён на 19 начисленных строк, но требует проверки и
@@ -18,8 +18,10 @@
 УК/поставщиков не подтверждены. Городская статистика показывается лишь при
 пяти сопоставимых подтверждённых квитанциях жителей с согласием; такой реальной
 выборки пока нет.
+В preview доступно числовое сравнение только с фиксированной синтетической
+выборкой, явно помеченной как учебная; это не статистика жителей города.
 Голос, транскрибация и реальная отправка обращения не входят в продукт.
-Уровни проверок и оставшиеся блокеры — в [отчёте VM](reports/agent-b-release-32a09a1-vm.md) и
+Уровни проверок и оставшиеся блокеры — в [интеграционном отчёте](reports/integration.md) и
 [плане](IMPLEMENTATION_PLAN.md).
 
 ## Локальный Compose

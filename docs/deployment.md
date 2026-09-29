@@ -1,7 +1,7 @@
 # Развёртывание ЖКХ MVP: Compose и командная VM
 
 Production и отдельный preview развёрнуты на VM из принятого SHA
-`32a09a12daad87c5137577ac5cd7ee505d51c554`. Ключи MAX и DeepSeek
+`b9032d549b560e93ebfbd3276ba0de8e63289d90`. Ключи MAX и DeepSeek
 находятся в закрытых runtime env вне Git; preview не получает MAX credentials.
 Порядок, резервная копия и границы
 обновления — `TECHNICAL_SPEC.md` §12.8.
