@@ -445,7 +445,7 @@ def _continue_contacts(state: dict, deps: DialogDeps) -> dict:
         details = deps.lookup.house_details(house)
     except LookupUnavailable as exc:
         return _lookup_failed(state, deps, exc.code)
-    card = build_service_card(details, state["service"])
+    card = {**build_service_card(details, state["service"]), "intro": _TOPIC_INTRO.get(topic)}
     parts = []
     if topic in _TOPIC_INTRO:
         parts.append(_TOPIC_INTRO[topic])
@@ -526,6 +526,12 @@ def _render_answer(state: dict, question: str, result: dict) -> dict:
     if status == "unsupported" and not result.get("topic_id"):
         reply = _menu_reply(state, "\n\n".join(lines + ["Выберите тему из списка или переформулируйте вопрос."]))
         reply["status"] = "unsupported"
+    elif status == "unsupported":
+        # No verified local instruction: offer the managing company's contacts instead of a dead end.
+        state["awaiting"] = None
+        state["options"] = [_option("topic:management_contacts", "Контакты УК"), _option(*BACK)]
+        lines.append("Местный порядок подскажет управляющая организация дома — могу найти её контакты по адресу.")
+        reply = _reply(status, "\n\n".join(lines), list(state["options"]), topic_id=state["topic_id"])
     else:
         state["awaiting"] = None
         state["options"] = [_option(*BACK)]
@@ -577,7 +583,29 @@ def _new_question(state: dict, deps: DialogDeps, text: str, llm: dict | None) ->
         topic = llm["topic_id"]
     if topic:
         return _start_contacts(state, deps, topic, text)
+    address = find_address(text)
+    city_only = city is not None and len(_norm(text).split()) <= 3
+    if address or city_only:
+        # Only an address or a city, no question: ask what to look up there.
+        if address:
+            _set_address(state, address)
+        else:
+            _set_city_only(state, city)
+        where = f"по адресу «{address}»" if address else f"в городе {city[0]}"
+        return _ask(state, "topic", f"Что найти {where}?", [
+            ("topic:management_contacts", "Контакты УК"), ("topic:supplier_contacts", "Поставщик услуги"),
+            ("topic:meter_readings", "Куда передать показания"), BACK])
     return _faq(state, deps, llm)
+
+
+def _set_city_only(state: dict, city: tuple) -> None:
+    memory = state["memory"]
+    memory["city"] = city[0]
+    if city[1]:
+        memory["territory_id"] = city[1]
+    memory["address"] = None
+    memory["house"] = None
+    state["candidates"] = []
 
 
 def _llm_read(state: dict, deps: DialogDeps, text: str) -> dict | None:
@@ -695,7 +723,7 @@ def _answer_pending(state: dict, deps: DialogDeps, text: str, llm: dict | None) 
             return _continue_contacts(state, deps)
         if mentions_water(text) and not new_topic:
             return _ask(state, "service", "Какая именно вода?", list(WATER_OPTIONS) + [BACK])
-        return None if new_topic or len(text) > 40 else _ask(
+        return None if new_topic or len(_norm(text).split()) > 2 else _ask(
             state, "service", "Не понял услугу. Выберите её кнопкой или напишите, например: «холодная вода», «свет».",
             [(f"service:{code}", label) for code, label in SERVICE_OPTIONS])
     if awaiting in {"address", "house_choice"}:
@@ -734,6 +762,10 @@ def _answer_pending(state: dict, deps: DialogDeps, text: str, llm: dict | None) 
         if address and not new_topic:
             _set_address(state, address)
             return _continue_contacts(state, deps)
+        city = find_city(text)
+        if city is not None and len(_norm(text).split()) <= 3 and state.get("flow") == "contacts":
+            _set_city_only(state, city)  # «Люберцы» after a card: another house in that city.
+            return _continue_contacts(state, deps)
         return None
     if awaiting == "territory":
         city = find_city(text)
@@ -752,7 +784,7 @@ def _answer_pending(state: dict, deps: DialogDeps, text: str, llm: dict | None) 
                           "проверенные сведения есть для Москвы и Московской области. Порядок зависит от региона: "
                           "уточните его в МФЦ или на официальном портале вашего региона.",
                           list(state["options"]), topic_id=state["topic_id"])
-        return None if new_topic or len(text) > 60 else _ask(
+        return None if new_topic or len(_norm(text).split()) > 3 else _ask(
             state, "territory", "Не узнал город. Напишите город или выберите регион кнопкой.", state["options"])
     if awaiting == "role":
         words = _norm(text)
@@ -762,14 +794,14 @@ def _answer_pending(state: dict, deps: DialogDeps, text: str, llm: dict | None) 
         if role:
             state["context"]["role"] = role
             return _faq(state, deps)
-        return None if len(text) > 40 else _ask(state, "role", "Выберите роль кнопкой.", state["options"])
+        return None if len(_norm(text).split()) > 2 else _ask(state, "role", "Выберите роль кнопкой.", state["options"])
     if awaiting == "engine_service":
         service = find_service(text)
         mapped = {"sewerage": "drainage", "gas": "other", "management": "maintenance"}.get(service, service)
         if mapped:
             state["context"]["service_code"] = mapped
             return _faq(state, deps)
-        return None if len(text) > 40 else _ask(state, "engine_service", "Выберите услугу кнопкой.", state["options"])
+        return None if len(_norm(text).split()) > 2 else _ask(state, "engine_service", "Выберите услугу кнопкой.", state["options"])
     if awaiting == "document_kind":
         if new_topic or len(text) > 200:
             return None

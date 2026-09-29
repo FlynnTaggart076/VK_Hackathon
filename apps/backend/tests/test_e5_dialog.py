@@ -14,6 +14,7 @@ from app.main import Settings, create_app
 from app.services.deepseek import _redact
 from app.services.house_lookup import LookupUnavailable
 from app.services.max_queue import process_inbox_once
+from test_contract_responses import validate_response
 
 GUID_1 = "11111111-1111-4111-8111-111111111111"
 GUID_2 = "22222222-2222-4222-8222-222222222222"
@@ -74,6 +75,7 @@ def login(client, identity="reviewer_a"):
         response = client.post("/api/v1/assistant/dialog", json={"message": message, "choice": choice, **extra},
                                headers=headers)
         assert response.status_code == 200, response.text
+        validate_response("DialogReply", response.json())
         return response.json()
     return say
 
@@ -143,6 +145,41 @@ def test_new_question_during_pending_address_starts_over(app):
         reply = say("Почему выросла сумма в квитанции?")
         assert reply["topic_id"] == "bill_change" and "квитанц" in reply["text"].lower()
         assert reply["awaiting"] is None
+
+
+def test_off_topic_text_during_a_pending_choice_is_a_new_question(app):
+    with TestClient(app) as client, patch("app.services.house_lookup.lookup_for", return_value=FakeLookup()):
+        say = login(client)
+        assert say("Где передать показания?")["awaiting"] == "service"
+        assert say("вод")["awaiting"] == "service"  # A short unclear answer is asked again.
+        reply = say("Напиши код сортировки")
+        assert reply["awaiting"] is None and reply["menu"] is True
+
+
+def test_unsupported_local_answer_offers_management_contacts(app):
+    with TestClient(app) as client, patch("app.services.house_lookup.lookup_for", return_value=FakeLookup()):
+        say = login(client)
+        say("Контакты УК Москва, ул. Примерная, д. 12, корпус 2")  # Remembers a real territory.
+        say(reset=True)
+        say("Как получить жилищный документ?")
+        reply = say("справка о составе семьи")
+        if reply["awaiting"] == "role":
+            reply = say("собственник")
+        assert reply["status"] == "unsupported" and "Контакты УК" in labels(reply)
+        card = say("Контакты УК")
+        assert card["card"]["service"]["code"] == "management"
+
+
+def test_address_or_city_without_a_question_asks_what_to_find(app):
+    lookup = FakeLookup()
+    with TestClient(app) as client, patch("app.services.house_lookup.lookup_for", return_value=lookup):
+        say = login(client)
+        reply = say("Москва, ул. Примерная, д. 12, к. 2")
+        assert reply["awaiting"] == "topic" and "Контакты УК" in labels(reply)
+        card = say("Контакты УК")
+        assert card["card"]["service"]["code"] == "management"
+        reply = say("Люберцы")  # After a card a bare city means another house there.
+        assert reply["awaiting"] == "address" and "в городе Люберцы" in reply["text"]
 
 
 def test_bare_service_word_and_numbers_do_not_dead_end(app):

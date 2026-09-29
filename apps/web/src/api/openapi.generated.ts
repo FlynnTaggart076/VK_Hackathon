@@ -829,6 +829,8 @@ export interface components {
             url: string;
         };
         HouseCard: {
+            /** @description Topic-specific hint shown before the card (readings */
+            intro: string | null;
             address: string;
             fias_guid: string;
             service: {

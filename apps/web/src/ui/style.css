@@ -60,6 +60,7 @@ fieldset { border: 1px solid #c9d8e1; border-radius: 8px; margin: 16px 0; paddin
 .house-card div { display: grid; grid-template-columns: minmax(0, 11em) minmax(0, 1fr); gap: 8px; }
 .house-card dt { font-weight: 600; } .house-card dd { margin: 0; }
 .chat .suggestion-buttons { margin: 10px 0 0; }
-.chat-form { position: sticky; bottom: env(safe-area-inset-bottom, 0px); background: white; padding-top: 8px; }
+.chat-form { padding-top: 8px; border-top: 1px solid #d6e0e6; }
+.house-card-wrap .review-warning { margin: 8px 0 0; font-size: .9rem; }
 button.secondary { background: white; color: #134b73; }
 @media (max-width: 480px) { .house-card div { grid-template-columns: 1fr; gap: 2px; } .bubble { max-width: 100%; } }

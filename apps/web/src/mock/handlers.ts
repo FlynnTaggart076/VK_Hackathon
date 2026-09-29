@@ -335,7 +335,7 @@ export const handlers = [
       const service = mockServices.find((item) => item.value === `service:${mockDialog.service}`)?.label ?? 'Услуга';
       reply = dialogReply({ status: 'answered', text: `${service} · Учебный город, Примерная улица, д. 1\nУправляющая организация: Учебная УК.`,
         options: [{ value: 'change_service', label: 'Другая услуга' }, { value: 'change_address', label: 'Другой адрес' }, { value: 'reset', label: 'Новый вопрос' }],
-        awaiting: 'after_card', card: { address: 'Учебный город, Примерная улица, д. 1', fias_guid: '00000000-0000-4000-8000-000000000001',
+        awaiting: 'after_card', card: { intro: null, address: 'Учебный город, Примерная улица, д. 1', fias_guid: '00000000-0000-4000-8000-000000000001',
           service: { code: mockDialog.service === 'management' ? 'management' : 'cold_water', name: service, status: mockDialog.service === 'management' ? 'management' : 'unknown', note: null },
           provider: null, management: { name: 'Учебная УК', phone: null, email: null, fetched_at: '2026-09-29' },
           source: { url: null, reviewed_at: null, record_start_at_utc: null }, links: [], warnings: [] } });

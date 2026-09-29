@@ -34,7 +34,9 @@ function LinkList({ links }: { links: DialogLink[] }) {
 
 function Card({ card }: { card: NonNullable<DialogReply['card']> }) {
   const phoneDigits = card.management.phone?.replace(/\D/g, '') ?? '';
-  return <dl className="house-card">
+  return <div className="house-card-wrap">
+    {card.intro && <p className="chat-text">{card.intro}</p>}
+    <dl className="house-card">
     <div><dt>Дом</dt><dd>{card.address}</dd></div>
     {card.service.code !== 'management' && <div><dt>{card.service.name}</dt><dd>{card.provider
       ? <>{card.provider.name}{card.service.status === 'candidate' && <small> · по историческим открытым данным, сверьте с квитанцией</small>}</>
@@ -43,7 +45,9 @@ function Card({ card }: { card: NonNullable<DialogReply['card']> }) {
     {card.management.phone && <div><dt>Телефон УК</dt><dd>{phoneDigits.length === 11 ? <a href={`tel:+${phoneDigits}`}>{card.management.phone}</a> : card.management.phone}</dd></div>}
     {card.management.email && <div><dt>Почта УК</dt><dd>{card.management.email}</dd></div>}
     <div><dt>Источник</dt><dd>HouseScore, данные от {card.management.fetched_at}{card.source.url ? ' · Dominfo' : ''}</dd></div>
-  </dl>;
+  </dl>
+    {card.warnings.length > 0 && <p className="review-warning">{card.warnings.join(' ')}</p>}
+  </div>;
 }
 
 export function Assistant() {
@@ -118,8 +122,7 @@ export function Assistant() {
         ? <p key={message.id} className="bubble user"><span className="sr-only">Вы: </span>{message.text}</p>
         : <article key={message.id} className={`bubble bot${message.reply?.status === 'unsupported' ? ' limited' : ''}`}>
           <span className="sr-only">Помощник: </span>
-          <p className="chat-text">{message.text}</p>
-          {message.reply?.card && <Card card={message.reply.card} />}
+          {message.reply?.card ? <Card card={message.reply.card} /> : <p className="chat-text">{message.text}</p>}
           {message.reply && <LinkList links={message.reply.links} />}
           {message.reply && message.id === latest && <ActionList actions={message.reply.actions} />}
           {message.reply?.dataset_kind === 'synthetic' && <p className="badge">Учебные данные</p>}

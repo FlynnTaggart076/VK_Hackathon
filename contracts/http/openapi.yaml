@@ -866,8 +866,9 @@ components:
     HouseCard:
       type: object
       additionalProperties: false
-      required: [address, fias_guid, service, provider, management, source, links, warnings]
+      required: [address, fias_guid, service, provider, management, source, links, warnings, intro]
       properties:
+        intro: {type: [string, 'null'], description: Topic-specific hint shown before the card (readings, deadlines, outages).}
         address: {type: string}
         fias_guid: {type: string}
         service:
