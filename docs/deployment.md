@@ -1,7 +1,11 @@
 # Развёртывание ЖКХ MVP: Compose и командная VM
 
 Production и отдельный preview развёрнуты на VM из принятого SHA
-`b9032d549b560e93ebfbd3276ba0de8e63289d90`. Ключи MAX и DeepSeek
+`a0844ee049a3213b078918eebc00dcdba3bab69b` (импорт `release-005015c`).
+Предыдущий релиз `37e6aba` сохранён в отдельных checkout. Миграций относительно
+него нет; обе БД остаются на `e5_dialog_state`. Перед обновлением выполнены
+закрытые backups и полное восстановление в отдельных проверочных БД.
+[Отчёт развёртывания](../reports/release-a0844ee-vm.md). Ключи MAX и DeepSeek
 находятся в закрытых runtime env вне Git; preview не получает MAX credentials.
 Порядок, резервная копия и границы
 обновления — `TECHNICAL_SPEC.md` §12.8.

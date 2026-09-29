@@ -1,16 +1,18 @@
 # Помощник ЖКХ в MAX — E4 кандидат с DeepSeek
 
-Текущий release `b9032d549b560e93ebfbd3276ba0de8e63289d90` развёрнут на VM:
+Текущий release `a0844ee049a3213b078918eebc00dcdba3bab69b` развёрнут на VM:
 production — `https://flynntaggart075.asuscomm.com/team/zhkh/`, отдельный
 учебный preview — `https://flynntaggart075.asuscomm.com/team/zhkh-preview/`.
-Код прошёл [E2 Compose/PG17](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36540202114)
-и [E4 preview/PG17](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36540202219)
-на integration `fab4485`; release отличается только документацией. Публичный
+Это импорт переданного владельцем `release-005015c` с обновлённым просмотром
+квитанций и справочником услуг. Код прошёл
+[E2 Compose/PG17](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36621394896)
+и [E4 preview/PG17](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36621395229)
+на integration `47190ff`; release отличается только документацией. Публичный
 preview проверен в Chrome на 360/1280 px с реальным API, отдельными гостями и
-учебными квитанциями Москвы/Люберец за два месяца. MAX Android чат ранее
-подтверждён владельцем, но новую кнопку и открытие mini-app в MAX нужно принять
-отдельно. Для постоянной кнопки владелец/организаторы привязывают production URL
-в настройках бота на платформе MAX.
+учебными квитанциями Москвы/Люберец за два месяца после этого обновления.
+MAX Android чат ранее подтверждён владельцем; запуск mini-app и полный сценарий
+в MAX Web/Android требуют отдельной приёмки и привязки production URL к боту.
+Подробности обновления — [отчёт VM](reports/release-a0844ee-vm.md).
 
 Каталог и демонстрационные квитанции синтетические. Локальный текстовый ЕПД
 Московской области извлечён на 19 начисленных строк, но требует проверки и
