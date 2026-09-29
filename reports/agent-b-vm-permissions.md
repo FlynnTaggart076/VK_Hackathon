@@ -1,6 +1,7 @@
 # B: VM image permission incident and follow-up
 
 Code commits: `bf9a0cddc9f3427e4bd7bbb584b881c69129e588` and `28c8a34f211531ac4ca577d2d8db3e71f3bb7d35` on `agent-b/e4-vm-permissions`.
+CI follow-up code: `a09fffdf623b442e645688b1593d1d8d871424bc`.
 Base release: `c0784c7abd3dbf63754d3403e15730eaaec11770`.
 
 ## VM state and recovery, 2026-09-29 UTC
@@ -15,5 +16,6 @@ Base release: `c0784c7abd3dbf63754d3403e15730eaaec11770`.
 
 - The backend Dockerfile now gives `/workspace` to group `app` for reading, including directories, and checks Alembic, engine, knowledge and fixture access during the image build after switching to `USER app`. No runtime files become world-writable or group-writable.
 - E2 Compose CI removes the source files' other-read bit before building, reproducing the VM checkout mode that caused the failure.
+- The first integration E2 run built the guarded image but three later cohort tests failed because their containers bind-mounted the permission-restricted host fixtures. The CI follow-up restores other-read permissions immediately after Compose build and in the exit trap. The new CI run is pending.
 - Local `git diff --check` passed. An isolated VM `docker build` of code SHA `28c8a34` from a clean checkout with the actual `0660` ini mode succeeded (`permission_build_exit:0`); the Dockerfile check ran as `USER app` and read Alembic, engine, knowledge and fixtures. This used a unique review image tag and did not run Compose, migrate, or alter live services. Integration CI remains required before release. Do not deploy this code until the coordinator accepts a new release SHA after CI.
 - After acceptance, redeploy production and preview from new clean worktrees, verify `e4_city_cohort` migration, HTTPS/preview UI, model and MAX egress, and preserve the shared Nginx and other projects. MAX client acceptance remains separate.
