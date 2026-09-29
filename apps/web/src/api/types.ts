@@ -40,6 +40,8 @@ export type DraftView = Schema['DraftView'];
 export type CityComparisonView = Schema['CityComparisonView'];
 export type AggregateConsentView = Schema['AggregateConsentView'];
 
+export type SyntheticCityComparisonView = Schema['PreviewCityComparisonView'];
+
 export interface UnexpectedErrorBody {
   error: { code: 'UNEXPECTED_RESPONSE'; message: string; retryable: boolean; fields: []; details: {} };
   request_id: string;
