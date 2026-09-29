@@ -32,19 +32,31 @@ jobs:
           export APP_MODE=dev ENGINE_MODE=real DEMO_AUTH_ENABLED=true LOCAL_WEB_PORT=18081
           project="zhkh-e2-ci-${GITHUB_RUN_ID}"
           compose=(docker compose -p "$project" -f compose.yaml -f compose.local.yaml)
+          restore_source_read_modes() {
+            find apps/backend/app apps/backend/migrations packages/housing_engine/src/housing_engine knowledge fixtures/receipts \
+              -type f -exec chmod o+r {} +
+            chmod o+r apps/backend/alembic.ini
+          }
           on_exit() {
             status=$?
+            restore_source_read_modes || true
             if [[ -n "${vite_pid:-}" ]]; then kill "$vite_pid" 2>/dev/null || true; fi
             if [[ -n "${nginx_dummy:-}" ]]; then docker rm -f "$nginx_dummy" >/dev/null 2>&1 || true; fi
             if (( status != 0 )); then "${compose[@]}" logs --no-color --tail=120 || true; fi
           }
           trap on_exit EXIT
           "${compose[@]}" config --quiet
+          # Reproduce the shared VM checkout mode: copied source has no other-read bit.
+          find apps/backend/app apps/backend/migrations packages/housing_engine/src/housing_engine knowledge fixtures/receipts \
+            -type f -exec chmod o-r {} +
+          chmod o-r apps/backend/alembic.ini
           if ! "${compose[@]}" up --build --detach > /tmp/zhkh-e2-build.log 2>&1; then
             build_error="$(tail -n 20 /tmp/zhkh-e2-build.log | tail -c 2200 | tr '\r\n' '  ' | sed -E 's#(postgresql\+psycopg://zhkh:)[^@ ]+#\1***#g')"
             echo "::error title=E2 Compose build::$build_error"
             exit 1
           fi
+          # Later test containers bind-mount this checkout and need to read fixtures.
+          restore_source_read_modes
           ready_code=000
           for attempt in $(seq 1 40); do
             ready_code="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18081/team/zhkh/health/ready || true)"

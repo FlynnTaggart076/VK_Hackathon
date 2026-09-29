@@ -31,7 +31,12 @@ COPY fixtures/receipts/manifest.json /workspace/fixtures/receipts/manifest.json
 COPY knowledge /workspace/knowledge
 
 RUN groupadd --system app && useradd --system --gid app --home /workspace app \
-    && mkdir /storage && chown app:app /storage
+    && mkdir /storage && chown app:app /storage \
+    && chgrp -R app /workspace && chmod -R g-w,g+rX /workspace
 USER app
+
+# Fail the build if checkout file modes would hide migrations or runtime data
+# from the non-root process used by migrate, api and worker.
+RUN python -c "from pathlib import Path; from alembic.config import Config; import housing_engine; root = Path('/workspace'); location = Config(str(root / 'alembic.ini')).get_main_option('script_location'); assert location and Path(location).is_dir(); assert (root / 'knowledge/topics/bill_change.yaml').read_text(encoding='utf-8'); assert (root / 'fixtures/receipts/manifest.json').read_text(encoding='utf-8')"
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
