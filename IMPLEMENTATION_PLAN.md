@@ -2,7 +2,20 @@
 
 Обновлено: 2026-09-29. Владелец: координатор. Источник требований: `TECHNICAL_SPEC.md` v1.1, 2026-09-27. Контракты: engine/HTTP v1.0 приняты для E0.
 
-## Текущий E4: запрос владельца на DeepSeek и реальный ЕПД (2026-09-28)
+## Текущая поставка: release-005015c (2026-09-29)
+
+Владелец передал ZIP и распакованную папку свежего релиза для синхронизации с Git и запуска на VM. Исходный SHA из ZIP — `005015cd9e5d77a6097e950aa995164d11b2ba61`, импорт в Git — `4730383`. Все 393 файла совпадают с ZIP, удалений относительно `ca23d1d` нет. [Задание A/B/C](tasks/e4/release-005015c.md). Архив, его папка и локальный `tmp.py` сохраняются вне commit.
+
+| Владелец | Ветка | Статус | Проверяемый результат |
+|---|---|---|---|
+| A | `agent-a/verify-005015c` | review | 49 unit tests/build и 4 mock browser сценария passed; report `e79edad`. Исправить устаревший локатор real browser CI |
+| C | `agent-c/verify-005015c` | review | 74 engine + 74 backend tests passed; 6 PostgreSQL skips. Зафиксировать Linux-compatible fixture hashes и HTTP contract check |
+| B | `agent-b/deploy-005015c` | in_progress | Read-only preflight принят: оба clean release `37e6aba`, schema `e5_dialog_state`, healthy и внутренние HTTP 200. Развернуть только после exact accepted main SHA |
+| Координатор | `integration/import-005015c` | in_progress | Принять исправления проверок, дождаться CI, синхронизировать main, передать release B и независимо проверить HTTPS |
+
+CI `b3e10e8`: [E4 preview/PG17](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36620632022) success; [E2](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36620632003) прошёл API/OCR/PostgreSQL проверки, затем упал на отсутствующем UI locator «Первый запуск» в `e2-real-flow.mjs`. Новых миграций в поставке нет. До принятия исправленного кандидата на VM остаётся `37e6aba`. Реальный MAX и E5 остаются отдельной приёмкой.
+
+## История E4: запрос владельца на DeepSeek и реальный ЕПД (2026-09-28)
 
 - **Исправление диалогов по запросу владельца 2026-09-29 (не развёрнуто):** ветка `fix/dialogue-pipelines`, слита в `main`. Общий серверный диалог для чата и мини-приложения (без петли уточнения города), контакты УК/поставщиков по адресу дома (HouseScore + Dominfo по решению владельца), согласие на DeepSeek одной кнопкой, чат в мини-приложении, автопереход и повтор OCR. Миграция `e5_dialog_state`; для production нужен `HOUSESCORE_API_KEY` в `runtime/app.env`. Детали, приватность, квоты и фактические проверки — [change-request-dialog-house-lookup.md](docs/change-request-dialog-house-lookup.md). Живые HouseScore/Dominfo/DeepSeek, VM и реальные клиенты MAX не проверены; следующий шаг — принять release SHA и развернуть по §12.8.
 - **Инцидент MAX Android 2026-09-29:** владелец подтвердил, что после `/help` inline-кнопка «Разобрать платёжку» отображается, но при нажатии возникает ошибка. Текст/скрин ошибки ещё ожидается. [Read-only отчёт B](reports/agent-b-max-open-app-diagnosis.md) pushed `82e3488`, принят в main `1f9a422`: production `MAX_WEB_APP` совпадает с `/me.username` выданного бота и фактическим `open_app.web_app` в outbox; публичный production URL отвечает HTTPS 200 без redirect и без блокирующих CSP/X-Frame-Options. Кодовый дефект не выявлен. Владелец подтвердил, что production URL **ещё не отправлен** через форму организаторов; по «Общему FAQ» они связывают URL с выданным ботом после отправки. Следующий шаг владельца — передать `https://flynntaggart075.asuscomm.com/team/zhkh/` через форму; после подтверждения привязки повторить запуск в MAX Android/Web и сверить экран ошибки, если она останется. До этого E4/E5 не принимать.

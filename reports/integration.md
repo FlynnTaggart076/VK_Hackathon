@@ -2,6 +2,15 @@
 
 Обновлено: 2026-09-29. Текущий этап: E4 после принятых E0–E3; E4 пока не принят. Актуальный checkpoint изменения DeepSeek находится ниже, прежние проверки сохранены как история.
 
+## Поставка release-005015c, 2026-09-29
+
+- Пользовательский ZIP SHA-256 `2e931b6db4e244a7e53de8b71d57e83c391da65c1ba5db087950207a89bb08db`, исходный SHA из ZIP `005015cd9e5d77a6097e950aa995164d11b2ba61`. Распакованные 393 файла совпали побайтно; 30 изменений/21 добавление/0 удалений против main `ca23d1d`. Проверка на известные локальные токены и распространённые форматы credentials не выявила совпадений. Исходный Git object отсутствует локально, в origin и в VM Git, поэтому создан import commit `4730383`. Executable bit deploy script восстановлен из ZIP в `b3e10e8`.
+- A report `e79edad` принят как `43f4db3`: 49 unit tests, build, browser E5 Russian UI (13 screens), service kind 360px, dense review (19 строк) и E2 mock passed. Runtime-код A не менял.
+- C сообщил 74 engine и 74 backend tests passed/6 PG skips. Найдено расхождение manifest SHA/bytes трёх fixtures между CRLF Windows и Git LF; исправление проверяется отдельно.
+- CI на `b3e10e8`: [E4 preview/PG17 success](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36620632022); [E2 failed](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36620632003) после успешных API, OCR, webhook и PG gates: устаревший `getByRole('link', {name: 'Первый запуск'})` в `e2-real-flow.mjs:18`. Дефект теста возвращён A; runtime defect не подтверждён.
+- B read-only preflight: production/preview clean HEAD `37e6aba`, schema `e5_dialog_state`, DB/API healthy, worker/web running, shared `/team/`/`healthz` и оба ready 200, 69G free. Прерванная предыдущая задача ничего на VM не меняла. Чужие M в старых checkout сохранены. Coordinator независимо повторил public prod/preview ready и `/team/` 200.
+- Следующий шаг: принять C/A fixes, повторить CI, опубликовать exact main SHA, затем B выполняет backup/restore и rollout из Git. Подтверждения запуска MAX Android/Web и полной E5 приёмки по-прежнему нет.
+
 ## E4 checkpoint: DeepSeek, реальный ЕПД и городское сравнение (2026-09-28)
 
 - **MAX Android: кнопка есть, запуск с ошибкой (2026-09-29).** Владелец подтвердил доставку новой inline-кнопки «Разобрать платёжку» после `/help`, но клиент MAX выдаёт ошибку при нажатии. Скрин/точный текст ещё не получен. B pushed [read-only диагноз](agent-b-max-open-app-diagnosis.md) `82e3488`, принят в main `1f9a422`: `MAX_WEB_APP` совпадает с authenticated `/me.username` и фактически сохранённым `open_app.web_app`, публичный HTTPS production URL отвечает 200 без redirect; CSP/X-Frame-Options не блокируют WebView. Владелец подтвердил, что URL организаторам **ещё не отправлен**; FAQ требует отправить его через форму для привязки к выданному боту. Отсутствующая привязка согласуется с ошибкой, но без экрана ошибки причинность не доказана. На VM изменений не было; deployed SHA остаётся `b9032d549b560e93ebfbd3276ba0de8e63289d90`. Следующий шаг — отправка production URL организаторам, подтверждение привязки, повторный запуск MAX Android и Web. E4/E5 и продуктовая готовность открыты.
