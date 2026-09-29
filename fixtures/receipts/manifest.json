@@ -245,8 +245,8 @@
     },
     {
       "file": "water-2026-08.json",
-      "sha256": "a3ceaf326907ef29febb5bbd050ada0e9b8b4fd56b85059965ad76a5eb534781",
-      "bytes": 1166,
+      "sha256": "6f9b5c1eb552a2d85388bcd84f3c79c65f44a1f56737bf481e0b3e74cf775be7",
+      "bytes": 1130,
       "media_type": "application/json",
       "representation": "canonical_bill_data",
       "template_id": null,
@@ -259,8 +259,8 @@
     },
     {
       "file": "water-2026-09.json",
-      "sha256": "90fb11ca0b92ebb1ada38a6682832c4fee3f21154a5a21007eccf6c9b9da7ca9",
-      "bytes": 1166,
+      "sha256": "4e763db8f76a86ea4c125d81e7d37f200a1baff445471c8c6eaa6c586163fd77",
+      "bytes": 1130,
       "media_type": "application/json",
       "representation": "canonical_bill_data",
       "template_id": null,
@@ -273,8 +273,8 @@
     },
     {
       "file": "water-comparison.json",
-      "sha256": "d835d60c7dc430bc7778baf3a1017f3a9d1f376e09e485b02434b679042cf751",
-      "bytes": 387,
+      "sha256": "82f02cc111bab0d77dc996e6dc71b371cca21cb80170bab71638164ac03b4784",
+      "bytes": 373,
       "media_type": "application/json",
       "representation": "expected_comparison",
       "template_id": null,
