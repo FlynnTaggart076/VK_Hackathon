@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "period": "2026-09",
+  "currency": "RUB",
+  "issuer_name": "Учебная управляющая организация",
+  "provider_id": "demo-provider-lyubertsy",
+  "account_number": "DEMO-LYT-001",
+  "address_text": "Московская область, г. Люберцы, ул. Примерная, д. 1, кв. 1",
+  "template_id": "demo-bill-v1",
+  "template_version": "1.0",
+  "services": [
+    {
+      "line_id": "21000000-0000-4000-8000-000000000004",
+      "raw_name": "Холодная вода",
+      "service_code": "cold_water",
+      "scope": "individual",
+      "unit": "m3",
+      "unit_label": null,
+      "quantity": "6.000000",
+      "tariff": "42.000000",
+      "charge_amount": "252.00",
+      "supplier_key": "demo-provider-lyubertsy",
+      "segment_key": null,
+      "calculation_kind": "simple_product"
+    }
+  ],
+  "adjustments": [],
+  "settlement": {
+    "formula_kind": "signed_balance_v1",
+    "opening_balance": "0.00",
+    "payments_credited": "0.00",
+    "penalties": "0.00",
+    "other_account_changes": "0.00",
+    "document_closing_balance": "252.00"
+  },
+  "document_current_charges": "252.00",
+  "document_total_due": "252.00"
+}
