@@ -18,6 +18,7 @@
     "test:browser:e4:clarifications": "node scripts/e4-clarifications-mock.mjs",
     "test:browser:e4:entry-diagnostics": "node scripts/e4-real-entry-diagnostics.mjs",
     "test:browser:e4:synthetic-city-preview-mock": "node scripts/e4-synthetic-city-preview-mock.mjs",
+    "test:browser:e4:synthetic-city-preview-live": "node scripts/e4-synthetic-city-preview-live.mjs",
     "test:browser:e4:dense-review": "node scripts/e4-dense-review-mock.mjs",
     "test:browser:e4:bridge-sim": "node scripts/e4-bridge-sim.mjs"
   },
