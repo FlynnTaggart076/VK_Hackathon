@@ -3,12 +3,14 @@
 Код новой версии с DeepSeek, разбором ЕПД и городским сравнением прошёл
 [E2 Compose/PG17](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36481270712)
 и [E4 preview/PG17](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36481270745)
-на integration SHA `9293b21`. Развёртывание новой версии на VM и её проверка
-в MAX ещё не выполнены. Production по адресу
-`https://flynntaggart075.asuscomm.com/team/zhkh/` пока работает из SHA
-`d3fa9b2fc4ea3ae89a0691c331945d2a6d1354f9`, отдельный preview — из
-`af2b066ab7d2854dc0138a0e0ef838598d8b76b4`. Организаторы должны привязать
-mini-app к боту после подачи опубликованного production URL.
+на раннем integration SHA `9293b21`; окончательный [E2 Compose/PG17](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36532214441)
+и [E4 preview/PG17](https://github.com/FlynnTaggart076/VK_Hackathon/actions/runs/36532214212)
+прошли на integration `345edd9`. Production
+`https://flynntaggart075.asuscomm.com/team/zhkh/` и отдельный preview
+`https://flynntaggart075.asuscomm.com/team/zhkh-preview/` развёрнуты из SHA
+`32a09a12daad87c5137577ac5cd7ee505d51c554`. Публичный HTTPS и учебный
+браузерный сценарий проверены; реальный MAX Web/Android клиент ещё не принят.
+Организаторы должны привязать mini-app к боту после подачи production URL.
 
 Каталог и демонстрационные квитанции синтетические. Локальный текстовый ЕПД
 Московской области извлечён на 19 начисленных строк, но требует проверки и
@@ -17,7 +19,7 @@ mini-app к боту после подачи опубликованного prod
 пяти сопоставимых подтверждённых квитанциях жителей с согласием; такой реальной
 выборки пока нет.
 Голос, транскрибация и реальная отправка обращения не входят в продукт.
-Уровни проверок и оставшиеся блокеры — в [отчёте B](reports/agent-b.md) и
+Уровни проверок и оставшиеся блокеры — в [отчёте VM](reports/agent-b-release-32a09a1-vm.md) и
 [плане](IMPLEMENTATION_PLAN.md).
 
 ## Локальный Compose

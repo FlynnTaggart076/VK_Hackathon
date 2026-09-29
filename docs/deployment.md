@@ -1,9 +1,8 @@
 # Развёртывание ЖКХ MVP: Compose и командная VM
 
-На VM уже развёрнут прежний production SHA `d3fa9b2` и отдельный preview
-`af2b066`. Новая версия с DeepSeek, ЕПД и городскими выборками ожидает
-принятого release SHA и обновления B. Токены MAX уже находятся в закрытом
-`runtime/app.env`; ключ DeepSeek B добавит туда же перед обновлением, вне Git.
+Production и отдельный preview развёрнуты на VM из принятого SHA
+`32a09a12daad87c5137577ac5cd7ee505d51c554`. Ключи MAX и DeepSeek
+находятся в закрытых runtime env вне Git; preview не получает MAX credentials.
 Порядок, резервная копия и границы
 обновления — `TECHNICAL_SPEC.md` §12.8.
 
