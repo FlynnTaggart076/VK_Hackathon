@@ -1,0 +1,154 @@
+{
+  "schema_version": "1.0",
+  "kind": "synthetic_preview_cohort",
+  "groups": [
+    {
+      "fixture_id": "city-moscow-water-2026-08",
+      "city": "moskva",
+      "territory_id": "moscow",
+      "period": "2026-08",
+      "service_code": "cold_water",
+      "scope": "individual",
+      "segment_key": null,
+      "unit": "m3",
+      "observations": [
+        {
+          "quantity": "4.000000",
+          "tariff": "40.000000",
+          "charge_amount": "160.00"
+        },
+        {
+          "quantity": "5.000000",
+          "tariff": "40.000000",
+          "charge_amount": "200.00"
+        },
+        {
+          "quantity": "6.000000",
+          "tariff": "40.000000",
+          "charge_amount": "240.00"
+        },
+        {
+          "quantity": "7.000000",
+          "tariff": "40.000000",
+          "charge_amount": "280.00"
+        },
+        {
+          "quantity": "10.000000",
+          "tariff": "40.000000",
+          "charge_amount": "400.00"
+        }
+      ]
+    },
+    {
+      "fixture_id": "city-moscow-water-2026-09",
+      "city": "moskva",
+      "territory_id": "moscow",
+      "period": "2026-09",
+      "service_code": "cold_water",
+      "scope": "individual",
+      "segment_key": null,
+      "unit": "m3",
+      "observations": [
+        {
+          "quantity": "5.000000",
+          "tariff": "45.000000",
+          "charge_amount": "225.00"
+        },
+        {
+          "quantity": "6.000000",
+          "tariff": "45.000000",
+          "charge_amount": "270.00"
+        },
+        {
+          "quantity": "7.000000",
+          "tariff": "45.000000",
+          "charge_amount": "315.00"
+        },
+        {
+          "quantity": "8.000000",
+          "tariff": "45.000000",
+          "charge_amount": "360.00"
+        },
+        {
+          "quantity": "12.000000",
+          "tariff": "45.000000",
+          "charge_amount": "540.00"
+        }
+      ]
+    },
+    {
+      "fixture_id": "city-lyubertsy-water-2026-08",
+      "city": "lyubertsy",
+      "territory_id": "moscow-oblast",
+      "period": "2026-08",
+      "service_code": "cold_water",
+      "scope": "individual",
+      "segment_key": null,
+      "unit": "m3",
+      "observations": [
+        {
+          "quantity": "4.000000",
+          "tariff": "38.000000",
+          "charge_amount": "152.00"
+        },
+        {
+          "quantity": "5.000000",
+          "tariff": "38.000000",
+          "charge_amount": "190.00"
+        },
+        {
+          "quantity": "6.000000",
+          "tariff": "38.000000",
+          "charge_amount": "228.00"
+        },
+        {
+          "quantity": "7.000000",
+          "tariff": "38.000000",
+          "charge_amount": "266.00"
+        },
+        {
+          "quantity": "10.000000",
+          "tariff": "38.000000",
+          "charge_amount": "380.00"
+        }
+      ]
+    },
+    {
+      "fixture_id": "city-lyubertsy-water-2026-09",
+      "city": "lyubertsy",
+      "territory_id": "moscow-oblast",
+      "period": "2026-09",
+      "service_code": "cold_water",
+      "scope": "individual",
+      "segment_key": null,
+      "unit": "m3",
+      "observations": [
+        {
+          "quantity": "5.000000",
+          "tariff": "42.000000",
+          "charge_amount": "210.00"
+        },
+        {
+          "quantity": "6.000000",
+          "tariff": "42.000000",
+          "charge_amount": "252.00"
+        },
+        {
+          "quantity": "7.000000",
+          "tariff": "42.000000",
+          "charge_amount": "294.00"
+        },
+        {
+          "quantity": "8.000000",
+          "tariff": "42.000000",
+          "charge_amount": "336.00"
+        },
+        {
+          "quantity": "12.000000",
+          "tariff": "42.000000",
+          "charge_amount": "504.00"
+        }
+      ]
+    }
+  ]
+}
