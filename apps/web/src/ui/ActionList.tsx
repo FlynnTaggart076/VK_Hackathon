@@ -22,13 +22,13 @@ function targetFor(action: NextAction): string | null {
 
 export function ActionList({ actions }: { actions: NextAction[] }) {
   if (!actions.length) return null;
-  return <div className="notice-box"><h4>Следующие шаги</h4><ul>{actions.map((action) => {
+  return <div className="notice-box"><h4>Следующие шаги</h4><ul className="action-list">{actions.map((action) => {
     const route = targetFor(action);
     let external: string | null = null;
     if (action.type === 'open_link' && action.url) {
       try { const parsed = new URL(action.url); if (parsed.protocol === 'https:') external = parsed.href; } catch { /* Bad URL stays plain text. */ }
     }
-    return <li key={action.id}>{route ? <Link to={route}>{action.label}</Link> : external ? <a href={external} target="_blank" rel="noopener noreferrer">{action.label}</a> : action.label}
+    return <li key={action.id}>{route ? <Link className="btn action-button" to={route}>{action.label}</Link> : external ? <a href={external} target="_blank" rel="noopener noreferrer">{action.label}</a> : action.label}
       {!!action.requires.length && <span> · требуется: {action.requires.join(', ')}</span>}
     </li>;
   })}</ul></div>;

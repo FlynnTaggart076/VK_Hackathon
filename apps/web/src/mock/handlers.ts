@@ -339,6 +339,11 @@ export const handlers = [
           service: { code: mockDialog.service === 'management' ? 'management' : 'cold_water', name: service, status: mockDialog.service === 'management' ? 'management' : 'unknown', note: null },
           provider: null, management: { name: 'Учебная УК', phone: null, email: null, fetched_at: '2026-09-29' },
           source: { url: null, reviewed_at: null, record_start_at_utc: null }, links: [], warnings: [] } });
+    } else if (choice === 'intent:bill_rise' || /вырос/.test(lower)) {
+      mockDialog = { awaiting: null, service: null };
+      reply = dialogReply({ status: 'answered', text: 'Чтобы объяснить изменение суммы, нужны подтверждённые квитанции за два соседних месяца. Загрузите квитанцию кнопкой ниже.',
+        options: [{ value: 'reset', label: 'Новый вопрос' }], actions: [{ id: 'upload-receipt', type: 'navigate', label: 'Загрузить квитанцию',
+          url: null, topic_id: null, organization_id: null, source_id: null, target: 'receipt_upload', receipt_ref: null, requires: [] }] });
     } else if (choice?.startsWith('topic:') || /поставщик|ук|показан/.test(lower)) {
       mockDialog = { awaiting: 'service', service: null };
       reply = dialogReply({ status: 'needs_input', text: 'По какой услуге?', options: mockServices, awaiting: 'service' });

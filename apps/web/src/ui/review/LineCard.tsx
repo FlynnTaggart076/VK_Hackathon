@@ -36,6 +36,7 @@ export function LineCard({ line, index, lines, evidence, issues, notes, open, on
           {lineNeedsAttention(index, evidence, issues) && <span className="chip chip--warn">Проверьте</span>}
           <span>{volumeText(line)}</span>
         </span>
+        <span className="line-toggle" aria-hidden="true">{open ? 'Свернуть' : 'Изменить'}</span>
       </div>
     </summary>
     <div className="line-body">

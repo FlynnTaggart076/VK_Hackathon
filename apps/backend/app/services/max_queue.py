@@ -192,8 +192,12 @@ def reply_keyboard(settings: object, reply: dict) -> list[dict]:
              if isinstance(link.get("url"), str) and link["url"].startswith("https://") and len(link["url"]) <= 2048]
     if links:
         rows.append(links)
-    if reply.get("menu"):
-        open_app = {"type": "open_app", "text": "Разобрать платёжку в мини-приложении"}
+    in_app = [action for action in reply.get("actions", [])
+              if action.get("type") in {"navigate", "prepare_draft"}]
+    if reply.get("menu") or in_app:
+        label = "Загрузить квитанцию в мини-приложении" if any(
+            action.get("target") == "receipt_upload" for action in in_app) else "Разобрать платёжку в мини-приложении"
+        open_app = {"type": "open_app", "text": label}
         if settings.max_web_app:
             open_app["web_app"] = settings.max_web_app
         rows.append([open_app])

@@ -50,12 +50,22 @@ def _money(value: str | None) -> str:
     return f"{Decimal(value):.2f} ₽" if value is not None else "не указано"
 
 
+def upload_action(label: str = "Загрузить квитанцию") -> dict:
+    """In-app route to the receipt upload screen; a chat cannot take the file itself."""
+    return {"id": "upload-receipt", "type": "navigate", "label": label, "url": None, "topic_id": None,
+            "organization_id": None, "source_id": None, "target": "receipt_upload", "receipt_ref": None,
+            "requires": []}
+
+
 def _receipt_answer(question: str, snapshots: list[dict], knowledge) -> dict:
     from app.services.comparison_adapter import compare_json
 
+    actions = []
     if not snapshots:
-        text = "Для разбора начислений загрузите и подтвердите квитанцию."
+        text = ("Чтобы объяснить изменение суммы, нужны подтверждённые квитанции за два соседних месяца. "
+                "Загрузите квитанцию кнопкой ниже, проверьте и подтвердите данные — затем спросите снова.")
         ref = None
+        actions = [upload_action()]
     elif len(snapshots) == 1:
         bill = snapshots[0]["bill_data"]
         period = bill.get("period") or "неизвестный месяц"
@@ -69,7 +79,9 @@ def _receipt_answer(question: str, snapshots: list[dict], knowledge) -> dict:
             text += f". Итого начислено: {_money(bill['document_current_charges'])}."
         else:
             text += "."
-        text += " Подтверждённой квитанции за предыдущий месяц нет, поэтому рост проверить нельзя."
+        text += (" Подтверждённой квитанции за предыдущий месяц нет, поэтому рост проверить нельзя. "
+                 "Загрузите квитанцию за прошлый месяц кнопкой ниже.")
+        actions = [upload_action("Загрузить квитанцию за прошлый месяц")]
         ref = {"id": str(snapshots[0]["id"]), "revision": snapshots[0]["revision"]}
     else:
         newer, older = snapshots[:2]
@@ -89,7 +101,7 @@ def _receipt_answer(question: str, snapshots: list[dict], knowledge) -> dict:
             text += " Сравнение частичное: часть строк или итогов не удалось сопоставить."
         ref = {"id": str(newer["id"]), "revision": newer["revision"]}
     return {"status": "answered", "text": text[:1500], "topic_id": "bill_change",
-            "steps": [], "sources": [], "actions": [], "clarification": None,
+            "steps": [], "sources": [], "actions": actions, "clarification": None,
             "limitations": [], "knowledge_version": knowledge.version, "receipt_ref": ref}
 
 
@@ -133,7 +145,8 @@ def _city_answer(question: str, context: dict, snapshots: list[dict], knowledge,
     output = _receipt_answer(question, snapshots, knowledge)
     output["text"] = ""
     if not snapshots:
-        output["text"] = "Для сравнения с городом загрузите и подтвердите квитанцию."
+        output["text"] = ("Для сравнения с городом нужна подтверждённая квитанция. "
+                          "Загрузите её кнопкой ниже, проверьте и подтвердите данные.")
         return output
     current = snapshots[0]
     bill = current["bill_data"]

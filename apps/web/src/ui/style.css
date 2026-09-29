@@ -32,7 +32,10 @@ a { color: var(--primary); }
 footer { padding: 16px 0 8px; font-size: .8rem; }
 .skip { position: absolute; left: -9999px; }
 .skip:focus { left: 12px; top: 8px; background: var(--surface); padding: 8px; z-index: 30; }
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sr-only, input.sr-only[type] {
+  position: absolute !important; left: 0; top: 0; width: 1px !important; height: 1px !important; min-width: 0 !important;
+  padding: 0 !important; margin: -1px !important; border: 0 !important; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
 
 /* Bottom tab bar */
 .tabbar {
@@ -119,7 +122,7 @@ legend { font-weight: 600; padding: 0 4px; }
 .kv dt { color: var(--muted); } .kv dd { margin: 0; }
 .receipt-page { display: block; width: 100%; height: auto; max-height: 520px; object-fit: contain; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
 .service-row { border: 1px solid var(--line); border-radius: var(--radius-sm); margin: 8px 0; background: var(--surface); }
-.service-row > summary { list-style: none; cursor: pointer; padding: 12px; min-height: 56px; }
+.service-row > summary { list-style: none; cursor: pointer; padding: 12px 44px 12px 12px; min-height: 56px; position: relative; }
 .service-row > summary::-webkit-details-marker { display: none; }
 .service-row[open] > summary { border-bottom: 1px solid var(--line); }
 .line-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: start; }
@@ -180,3 +183,20 @@ input.sr-only:focus-visible + .file-button { outline: 3px solid var(--focus); ou
 }
 @media (max-width: 380px) { .app { padding-left: 10px; padding-right: 10px; } .panel { padding: 14px; } .sticky-bar { margin-inline: -10px; } }
 @media (prefers-reduced-motion: no-preference) { button, a { transition: background-color .15s, color .15s; } }
+
+/* Expandable blocks: a visible chevron instead of the tiny system marker. */
+details > summary { list-style: none; cursor: pointer; }
+details > summary::-webkit-details-marker { display: none; }
+details:not(.service-row) > summary { display: flex; align-items: center; gap: 10px; }
+details:not(.service-row) > summary::before, .service-row > summary::after {
+  content: ""; flex: none; width: 9px; height: 9px; border-right: 2px solid var(--primary); border-bottom: 2px solid var(--primary);
+  transform: rotate(-45deg); transition: transform .15s ease;
+}
+details[open]:not(.service-row) > summary::before { transform: rotate(45deg); }
+.service-row > summary::after { position: absolute; right: 16px; top: 22px; transform: rotate(45deg); }
+.service-row[open] > summary::after { transform: rotate(-135deg); top: 26px; }
+.service-row > summary:hover, .service-row > summary:active { background: var(--surface-2); }
+.service-row { box-shadow: var(--shadow); }
+.line-toggle { grid-column: 1 / -1; justify-self: start; color: var(--primary); font-size: .85rem; font-weight: 600; }
+.action-button { margin: 4px 0; }
+.action-list { list-style: none; padding: 0; margin: 0; }

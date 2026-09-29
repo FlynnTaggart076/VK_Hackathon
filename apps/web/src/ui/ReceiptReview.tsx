@@ -170,6 +170,7 @@ export function ReceiptReview() {
           <Field label="Код поставщика (если известен)" value={draft.provider_id} maxLength={200} onChange={(value) => update('provider_id', value)} hint={<Evidence path="/provider_id" evidence={receipt.field_evidence} issues={receipt.issues} />} />
         </details>
         <h3>Строки начислений</h3>
+        <p className="notice">Нажмите на строку, чтобы проверить или исправить её значения.</p>
         {draft.services.length === 0 && <p>Строки не найдены. Добавьте их по оригиналу.</p>}
         {draft.services.map((line, index) => <LineCard key={line.line_id} line={line} index={index} lines={draft.services}
           evidence={receipt.field_evidence} issues={receipt.issues} notes={lineNotes[line.line_id] ?? []} open={expandedLines.includes(line.line_id)}

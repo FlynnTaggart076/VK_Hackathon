@@ -282,3 +282,16 @@ def test_max_chat_uses_buttons_and_continues_pending_question(app):
     assert any(button["type"] == "link" for row in last_rows for button in row)
     assert answers == []  # Contact cards are not engine answers.
     assert uuid.UUID(str(rows[0].id))
+
+
+def test_bill_rise_without_receipts_offers_upload_button(app):
+    from app.services.max_queue import reply_keyboard
+
+    with TestClient(app) as client:
+        say = login(client)
+        reply = say(choice="intent:bill_rise")
+        upload = [action for action in reply["actions"] if action["target"] == "receipt_upload"]
+        assert upload and upload[0]["type"] == "navigate" and "Загрузить" in upload[0]["label"]
+        rows = reply_keyboard(app.state.store.settings, reply)[0]["payload"]["buttons"]
+        opens = [button for row in rows for button in row if button["type"] == "open_app"]
+        assert opens and "Загрузить квитанцию" in opens[0]["text"]
