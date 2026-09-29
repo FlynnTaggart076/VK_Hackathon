@@ -59,6 +59,7 @@ def test_meta_and_demo_auth_guard(client):
     assert meta.json()["features"] == {
         "voice": False, "external_submission": False, "receipt_ocr": False,
         "comparison": False, "engine_stub": True, "demo_auth": True,
+        "dialog": False, "house_lookup": False,
     }
     assert client.get("/api/v1/me").json()["error"]["code"] == "AUTH_REQUIRED"
     denied = client.post("/api/v1/auth/demo", json={"identity": "reviewer_a", "access_code": "wrong"})

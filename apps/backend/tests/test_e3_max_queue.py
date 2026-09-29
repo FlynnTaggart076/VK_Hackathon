@@ -42,9 +42,11 @@ def test_webhook_replay_and_bounded_outbox(tmp_path):
             rows = session.scalars(select(Outbox)).all()
             assert len(rows) == 1 and rows[0].state == "queued"
             buttons = rows[0].attachments[0]["payload"]["buttons"]
-            assert buttons == [[{"type": "message", "text": "Задать вопрос"}],
-                               [{"type": "open_app", "text": "Разобрать платёжку",
-                                 "web_app": "fixture_bot"}]]
+            assert buttons[:2] == [[{"type": "message", "text": "Задать вопрос"}],
+                                   [{"type": "open_app", "text": "Разобрать платёжку",
+                                     "web_app": "fixture_bot"}]]
+            scenario_buttons = {button["text"] for row in buttons[2:] for button in row}
+            assert {"Контакты поставщика", "Контакты УК", "Передать показания"} <= scenario_buttons
         sent = []
         assert process_outbox_once(app.state.store,
                                    sender=lambda _settings, uid, text, attachments:

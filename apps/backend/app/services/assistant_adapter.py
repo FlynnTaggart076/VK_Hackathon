@@ -94,10 +94,24 @@ def _receipt_answer(question: str, snapshots: list[dict], knowledge) -> dict:
 
 
 def _fallback_intent(question: str) -> str:
-    lowered = question.lower()
-    if re.search(r"(по городу|у других|у всех|средн|сосед|по москве|везде)", lowered):
+    """Whole-word cues only: «простой» is not «рост», «Контакты УК по Москве» is not a comparison."""
+    words = re.findall(r"[а-яa-z0-9]+", question.lower().replace("ё", "е"))
+    text = f" {' '.join(words)} "
+
+    def has(*roots: str) -> bool:
+        return any(word.startswith(root) for word in words for root in roots)
+
+    money = has("плат", "сумм", "начисл", "квитанц", "тариф", "счет", "коммуналк", "жку", "стоим", "дорож")
+    subject = money or has("вырос", "подорож", "вод", "свет", "электр", "отоплен", "газ", "тепл", "мусор")
+    contact = has("контакт", "телефон", "позвон", "кому", "куда", "управля", "поставщик") or "ук" in words
+    if subject and not contact and (has("сосед", "средн") or any(phrase in text for phrase in (
+            " у других ", " у всех ", " по городу ", " в городе ", " по москве ", " в москве ",
+            " по области ", " везде "))):
         return "city_comparison"
-    if re.search(r"(вырос|подорож|дороже|измен|увелич|скачок|рост|сравн)", lowered):
+    if (has("вырос", "выросл", "подорож", "дороже", "увелич", "скачок", "скакнул", "прибав")
+            or any(word in {"рост", "роста", "росте"} for word in words)):
+        return "bill_rise"
+    if has("измен", "сравн", "разниц", "отлич", "больше") and money:
         return "bill_rise"
     return "faq"
 
@@ -222,14 +236,25 @@ def answer_json(question: str, context: dict, snapshots: list[dict],
                 profile: dict, knowledge, *, api_key: str | None = None,
                 model: str = "deepseek-flash", personal_snapshots: list[dict] | None = None,
                 allow_receipt_model: bool = False,
-                city_lookup: Callable[[str, str, str], dict] | None = None) -> dict:
-    context = {**context, "territory_id": profile["territory_id"], "role": profile["role"]}
+                city_lookup: Callable[[str, str, str], dict] | None = None,
+                intent: str | None = None) -> dict:
+    """Answer one question. A valid context territory/role (from a clarification or the dialogue)
+    wins over the profile, so answering a clarification never loops back to the same question."""
+    territories = {item["id"] for item in knowledge.territories}
+    context = {**context,
+               "territory_id": context.get("territory_id") if context.get("territory_id") in territories
+               else profile["territory_id"],
+               "role": context.get("role") if context.get("role") in {"owner", "tenant", "other"}
+               else profile["role"]}
     context.pop("receipt_id", None)
     context.pop("receipt_revision", None)
     explicit_topic = context.get("topic_id")
-    heuristic_intent = _fallback_intent(question)
-    intent = heuristic_intent
-    if api_key:
+    if intent is not None:
+        api_key_for_classify = None
+    else:
+        api_key_for_classify = api_key
+        intent = _fallback_intent(question)
+    if api_key_for_classify:
         try:
             detected = classify(question, knowledge.topics, api_key, model)
             intent = detected["intent"]
@@ -259,7 +284,7 @@ def answer_json(question: str, context: dict, snapshots: list[dict],
                 except ModelUnavailable:
                     pass
         return output
-    receipt = _confirmed(snapshots[0], profile["territory_id"]) if snapshots else None
+    receipt = _confirmed(snapshots[0], context["territory_id"]) if snapshots else None
     result = answer_question(QuestionRequest(
         question=question, context=QuestionContext(**context),
         receipt=receipt, now=datetime.now(timezone.utc),
@@ -267,7 +292,8 @@ def answer_json(question: str, context: dict, snapshots: list[dict],
     output = result.model_dump(mode="json")
     if api_key and output["status"] == "answered":
         try:
-            phrased = phrase(question, output["text"], api_key, model)
+            facts = "\n".join([output["text"], *output["steps"], *output["limitations"]])
+            phrased = phrase(question, facts, api_key, model)
             # Never let model introduce numeric, URL or currency facts absent from the card.
             numbers = set(re.findall(r"\d+(?:[.,]\d+)?", output["text"]))
             if set(re.findall(r"\d+(?:[.,]\d+)?", phrased)) <= numbers:

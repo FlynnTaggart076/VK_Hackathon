@@ -1,0 +1,39 @@
+{
+  "7720518494": {
+    "name": "ПАО «МОЭК»",
+    "website": "https://www.moek.ru/",
+    "website_source_url": "https://www.moek.ru/about/rekvizity/",
+    "contact_url": "https://www.moek.ru/contacts/hotline/",
+    "contact_label": "Горячая линия организации",
+    "checked_at": "2026-09-27"
+  },
+  "7736520080": {
+    "name": "АО «Мосэнергосбыт»",
+    "website": "https://www.mosenergosbyt.ru/",
+    "website_source_url": "https://www.mos.ru/upload/documents/files/9157/282-62aa061aeba6ac5254b38e6f024be89d.pdf",
+    "identity_source_url": "https://www.a-3.ru/provider/7736520080/",
+    "checked_at": "2026-09-27"
+  },
+  "7701984274": {
+    "name": "АО «Мосводоканал»",
+    "website": "https://www.mosvodokanal.ru/",
+    "website_source_url": "https://www.mosvodokanal.ru/forinvestors/",
+    "checked_at": "2026-09-27"
+  },
+  "5027130197": {
+    "name": "АО «Люберецкий Водоканал»",
+    "website": "https://luberetskiyvodokanal.ru/",
+    "website_source_url": "https://xn--90aiqw4a4aq.xn--p1ai/жкх/ресурсоснабжающие-организации",
+    "identity_source_url": "https://luberetskiyvodokanal.ru/files/Договор%20ООО%20Страж%2008.10.2018%20физическая%20охрана.pdf",
+    "checked_at": "2026-09-27"
+  },
+  "7706771230": {
+    "name": "ООО «ЭнергоСтрой»",
+    "website": null,
+    "contact_url": "https://xn--90aiqw4a4aq.xn--p1ai/жкх/ресурсоснабжающие-организации",
+    "contact_label": "Контакты организации на сайте администрации",
+    "identity_source_url": "https://www.a-3.ru/provider/7706771230/",
+    "checked_at": "2026-09-27",
+    "note": "Собственный сайт не подтверждён. Совпадение по ИНН и адресу: Люберцы, проспект Гагарина, 6."
+  }
+}

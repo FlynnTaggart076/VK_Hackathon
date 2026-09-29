@@ -59,10 +59,24 @@ def run_retention_once(store: SqlStore) -> None:
         session.execute(delete(Outbox).where(Outbox.expires_at <= moment))
         session.execute(delete(AssistantAnswer).where(AssistantAnswer.expires_at <= moment))
         session.execute(delete(Draft).where(Draft.expires_at <= moment))
+        from app.services.dialog_store import purge_expired
+
+        purge_expired(session)
         for item in session.scalars(select(Outbox).where(
             Outbox.state == "sending", Outbox.run_after <= moment - timedelta(seconds=30)
         ).with_for_update(skip_locked=True)):
             item.state = "uncertain"
+
+    # Search cache files contain the typed house address in their request URL; keep them 30 days.
+    cache_dir = store.settings.house_cache_dir
+    if cache_dir.is_dir():
+        cutoff = (moment - timedelta(days=30)).timestamp()
+        for path in cache_dir.glob("*.json"):
+            try:
+                if path.stat().st_mtime < cutoff:
+                    path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     if store.settings.mode == "preview":
         # Preview users are anonymous and only have one-hour sessions. Remove
