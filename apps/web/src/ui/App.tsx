@@ -87,7 +87,7 @@ function Entry({ meta, sessionExpired, onAuth }: { meta: MetaResponse | null; se
     </> : <p>В рабочей версии вход происходит в MAX после проверки стартовых данных сервером.</p>}
     {import.meta.env.DEV && meta && <p className="notice">Версия интерфейса обмена {meta.api_version} · база знаний {meta.knowledge_version ?? 'ещё не подключена'}</p>}
     {PREVIEW_MODE ? null : mockEnabled ? <button type="button" onClick={() => void enterDemo()} disabled={busy}>{busy ? 'Входим…' : 'Войти в учебный mock'}</button> :
-      import.meta.env.DEV && meta?.features.demo_auth ? <form onSubmit={(event) => void enterDemo(event)}>
+      meta?.features.demo_auth ? <form onSubmit={(event) => void enterDemo(event)}>
         <p className="badge">Локальный dev вход. Код задаётся при запуске backend и не сохраняется в браузере.</p>
         <label htmlFor="demo-identity">Учётная запись</label>
         <select id="demo-identity" value={identity} onChange={(event) => setIdentity(event.target.value as 'reviewer_a' | 'reviewer_b')}>

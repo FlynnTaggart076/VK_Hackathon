@@ -1,3 +1,6 @@
+# Local run: `docker compose -f compose.yaml -f compose.local.yaml up --build -d`
+# Publishes only the web entry on loopback; api and worker also get outbound internet so DeepSeek,
+# HouseScore and Dominfo work when their keys are set in .env (without keys the app still runs).
 services:
   web:
     ports:
@@ -7,6 +10,15 @@ services:
       - local_edge
     volumes:
       - ./infra/nginx/app-local.conf:/etc/nginx/conf.d/default.conf:ro
+  api:
+    networks:
+      private: {}
+      local_egress: {}
+  worker:
+    networks:
+      private: {}
+      local_egress: {}
 
 networks:
   local_edge: {}
+  local_egress: {}

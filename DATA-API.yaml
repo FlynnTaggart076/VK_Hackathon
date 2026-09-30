@@ -1,0 +1,200 @@
+# DATA-API: обязательные проверки собственного API «Помощник ЖКХ в MAX».
+# Полная спецификация методов и форматов: contracts/http/openapi.yaml (OpenAPI 3.1).
+# Проверки идут через публичный учебный стенд: гостевой вход без MAX, только синтетические данные.
+# Production (https://flynntaggart075.asuscomm.com/team/zhkh/api/v1) принимает только вход через MAX
+# (подписанные initData мини-приложения), поэтому для автоматической проверки не подходит.
+
+config_version: "1.0"          # Версия схемы этого файла.
+solution:
+  name: "Помощник ЖКХ в MAX"
+  team_id: "t614"              # Идентификатор бота t614_hakaton_max_bot.
+base_url: "https://flynntaggart075.asuscomm.com/team/zhkh-preview/api/v1"
+production_base_url: "https://flynntaggart075.asuscomm.com/team/zhkh/api/v1"
+openapi: "contracts/http/openapi.yaml"
+
+auth:
+  type: bearer
+  header: "Authorization: Bearer {access_token}"
+  obtain: "POST /auth/preview с телом {} возвращает access_token (гость, 60 минут)."
+
+roles:
+  anonymous: "Без токена: только /meta."
+  guest: "Учебный пользователь preview: свои синтетические квитанции, помощник, сравнение."
+
+# Проверки выполняются по порядку: значения {access_token}, {job_id}, {receipt_id},
+# {revision}, {left}, {right} берутся из ответов предыдущих шагов.
+checks:
+  - id: meta
+    title: "Версия, режим и возможности сервиса"
+    method: GET
+    path: /meta
+    role: anonymous
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields: [api_version, engine_version, knowledge_version, mode, limits, features, privacy_notice]
+
+  - id: auth_guest
+    title: "Гостевой вход учебного стенда"
+    method: POST
+    path: /auth/preview
+    role: anonymous
+    headers: {Content-Type: application/json}
+    body: {}
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields: [access_token, token_type, expires_in, user, profile]
+
+  - id: me
+    title: "Текущий пользователь и профиль"
+    method: GET
+    path: /me
+    role: guest
+    headers: {Authorization: "Bearer {access_token}"}
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields: [user, profile]
+
+  - id: me_unauthorized
+    title: "Без токена доступ закрыт"
+    method: GET
+    path: /me
+    role: anonymous
+    expected_status: [401]
+    response:
+      content_type: application/json
+      required_fields: [error, request_id]
+
+  - id: catalog
+    title: "Справочники: территории, темы, услуги, учебные квитанции"
+    method: GET
+    path: /catalog
+    role: guest
+    headers: {Authorization: "Bearer {access_token}"}
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields: [territories, organizations, topics, service_codes, units, document_kinds, demo_receipts]
+
+  - id: profile
+    title: "Роль, территория и согласие с уведомлением об обработке данных"
+    method: PUT
+    path: /me/profile
+    role: guest
+    headers: {Authorization: "Bearer {access_token}", Content-Type: application/json}
+    body: {role: tenant, territory_id: moscow, privacy_notice_version: "3.0", privacy_acknowledged: true}
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields: [role, territory_id, onboarding_completed, privacy_notice_version, privacy_acknowledged_at]
+
+  - id: assistant_dialog
+    title: "Помощник: вопрос своими словами"
+    method: POST
+    path: /assistant/dialog
+    role: guest
+    headers: {Authorization: "Bearer {access_token}", Content-Type: application/json}
+    body: {message: "кто поставляет свет в дом"}
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields: [status, text, options, card, links, sources, actions, awaiting, topic_id, menu, dataset_kind]
+      expect: "status=needs_input, awaiting=address (помощник просит адрес дома)."
+
+  - id: receipt_demo_import
+    title: "Импорт учебной квитанции (август, холодная вода 5 м³ × 40 ₽)"
+    method: POST
+    path: /receipts/demo
+    role: guest
+    headers: {Authorization: "Bearer {access_token}", Content-Type: application/json, Idempotency-Key: "{uuid}"}
+    body: {fixture_id: water-2026-08}
+    expected_status: [202]
+    response:
+      content_type: application/json
+      required_fields: [receipt, job_id]
+
+  - id: job_status
+    title: "Статус распознавания (повторять до succeeded, обычно до 10 секунд)"
+    method: GET
+    path: /jobs/{job_id}
+    role: guest
+    headers: {Authorization: "Bearer {access_token}"}
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields: [id, kind, state, stage, receipt_id, error, updated_at]
+
+  - id: receipt_view
+    title: "Распознанные данные квитанции для проверки"
+    method: GET
+    path: /receipts/{receipt_id}
+    role: guest
+    headers: {Authorization: "Bearer {access_token}"}
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields: [id, status, revision, bill_data, field_evidence, issues, document, job, dataset_kind]
+      expect: "status=needs_review; предупреждение SYNTHETIC_DEMO."
+
+  - id: receipt_confirm
+    title: "Подтверждение проверенных данных"
+    method: POST
+    path: /receipts/{receipt_id}/confirm
+    role: guest
+    headers: {Authorization: "Bearer {access_token}", Content-Type: application/json, Idempotency-Key: "{uuid}"}
+    body: {expected_revision: "{revision}", acknowledged_warning_codes: [SYNTHETIC_DEMO]}
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields: [id, status, revision, confirmed_at]
+      expect: "status=confirmed, revision увеличена на 1."
+
+  - id: receipt_explanation
+    title: "Объяснение строк и итогов подтверждённой квитанции"
+    method: GET
+    path: /receipts/{receipt_id}/explanation
+    role: guest
+    query: {revision: "{revision}"}
+    headers: {Authorization: "Bearer {access_token}"}
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields: [receipt_ref, summary, current_charges, document_total_due, lines, reconciliation_checks, issues]
+
+  - id: receipts_list
+    title: "Список своих квитанций"
+    method: GET
+    path: /receipts
+    role: guest
+    query: {limit: 20}
+    headers: {Authorization: "Bearer {access_token}"}
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields: [items, next_cursor]
+
+  - id: comparison
+    title: "Сравнение августа и сентября (импортировать и подтвердить water-2026-09 теми же шагами)"
+    method: POST
+    path: /comparisons
+    role: guest
+    headers: {Authorization: "Bearer {access_token}", Content-Type: application/json}
+    body: {left: "{left}", right: "{right}", identity_acknowledged: false}
+    expected_status: [200]
+    response:
+      content_type: application/json
+      required_fields: [status, older, newer, delta_current_charges, delta_total_due, lines, issues]
+      expect: "delta_current_charges=70.00; строка «Холодная вода»: quantity_effect=40.00, tariff_effect=30.00."
+
+  - id: foreign_receipt
+    title: "Чужой или несуществующий документ недоступен"
+    method: GET
+    path: /receipts/{random_uuid}
+    role: guest
+    headers: {Authorization: "Bearer {access_token}"}
+    expected_status: [404]
+    response:
+      content_type: application/json
+      required_fields: [error, request_id]

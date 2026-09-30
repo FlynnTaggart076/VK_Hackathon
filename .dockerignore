@@ -10,3 +10,19 @@ runtime
 **/*.sqlite
 reports
 tasks
+# Private files and material the images never need (keeps secrets out of the build context).
+TOKEN.txt
+DST.txt
+EX.pdf
+*.pdf
+*.zip
+colleague_anton
+screenshots
+update
+Работа с сервером.md
+docs
+TECHNICAL_SPEC.md
+IMPLEMENTATION_PLAN.md
+**/.venv
+**/*.egg-info
+apps/web/tsconfig.tsbuildinfo

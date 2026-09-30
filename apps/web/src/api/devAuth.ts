@@ -1,4 +1,5 @@
-// Loaded only by the local development entry screen. Never import from a production route.
+// Loaded only when the server reports features.demo_auth (dev/demo stands; production forbids it).
+// The access code is typed by the tester and never stored in the bundle.
 import { request } from './client';
 import type { AuthResponse } from './types';
 
