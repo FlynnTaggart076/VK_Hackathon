@@ -34,6 +34,8 @@ export function ReceiptReview() {
   const [conflict, setConflict] = useState<ReceiptView | null>(null);
   const [acknowledged, setAcknowledged] = useState<string[]>([]);
   const confirmKey = useRef(crypto.randomUUID());
+  const [manual, setManual] = useState(false);
+  const manualRequest = useRef<{ body: string; key: string } | null>(null);
   const [reload, setReload] = useState(0);
   const [expandedLines, setExpandedLines] = useState<string[]>([]);
   const [lineNotes, setLineNotes] = useState<Record<string, string[]>>({});
@@ -41,9 +43,11 @@ export function ReceiptReview() {
   useEffect(() => {
     if (!id) return;
     const controller = new AbortController();
+    setManual(false); manualRequest.current = null; setAcknowledged([]);
     setLoading(true); setError(null); setReceipt(null); setDraft(null); setConflict(null); setLineNotes({});
     api.receipt(id, controller.signal).then((value) => {
       setReceipt(value); setDraft(value.bill_data);
+      setManual(value.status === 'failed' && params.get('manual') === '1');
       const focus = value.bill_data.services.findIndex((_, index) => lineNeedsAttention(index, value.field_evidence, value.issues));
       const first = value.bill_data.services[Math.max(focus, 0)];
       setExpandedLines(first ? [first.line_id] : []);
@@ -98,12 +102,20 @@ export function ReceiptReview() {
   }
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!id || !receipt || !draft || conflict) return;
+    if (!id || !receipt || !draft || conflict || busy) return;
     const normalized = normalizeBill(draft);
     setDraft(normalized);
     if (billErrors(normalized).length) return;
     setBusy(true); setError(null);
     try {
+      if (manual && receipt.status === 'failed') {
+        const body = JSON.stringify({ bill_data: normalized });
+        if (manualRequest.current?.body !== body) manualRequest.current = { body, key: crypto.randomUUID() };
+        const result = await api.createManualReceipt({ bill_data: normalized }, manualRequest.current.key);
+        navigate(`/review?id=${encodeURIComponent(result.id)}`, { replace: true });
+        return;
+      }
+      if (receipt.status !== 'needs_review' && receipt.status !== 'confirmed') return;
       const result = await api.editReceipt(id, { expected_revision: receipt.revision, bill_data: normalized });
       setReceipt(result); setDraft(result.bill_data); setAcknowledged([]); setLineNotes({}); confirmKey.current = crypto.randomUUID();
     } catch (cause) { await loadConflict(cause); }
@@ -130,7 +142,7 @@ export function ReceiptReview() {
   const hasServerErrors = !!receipt?.issues.some((issue) => issue.severity === 'error');
   const unacknowledged = warnings.some((issue) => !acknowledged.includes(issue.code));
   const canConfirm = receipt?.status === 'needs_review' && !busy && !conflict && !dirty && !validation.length && !hasServerErrors && !unacknowledged;
-  const editable = receipt?.status === 'needs_review' || receipt?.status === 'confirmed';
+  const editable = manual || receipt?.status === 'needs_review' || receipt?.status === 'confirmed';
   const barHint = dirty
     ? (validation.length ? 'Исправьте ошибки в форме.' : 'Сохраните исправления, затем подтвердите данные.')
     : hasServerErrors ? 'Сервер сообщил об ошибках данных.'
@@ -152,14 +164,18 @@ export function ReceiptReview() {
       </div>
       {receipt.status === 'needs_review' && <p className="notice">{extractionOutcomeLabel(receipt.extraction_outcome)}. Сверьте каждое число с оригиналом.</p>}
       {receipt.status === 'queued' || receipt.status === 'processing' ? <p role="status">Обработка ещё не завершена. <Link to={receipt.job ? `/processing?job=${encodeURIComponent(receipt.job.id)}` : '/upload'}>Вернуться к обработке</Link></p> : null}
-      {receipt.status === 'failed' && <p role="alert">Обработка не удалась. Дождитесь доступного повторного запуска или введите данные вручную после перехода документа в состояние проверки.</p>}
+      {receipt.status === 'failed' && <div className="notice-box">
+        <p role="alert">Распознавание не удалось. Можно заполнить данные по оригиналу без повторной загрузки файла.</p>
+        {manual ? <p>Сохранение создаст отдельную квитанцию для проверки. Исходный документ с ошибкой останется в истории.</p>
+          : <button type="button" onClick={() => { setManual(true); setError(null); }}>Заполнить вручную</button>}
+      </div>}
       <SourcePreview receipt={receipt} />
       {conflict && <div className="error" role="alert"><p>На сервере уже версия {conflict.revision}. Ваши правки сохранены в форме и не отправлены повторно.</p>
         <div className="actions">
           <button type="button" onClick={() => { setReceipt(conflict); setConflict(null); setError(null); setAcknowledged([]); confirmKey.current = crypto.randomUUID(); }}>Применить мои правки к актуальной версии</button>
           <button type="button" className="secondary" onClick={() => { setReceipt(conflict); setDraft(conflict.bill_data); setConflict(null); setError(null); setAcknowledged([]); }}>Использовать серверную версию</button>
         </div></div>}
-      <form id="review-form" onSubmit={(event) => void save(event)}><h3>Данные для проверки</h3>
+      <form id="review-form" onSubmit={(event) => void save(event)}><fieldset disabled={!editable || busy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><h3>Данные для проверки</h3>
         <p className="notice">Поля без значения остаются неизвестными. Сохранение не подтверждает законность начислений.</p>
         <Field label="Период (ГГГГ-ММ)" value={draft.period} maxLength={7} onChange={(value) => update('period', value)}
           hint={<><p className="field-hint">{formatPeriod(draft.period)}</p><Evidence path="/period" evidence={receipt.field_evidence} issues={receipt.issues} /></>} />
@@ -185,14 +201,14 @@ export function ReceiptReview() {
         <button type="button" className="add-card" onClick={() => update('adjustments', [...draft.adjustments, { adjustment_id: crypto.randomUUID(), label: '', amount: null, service_line_id: null, related_period: null }])}>Добавить перерасчёт</button>
         <TotalsSection draft={draft} evidence={receipt.field_evidence} issues={receipt.issues} onChange={update} onSettlementChange={updateSettlement} />
         {validation.length > 0 && <div className="error" role="alert"><strong>Для сохранения исправьте:</strong><ul>{validation.map((item) => <li key={item}>{item}</li>)}</ul></div>}
-      </form>
+      </fieldset></form>
       <IssuesPanel issues={receipt.issues} acknowledged={acknowledged} canAcknowledge={receipt.status === 'needs_review'}
         onAcknowledge={(code, checked) => setAcknowledged((current) => checked ? [...new Set([...current, code])] : current.filter((item) => item !== code))} />
       {receipt.status === 'needs_review' && <p className="notice">Вы подтверждаете проверенные вами данные платёжки, а не законность начислений.</p>}
       {receipt.status === 'confirmed' && !dirty && <div className="actions"><Link to={`/explanation?id=${encodeURIComponent(receipt.id)}`}>Открыть объяснение</Link><Link to={`/assistant?receipt=${encodeURIComponent(receipt.id)}`}>Вопрос по платёжке</Link><Link to={`/city-comparison?receipt=${encodeURIComponent(receipt.id)}`}>{PREVIEW_MODE && receipt.dataset_kind === 'synthetic' ? 'Сравнить с учебной выборкой' : 'Сравнить с городом'}</Link></div>}
-      {editable && (dirty || receipt.status === 'needs_review') && <div className="sticky-bar">
-        {dirty
-          ? <button type="submit" form="review-form" disabled={busy || !!conflict || !!validation.length}>{busy ? 'Сохраняем…' : 'Сохранить исправления'}</button>
+      {editable && (manual || dirty || receipt.status === 'needs_review') && <div className="sticky-bar">
+        {manual || dirty
+          ? <button type="submit" form="review-form" disabled={busy || !!conflict || !!validation.length}>{busy ? 'Сохраняем…' : manual ? 'Сохранить ручной ввод' : 'Сохранить исправления'}</button>
           : <button type="button" disabled={!canConfirm} onClick={() => void confirm()}>{busy ? 'Подтверждаем…' : 'Подтвердить проверенные данные'}</button>}
         {barHint && <p>{barHint}</p>}
       </div>}
