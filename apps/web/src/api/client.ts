@@ -1,4 +1,4 @@
-import type { AggregateConsentView, AnswerContext, AnswerView, ApiErrorBody, DialogReply, DialogRequest, Catalog, CityComparisonView, CompareRequest, ComparisonView, ConfirmReceiptRequest, CreateDraftRequest, DraftView, EditDraftRequest, EditReceiptRequest, Job, MeResponse, MetaResponse, Profile, ReceiptExplanation, ReceiptList, ReceiptQueued, ReceiptView, SyntheticCityComparisonView, UnexpectedErrorBody, UpdateProfileRequest } from './types';
+import type { AggregateConsentView, AnswerContext, AnswerView, ApiErrorBody, DialogReply, DialogRequest, Catalog, CityComparisonView, CompareRequest, ComparisonView, ConfirmReceiptRequest, CreateDraftRequest, DraftView, EditDraftRequest, EditReceiptRequest, Job, MeResponse, MetaResponse, ManualReceiptRequest, Profile, ReceiptExplanation, ReceiptList, ReceiptQueued, ReceiptView, SyntheticCityComparisonView, UnexpectedErrorBody, UpdateProfileRequest } from './types';
 import { APP_BASE, PREVIEW_MODE } from './appConfig';
 
 export const API_BASE = `${APP_BASE}api/v1`;
@@ -106,6 +106,9 @@ export const api = {
   job: (id: string, signal?: AbortSignal) => request<Job>(`/jobs/${encodeURIComponent(id)}`, { signal }),
   page: (id: string, page: number, signal?: AbortSignal) => requestBlob(`/receipts/${encodeURIComponent(id)}/pages/${page}`, signal),
   source: (id: string, signal?: AbortSignal) => requestBlob(`/receipts/${encodeURIComponent(id)}/source`, signal),
+  createManualReceipt: (body: ManualReceiptRequest, key: string, signal?: AbortSignal) => request<ReceiptView>('/receipts/manual', {
+    method: 'POST', body: JSON.stringify(body), headers: { 'Idempotency-Key': key }, signal,
+  }),
   editReceipt: (id: string, body: EditReceiptRequest, signal?: AbortSignal) => request<ReceiptView>(`/receipts/${encodeURIComponent(id)}/draft`, {
     method: 'PUT', body: JSON.stringify(body), signal,
   }),

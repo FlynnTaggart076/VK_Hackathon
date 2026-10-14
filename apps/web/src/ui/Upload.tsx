@@ -131,6 +131,7 @@ export function Processing({ stub }: { stub: boolean }) {
       {job?.state === 'succeeded' && job.receipt_id && <p><Link to={`/review?id=${encodeURIComponent(job.receipt_id)}`}>Проверить данные платёжки</Link></p>}
       {job?.state === 'failed' && <div className="notice-box">
         <p>Обработка не удалась. Можно запустить её ещё раз или открыть документ из истории и ввести данные вручную.</p>
+        {job.receipt_id && <p><Link to={`/review?id=${encodeURIComponent(job.receipt_id)}&manual=1`}>Заполнить вручную</Link></p>}
         <button type="button" onClick={() => void retry()} disabled={busy}>Повторить обработку</button>
         {retryError !== null && <p role="alert">{retryMessage(retryError)}</p>}
       </div>}

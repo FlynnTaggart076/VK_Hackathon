@@ -243,3 +243,19 @@ describe('E3 comparison, FAQ, draft and history mock', () => {
     expect((await api.draft(draft.id)).stale).toBe(true);
   });
 });
+
+
+it('posts manual data as JSON with authentication and idempotency, and preserves validation errors', async () => {
+  setSessionToken('manual-session');
+  const bill = JSON.parse(readFileSync('../../contracts/http/examples/receipt-confirmed.json', 'utf8')).bill_data as BillData;
+  let captured: { body: unknown; key: string | null; auth: string | null } | undefined;
+  server.use(http.post('*/api/v1/receipts/manual', async ({ request }) => {
+    captured = { body: await request.json(), key: request.headers.get('Idempotency-Key'), auth: request.headers.get('Authorization') };
+    return HttpResponse.json({ request_id: 'manual-test', error: { code: 'VALIDATION_FAILED', message: 'Проверьте данные.',
+      retryable: false, fields: [{ path: '/period', message: 'Неверный период.' }], details: {} } }, { status: 422 });
+  }));
+  await expect(api.createManualReceipt({ bill_data: bill }, 'manual-key')).rejects.toMatchObject({
+    status: 422, code: 'VALIDATION_FAILED', body: { error: { fields: [{ path: '/period', message: 'Неверный период.' }] } },
+  });
+  expect(captured).toEqual({ body: { bill_data: bill }, key: 'manual-key', auth: 'Bearer manual-session' });
+});

@@ -374,3 +374,47 @@ def test_http_limits_and_failed_ocr_keep_safe_job_state(tmp_path, monkeypatch, c
         receipt = client.get(f"/api/v1/receipts/{queued.json()['receipt']['id']}", headers=headers(token)).json()
         assert receipt["status"] == "failed" and receipt["extraction_outcome"] is None
         assert token not in caplog.text and "test-secret" not in caplog.text
+
+
+@pytest.mark.parametrize("ocr_code", ["OCR_TIMEOUT", "INTERNAL_ENGINE_ERROR"])
+def test_failed_ocr_manual_recovery_validates_and_confirms(tmp_path, monkeypatch, ocr_code):
+    database_url = f"sqlite:///{(tmp_path / 'recovery.sqlite').as_posix()}"
+    monkeypatch.setenv("APP_MODE", "dev")
+    migrate(database_url, monkeypatch)
+    settings = Settings(mode="dev", demo_auth_enabled=True, demo_access_code="test-secret",
+                        engine_mode="real", database_url=database_url, storage_path=tmp_path / "private")
+    with TestClient(create_app(settings)) as client:
+        token = login(client, "reviewer_a")["access_token"]
+        accept_privacy(client, token)
+        queued = upload(client, token, str(uuid.uuid4()), data=image_bytes()).json()
+        rid = queued["receipt"]["id"]
+
+        def fail_engine(*args, **kwargs):
+            raise EngineError(ocr_code, "Ошибка распознавания", retryable=True)
+
+        monkeypatch.setattr("app.jobs.worker.bounded_extract", fail_engine)
+        with client.app.state.store.Session.begin() as session:
+            session.get(Job, uuid.UUID(queued["job_id"])).attempt = 2
+        assert run_once(client.app.state.store)
+        failed = client.get(f"/api/v1/receipts/{rid}", headers=headers(token)).json()
+        assert failed["status"] == "failed"
+        bill = json.loads((FIXTURE.parent / "water-2026-08.json").read_text(encoding="utf-8"))
+        invalid = dict(bill, period="2026-99")
+        key = str(uuid.uuid4())
+        rejected = client.post("/api/v1/receipts/manual", headers=headers(token, key), json={"bill_data": invalid})
+        assert rejected.status_code == 422
+        created = client.post("/api/v1/receipts/manual", headers=headers(token, key), json={"bill_data": bill})
+        assert created.status_code == 201, created.json()
+        manual = created.json()
+        assert manual["id"] != rid and manual["status"] == "needs_review"
+        assert manual["bill_data"]["template_id"] == "manual-v1"
+        assert all(item["source"] == "manual" for item in manual["field_evidence"])
+        assert not any(item["code"] == ocr_code for item in manual["issues"])
+        assert client.post("/api/v1/receipts/manual", headers=headers(token, key), json={"bill_data": bill}).json() == manual
+        warnings = sorted({item["code"] for item in manual["issues"] if item["severity"] == "warning"})
+        confirmed = client.post(f"/api/v1/receipts/{manual['id']}/confirm", headers=headers(token, str(uuid.uuid4())),
+                                json={"expected_revision": manual["revision"], "acknowledged_warning_codes": warnings})
+        assert confirmed.status_code == 200, confirmed.json()
+        assert confirmed.json()["status"] == "confirmed"
+        assert client.get(f"/api/v1/receipts/{rid}", headers=headers(token)).json()["status"] == "failed"
+        assert client.get(f"/api/v1/receipts/{rid}/source", headers=headers(token)).status_code == 200

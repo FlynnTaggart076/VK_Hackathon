@@ -27,6 +27,7 @@ export type ReceiptView = Omit<Schema['ReceiptView'], 'bill_data'> & { bill_data
 export type ReceiptQueued = Omit<Schema['ReceiptQueued'], 'receipt'> & { receipt: ReceiptView };
 export type Job = Schema['Job'];
 export type EditReceiptRequest = Omit<Schema['EditReceiptRequest'], 'bill_data'> & { bill_data: BillData };
+export type ManualReceiptRequest = Omit<Schema['ManualReceiptRequest'], 'bill_data'> & { bill_data: BillData };
 export type ConfirmReceiptRequest = Schema['ConfirmReceiptRequest'];
 export type ReceiptExplanation = Omit<Schema['ReceiptExplanation.schema'], '$defs'>;
 export type ReceiptSummary = Schema['ReceiptSummary'];
